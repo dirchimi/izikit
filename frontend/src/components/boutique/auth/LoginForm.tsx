@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import Icon from '@/components/ui/Icon';
 import GoogleButton from './GoogleButton';
@@ -36,7 +35,6 @@ function loginError(err: unknown, t: Translate): string {
 export default function LoginForm() {
   const router = useRouter();
   const { user, refresh } = useAuth();
-  const { toast } = useToast();
   const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -137,13 +135,9 @@ export default function LoginForm() {
           </span>
           <span className="text-foreground font-body text-xs">{t('auth.remember')}</span>
         </button>
-        <button
-          type="button"
-          onClick={() => toast(t('auth.forgotSoon'), 'info')}
-          className="text-primary font-body text-xs font-semibold"
-        >
+        <Link href="/mot-de-passe-oublie" className="text-primary font-body text-xs font-semibold">
           {t('auth.forgot')}
-        </button>
+        </Link>
       </div>
 
       {error && (

@@ -59,10 +59,63 @@ const messages: Record<string, Msg> = {
     en: 'Forgot password?',
     ar: 'هل نسيت كلمة المرور؟',
   },
-  'auth.forgotSoon': {
-    fr: 'Récupération de mot de passe à venir.',
-    en: 'Password recovery coming soon.',
-    ar: 'استعادة كلمة المرور قريباً.',
+  'auth.forgotTagline': {
+    fr: 'Réinitialiser votre mot de passe',
+    en: 'Reset your password',
+    ar: 'إعادة تعيين كلمة المرور',
+  },
+  'auth.forgotIntro': {
+    fr: 'Entrez votre e-mail : nous vous enverrons un code de réinitialisation.',
+    en: "Enter your email: we'll send you a reset code.",
+    ar: 'أدخل بريدك الإلكتروني: سنرسل لك رمز إعادة التعيين.',
+  },
+  'auth.forgotSubmit': { fr: 'Envoyer le code', en: 'Send code', ar: 'إرسال الرمز' },
+  'auth.forgotSending': { fr: 'Envoi…', en: 'Sending…', ar: 'جارٍ الإرسال…' },
+  'auth.forgotSent': {
+    fr: 'Si un compte existe, un code vient d’être envoyé.',
+    en: 'If an account exists, a code was just sent.',
+    ar: 'إذا كان هناك حساب، فقد تم إرسال رمز للتو.',
+  },
+  'auth.backToLogin': {
+    fr: '← Retour à la connexion',
+    en: '← Back to login',
+    ar: '← العودة لتسجيل الدخول',
+  },
+  'auth.resetTagline': {
+    fr: 'Choisir un nouveau mot de passe',
+    en: 'Choose a new password',
+    ar: 'اختر كلمة مرور جديدة',
+  },
+  'auth.resetIntro': {
+    fr: 'Saisissez le code reçu par e-mail et votre nouveau mot de passe.',
+    en: 'Enter the code from your email and your new password.',
+    ar: 'أدخل الرمز الذي وصلك بالبريد وكلمة المرور الجديدة.',
+  },
+  'auth.newPassword': {
+    fr: 'Nouveau mot de passe',
+    en: 'New password',
+    ar: 'كلمة المرور الجديدة',
+  },
+  'auth.resetSubmit': {
+    fr: 'Réinitialiser',
+    en: 'Reset password',
+    ar: 'إعادة التعيين',
+  },
+  'auth.resetting': { fr: 'Réinitialisation…', en: 'Resetting…', ar: 'جارٍ إعادة التعيين…' },
+  'auth.resetSuccess': {
+    fr: 'Mot de passe réinitialisé. Connectez-vous.',
+    en: 'Password reset. Please log in.',
+    ar: 'تمت إعادة تعيين كلمة المرور. يرجى تسجيل الدخول.',
+  },
+  'auth.err.tooManyForgot': {
+    fr: 'Trop de demandes. Réessayez plus tard.',
+    en: 'Too many requests. Try again later.',
+    ar: 'طلبات كثيرة جداً. حاول لاحقاً.',
+  },
+  'auth.err.tooManyReset': {
+    fr: 'Trop de tentatives. Réessayez plus tard.',
+    en: 'Too many attempts. Try again later.',
+    ar: 'محاولات كثيرة جداً. حاول لاحقاً.',
   },
   'auth.login': { fr: 'Se connecter', en: 'Log in', ar: 'تسجيل الدخول' },
   'auth.loggingIn': { fr: 'Connexion…', en: 'Logging in…', ar: 'جارٍ تسجيل الدخول…' },
