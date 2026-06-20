@@ -25,6 +25,7 @@ const messages: Record<string, Msg> = {
     ar: 'غير متصل — المزامنة معلّقة',
   },
   'offline.short': { fr: 'Hors ligne', en: 'Offline', ar: 'غير متصل' },
+  'online.connected': { fr: 'En ligne', en: 'Online', ar: 'متصل' },
   'lang.soon': {
     fr: 'العربية — bientôt disponible.',
     en: 'Arabic — coming soon.',
@@ -283,14 +284,14 @@ const messages: Record<string, Msg> = {
     ar: 'احتفظ بسجل لمن يدين لك وبكم. لا مزيد من الدفاتر، ولا نسيان.',
   },
   'landing.feat.offline.title': {
-    fr: 'Fonctionne hors-ligne',
-    en: 'Works offline',
-    ar: 'يعمل بدون اتصال',
+    fr: 'Hors-ligne (bientôt)',
+    en: 'Offline (coming soon)',
+    ar: 'دون اتصال (قريباً)',
   },
   'landing.feat.offline.desc': {
-    fr: 'Pas d’internet ? Aucun problème. Sahilley fonctionne même sans connexion et synchronise dès que possible.',
-    en: 'No internet? No problem. Sahilley works without a connection and syncs as soon as it can.',
-    ar: 'لا يوجد إنترنت؟ لا مشكلة. يعمل Sahilley بدون اتصال ويزامن بمجرد توفّره.',
+    fr: 'Le mode hors-ligne arrive bientôt : vous pourrez vendre sans connexion et synchroniser dès le retour du réseau.',
+    en: 'Offline mode is coming soon: sell without a connection and sync once the network is back.',
+    ar: 'وضع العمل دون اتصال قريباً: بِع دون اتصال وزامن عند عودة الشبكة.',
   },
   'landing.feat.keyPoint': { fr: 'Argument clé', en: 'Key point', ar: 'نقطة أساسية' },
   'landing.problem.eyebrow': {
@@ -564,6 +565,16 @@ const messages: Record<string, Msg> = {
     fr: 'Produit « {name} » ajouté ({ref}).',
     en: 'Product “{name}” added ({ref}).',
     ar: 'تمت إضافة المنتج «{name}» ({ref}).',
+  },
+  'stock.refTaken': {
+    fr: 'Cette référence produit existe déjà.',
+    en: 'This product reference already exists.',
+    ar: 'هذه المرجعية موجودة بالفعل.',
+  },
+  'stock.emptyAll': {
+    fr: 'Aucun produit pour le moment. Ajoutez votre premier produit.',
+    en: 'No products yet. Add your first product.',
+    ar: 'لا توجد منتجات بعد. أضف أول منتج.',
   },
   'stock.nameRequired': {
     fr: 'Le nom du produit est requis.',
@@ -979,6 +990,9 @@ const messages: Record<string, Msg> = {
   'parametres.you': { fr: 'Vous', en: 'You', ar: 'أنت' },
   'common.subtotal': { fr: 'Sous-total', en: 'Subtotal', ar: 'المجموع الفرعي' },
   'common.loading': { fr: 'Chargement…', en: 'Loading…', ar: 'جارٍ التحميل…' },
+  'async.error': { fr: 'Une erreur est survenue.', en: 'Something went wrong.', ar: 'حدث خطأ ما.' },
+  'async.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
+  'async.empty': { fr: 'Aucune donnée.', en: 'No data.', ar: 'لا توجد بيانات.' },
 
   // ── Vendre (POS) ──────────────────────────────────────────────────────────
   'pos.subtitle': {

@@ -61,11 +61,11 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
         </div>
       </div>
 
-      {/* Offline badge */}
-      <div className="bg-offline mx-4 mt-4 mb-2 flex items-center gap-2 rounded-md px-3 py-2">
-        <div className="bg-offline-foreground h-2 w-2 shrink-0 rounded-full opacity-70" />
-        <span className="text-offline-foreground font-body text-xs font-semibold">
-          {t('offline.syncPending')}
+      {/* Statut connexion — online-only en v1 (le hors-ligne viendra plus tard) */}
+      <div className="bg-muted mx-4 mt-4 mb-2 flex items-center gap-2 rounded-md px-3 py-2">
+        <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+        <span className="text-muted-foreground font-body text-xs font-semibold">
+          {t('online.connected')}
         </span>
       </div>
 
