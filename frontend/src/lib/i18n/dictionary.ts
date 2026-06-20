@@ -19,6 +19,7 @@ const messages: Record<string, Msg> = {
   'nav.rapports': { fr: 'Rapports', en: 'Reports', ar: 'التقارير' },
   'nav.parametres': { fr: 'Paramètres', en: 'Settings', ar: 'الإعدادات' },
   'nav.logout': { fr: 'Déconnexion', en: 'Log out', ar: 'تسجيل الخروج' },
+  'nav.admin': { fr: 'Admin', en: 'Admin', ar: 'الإدارة' },
   'role.patron': { fr: 'Patron', en: 'Owner', ar: 'المالك' },
   'offline.syncPending': {
     fr: 'Hors ligne — sync en attente',

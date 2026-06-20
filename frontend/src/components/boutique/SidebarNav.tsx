@@ -47,6 +47,9 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   const { logout, loggingOut } = useAuth();
   // Charge (et provisionne au 1er accès) la boutique courante.
   const { data: boutique } = useApi<BoutiqueCurrent>('/api/org/current');
+  // Sonde admin : 403 pour les non-admins → `data` reste null → lien masqué
+  // (mis en cache une fois par session par useApi).
+  const { data: adminMe } = useApi<{ admin: { role: string } }>('/api/admin/me');
   const boutiqueName = boutique?.organization.name ?? 'Sahilley';
   const roleLabel = boutique ? t(ROLE_LABEL_KEY[boutique.role] ?? 'role.vendeur') : '';
 
@@ -116,6 +119,16 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
           <Icon i="settings" size={16} />
           {t('nav.parametres')}
         </Link>
+        {adminMe && (
+          <Link
+            href="/admin"
+            onClick={onNavigate}
+            className="font-body text-sidebar-foreground flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium opacity-60 transition-colors hover:opacity-100"
+          >
+            <Icon i="shield" size={16} />
+            {t('nav.admin')}
+          </Link>
+        )}
         <div className="mt-1 flex items-center gap-3 px-3 pt-3">
           <div className="bg-sidebar-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
             <Icon i="user" size={14} className="text-sidebar-foreground" />
