@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 
 interface NavItem {
@@ -42,10 +43,18 @@ function isActive(pathname: string, href: string): boolean {
 export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const t = useT();
+  const router = useRouter();
+  const { logout, loggingOut } = useAuth();
   // Charge (et provisionne au 1er accès) la boutique courante.
   const { data: boutique } = useApi<BoutiqueCurrent>('/api/org/current');
   const boutiqueName = boutique?.organization.name ?? 'Sahilley';
   const roleLabel = boutique ? t(ROLE_LABEL_KEY[boutique.role] ?? 'role.vendeur') : '';
+
+  async function handleLogout() {
+    onNavigate();
+    await logout();
+    router.replace('/connexion');
+  }
 
   return (
     <div className="bg-sidebar flex h-full w-full flex-col">
@@ -118,6 +127,16 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
             <div className="text-sidebar-foreground font-body text-xs opacity-50">{roleLabel}</div>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="font-body text-sidebar-foreground mt-2 flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium opacity-60 transition-colors hover:opacity-100 disabled:opacity-40"
+        >
+          <Icon i="log-out" size={16} />
+          {loggingOut ? '…' : t('nav.logout')}
+        </button>
       </div>
     </div>
   );
