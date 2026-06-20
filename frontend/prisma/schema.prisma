@@ -207,6 +207,7 @@ model SaleItem {
   name      String
   qty       Int
   unitPrice Int
+  buyPrice  Int      @default(0) // instantané du prix d'achat (marge des rapports)
 
   @@index([saleId])
 }

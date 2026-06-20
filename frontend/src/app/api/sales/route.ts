@@ -124,7 +124,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const ids = items.map((i) => i.productId);
         const products = await tx.product.findMany({
           where: { id: { in: ids }, organizationId: orgId },
-          select: { id: true, name: true, sellPrice: true, qty: true },
+          select: { id: true, name: true, sellPrice: true, buyPrice: true, qty: true },
         });
         const byId = new Map(products.map((p) => [p.id, p]));
 
@@ -179,6 +179,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   name: p ? p.name : 'Article',
                   qty: item.qty,
                   unitPrice: p ? p.sellPrice : 0,
+                  buyPrice: p ? p.buyPrice : 0,
                 };
               }),
             },

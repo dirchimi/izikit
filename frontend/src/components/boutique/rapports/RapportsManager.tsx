@@ -5,34 +5,92 @@ import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
-import { reportSummary, reportTopProducts } from '@/lib/boutique/fixtures';
 import ReportBarChart from './ReportBarChart';
 
-const periods = [
+type Period = 'today' | 'week' | 'month' | 'year';
+
+interface ReportData {
+  period: Period;
+  summary: {
+    revenue: number;
+    sales: number;
+    grossMargin: number;
+    marginPct: number;
+    expenses: number;
+    netProfit: number;
+  };
+  series: { label: string; value: number }[];
+  topProducts: { rank: number; name: string; qty: number; ca: number }[];
+}
+
+const periods: { id: Period; key: string }[] = [
   { id: 'today', key: 'rapports.period.today' },
   { id: 'week', key: 'rapports.period.week' },
   { id: 'month', key: 'rapports.period.month' },
   { id: 'year', key: 'rapports.period.year' },
-  { id: 'custom', key: 'rapports.period.custom' },
 ];
+
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  const escape = (v: string | number) => {
+    const s = String(v);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = rows.map((r) => r.map(escape).join(';')).join('\r\n');
+  // BOM pour qu'Excel lise l'UTF-8 (accents) correctement.
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function RapportsManager() {
   const { toast } = useToast();
   const t = useT();
-  const [period, setPeriod] = useState('week');
-  const isCustom = period === 'custom';
+  const [period, setPeriod] = useState<Period>('week');
+
+  const { data, loading, error, refresh } = useApi<ReportData>(`/api/reports?period=${period}`);
+  const summary = data?.summary;
+
+  function exportCsv() {
+    if (!data || !summary) {
+      toast(t('async.error'), 'error');
+      return;
+    }
+    const rows: (string | number)[][] = [
+      [t('rapports.exportTitle'), t(`rapports.period.${period}`)],
+      [],
+      [t('rapports.kpi.revenue'), summary.revenue],
+      [t('rapports.kpi.sales'), summary.sales],
+      [t('rapports.kpi.margin'), summary.grossMargin],
+      ['%', summary.marginPct],
+      [t('nav.depenses'), summary.expenses],
+      [t('rapports.kpi.netProfit'), summary.netProfit],
+      [],
+      [t('rapports.topProducts')],
+      ['#', t('common.product'), t('common.qty'), t('common.ca')],
+      ...data.topProducts.map((p) => [p.rank, p.name, p.qty, p.ca]),
+    ];
+    downloadCsv(`rapport-${period}.csv`, rows);
+    toast(t('rapports.exported'), 'success');
+  }
 
   const exportBtn = (
     <button
       type="button"
-      onClick={() => toast(t('rapports.exportSoon'), 'info')}
-      className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
+      onClick={exportCsv}
+      disabled={loading || !data}
+      className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
     >
       <Icon i="download" size={14} />
-      {t('rapports.exportPdf')}
+      {t('rapports.exportCsv')}
     </button>
   );
 
@@ -69,121 +127,122 @@ export default function RapportsManager() {
               );
             })}
           </div>
-          <div
-            className={`border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2 ${
-              isCustom ? '' : 'pointer-events-none opacity-40'
-            }`}
-            aria-hidden={!isCustom}
-          >
-            <Icon i="calendar" size={13} className="text-muted-foreground" />
-            <span className="text-muted-foreground font-body text-sm">01 jan 2025</span>
-            <span className="text-muted-foreground mx-1 text-xs">→</span>
-            <span className="text-muted-foreground font-body text-sm">15 jan 2025</span>
-          </div>
         </div>
 
-        {/* KPI */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <KpiCard
-            accent
-            label={t('rapports.kpi.revenue')}
-            value={formatFCFA(reportSummary.revenue)}
-            sublabel={t('common.fcfa')}
-          />
-          <KpiCard
-            label={t('rapports.kpi.sales')}
-            value={String(reportSummary.sales)}
-            sublabel={t('common.transactions')}
-          />
-          <KpiCard
-            label={t('rapports.kpi.margin')}
-            value={formatFCFA(reportSummary.grossMargin)}
-            sublabel={
-              <>
-                {t('common.fcfa')} ·{' '}
-                <span className="text-primary font-semibold">{reportSummary.marginPct} %</span>
-              </>
-            }
-          />
-          <KpiCard
-            label={t('nav.depenses')}
-            value={formatFCFA(reportSummary.expenses)}
-            sublabel={t('common.fcfa')}
-            valueClass="text-warning"
-          />
-          <KpiCard
-            label={t('rapports.kpi.netProfit')}
-            value={formatFCFA(reportSummary.netProfit)}
-            sublabel={t('common.fcfa')}
-            valueClass="text-danger"
-          />
-        </div>
-
-        {/* Graphe + Top produits */}
-        <div className="flex flex-col gap-5 lg:flex-row">
-          <div className="bg-surface border-border flex flex-1 flex-col gap-4 rounded-lg border px-5 py-5 md:px-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-headings text-foreground text-base font-bold">
-                {t('rapports.chartTitle')}
-              </h2>
-              <span className="text-muted-foreground font-body text-xs">
-                {t('rapports.chartSub')}
-              </span>
-            </div>
-            <ReportBarChart />
-          </div>
-
-          <div className="bg-surface border-border flex flex-col gap-4 rounded-lg border px-5 py-5 md:px-6 lg:w-[380px]">
-            <h2 className="font-headings text-foreground text-base font-bold">
-              {t('rapports.topProducts')}
-            </h2>
-            <div className="flex flex-col">
-              <div className="border-border flex items-center gap-3 border-b pb-2">
-                <span className="font-body text-muted-foreground w-6 text-center text-xs font-semibold">
-                  #
-                </span>
-                <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
-                  {t('common.product')}
-                </span>
-                <span className="font-body text-muted-foreground w-10 text-center text-xs font-semibold">
-                  {t('common.qty')}
-                </span>
-                <span className="font-body text-muted-foreground w-24 text-end text-xs font-semibold">
-                  {t('common.ca')}
-                </span>
+        <AsyncState loading={loading} error={error} onRetry={refresh}>
+          {summary && data && (
+            <div className="flex flex-col gap-6">
+              {/* KPI */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                <KpiCard
+                  accent
+                  label={t('rapports.kpi.revenue')}
+                  value={formatFCFA(summary.revenue)}
+                  sublabel={t('common.fcfa')}
+                />
+                <KpiCard
+                  label={t('rapports.kpi.sales')}
+                  value={String(summary.sales)}
+                  sublabel={t('common.transactions')}
+                />
+                <KpiCard
+                  label={t('rapports.kpi.margin')}
+                  value={formatFCFA(summary.grossMargin)}
+                  sublabel={
+                    <>
+                      {t('common.fcfa')} ·{' '}
+                      <span className="text-primary font-semibold">{summary.marginPct} %</span>
+                    </>
+                  }
+                />
+                <KpiCard
+                  label={t('nav.depenses')}
+                  value={formatFCFA(summary.expenses)}
+                  sublabel={t('common.fcfa')}
+                  valueClass="text-warning"
+                />
+                <KpiCard
+                  label={t('rapports.kpi.netProfit')}
+                  value={formatFCFA(summary.netProfit)}
+                  sublabel={t('common.fcfa')}
+                  valueClass={summary.netProfit < 0 ? 'text-danger' : 'text-primary'}
+                />
               </div>
-              {reportTopProducts.map((p) => (
-                <div
-                  key={p.rank}
-                  className="border-border flex items-center gap-3 border-b py-3 last:border-b-0"
-                >
-                  <span
-                    className={`font-headings w-6 text-center text-sm font-bold ${
-                      p.rank === 1 ? 'text-primary' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {p.rank}
-                  </span>
-                  <span className="font-body text-foreground flex-1 text-sm font-medium">
-                    {p.name}
-                  </span>
-                  <span className="font-body text-muted-foreground w-10 text-center text-sm">
-                    {p.qty}
-                  </span>
-                  <span className="font-body text-foreground w-24 text-end text-sm font-bold">
-                    {formatFCFA(p.ca)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Note */}
-        <div className="bg-muted flex items-center gap-3 rounded-lg px-5 py-3">
-          <Icon i="info" size={14} className="text-muted-foreground shrink-0" />
-          <p className="text-muted-foreground font-body text-xs">{t('rapports.note')}</p>
-        </div>
+              {/* Graphe + Top produits */}
+              <div className="flex flex-col gap-5 lg:flex-row">
+                <div className="bg-surface border-border flex flex-1 flex-col gap-4 rounded-lg border px-5 py-5 md:px-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-headings text-foreground text-base font-bold">
+                      {t('rapports.chartTitle')}
+                    </h2>
+                    <span className="text-muted-foreground font-body text-xs">
+                      {t('rapports.chartSub')}
+                    </span>
+                  </div>
+                  <ReportBarChart bars={data.series} />
+                </div>
+
+                <div className="bg-surface border-border flex flex-col gap-4 rounded-lg border px-5 py-5 md:px-6 lg:w-[380px]">
+                  <h2 className="font-headings text-foreground text-base font-bold">
+                    {t('rapports.topProducts')}
+                  </h2>
+                  {data.topProducts.length === 0 ? (
+                    <p className="text-muted-foreground font-body text-sm">
+                      {t('rapports.noProducts')}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col">
+                      <div className="border-border flex items-center gap-3 border-b pb-2">
+                        <span className="font-body text-muted-foreground w-6 text-center text-xs font-semibold">
+                          #
+                        </span>
+                        <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
+                          {t('common.product')}
+                        </span>
+                        <span className="font-body text-muted-foreground w-10 text-center text-xs font-semibold">
+                          {t('common.qty')}
+                        </span>
+                        <span className="font-body text-muted-foreground w-24 text-end text-xs font-semibold">
+                          {t('common.ca')}
+                        </span>
+                      </div>
+                      {data.topProducts.map((p) => (
+                        <div
+                          key={p.rank}
+                          className="border-border flex items-center gap-3 border-b py-3 last:border-b-0"
+                        >
+                          <span
+                            className={`font-headings w-6 text-center text-sm font-bold ${
+                              p.rank === 1 ? 'text-primary' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {p.rank}
+                          </span>
+                          <span className="font-body text-foreground flex-1 text-sm font-medium">
+                            {p.name}
+                          </span>
+                          <span className="font-body text-muted-foreground w-10 text-center text-sm">
+                            {p.qty}
+                          </span>
+                          <span className="font-body text-foreground w-24 text-end text-sm font-bold">
+                            {formatFCFA(p.ca)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Note */}
+              <div className="bg-muted flex items-center gap-3 rounded-lg px-5 py-3">
+                <Icon i="info" size={14} className="text-muted-foreground shrink-0" />
+                <p className="text-muted-foreground font-body text-xs">{t('rapports.note')}</p>
+              </div>
+            </div>
+          )}
+        </AsyncState>
       </div>
     </>
   );

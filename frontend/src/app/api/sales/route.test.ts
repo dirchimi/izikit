@@ -56,8 +56,8 @@ beforeEach(() => {
 describe('POST /api/sales (checkout)', () => {
   it('vente comptant : crée la vente, décrémente le stock, mouvements OUT → 201', async () => {
     prismaMock.product.findMany.mockResolvedValueOnce([
-      { id: 'p1', name: 'Riz', sellPrice: 6000, qty: 10 },
-      { id: 'p2', name: 'Eau', sellPrice: 500, qty: 30 },
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+      { id: 'p2', name: 'Eau', sellPrice: 500, buyPrice: 300, qty: 30 },
     ] as never);
     prismaMock.sale.count.mockResolvedValueOnce(5);
     prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
@@ -84,6 +84,11 @@ describe('POST /api/sales (checkout)', () => {
     expect(prismaMock.sale.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ total: 13500, method: 'CASH' }) }),
     );
+    // les lignes figent le prix d'achat (marge des rapports)
+    const saleArg = prismaMock.sale.create.mock.calls[0]?.[0] as {
+      data: { items: { create: { buyPrice: number }[] } };
+    };
+    expect(saleArg.data.items.create[0]?.buyPrice).toBe(4500);
   });
 
   it('409 INSUFFICIENT_STOCK si la quantité dépasse le stock', async () => {
