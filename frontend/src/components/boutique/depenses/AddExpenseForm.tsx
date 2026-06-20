@@ -16,22 +16,29 @@ const fieldClass =
   'border-border bg-input text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none focus:border-primary';
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 
-/** Formulaire d'ajout de dépense (contrôlé). */
-export default function AddExpenseForm({ onSubmit }: { onSubmit: (e: NewExpenseInput) => void }) {
+/** Formulaire d'ajout de dépense (contrôlé). Ne se vide qu'en cas de succès. */
+export default function AddExpenseForm({
+  onSubmit,
+  disabled = false,
+}: {
+  onSubmit: (e: NewExpenseInput) => void | Promise<boolean | void>;
+  disabled?: boolean;
+}) {
   const t = useT();
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit({
+    const ok = await onSubmit({
       label: label.trim(),
       amount: Number(amount) || 0,
       category: category || 'Charges',
       note: note.trim(),
     });
+    if (ok === false) return;
     setLabel('');
     setAmount('');
     setCategory('');
@@ -123,7 +130,8 @@ export default function AddExpenseForm({ onSubmit }: { onSubmit: (e: NewExpenseI
 
         <button
           type="submit"
-          className="bg-primary text-primary-foreground font-body mt-1 flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold"
+          disabled={disabled}
+          className="bg-primary text-primary-foreground font-body mt-1 flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold disabled:opacity-60"
         >
           <Icon i="plus" size={15} />
           {t('depenses.form.submit')}

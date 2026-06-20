@@ -629,6 +629,16 @@ const messages: Record<string, Msg> = {
     en: 'Label is required.',
     ar: 'البيان مطلوب.',
   },
+  'depenses.amountInvalid': {
+    fr: 'Le montant doit être supérieur à zéro.',
+    en: 'Amount must be greater than zero.',
+    ar: 'يجب أن يكون المبلغ أكبر من الصفر.',
+  },
+  'depenses.emptyAll': {
+    fr: 'Aucune dépense pour le moment. Enregistrez votre première dépense.',
+    en: 'No expenses yet. Record your first expense.',
+    ar: 'لا توجد مصاريف بعد. سجّل أول مصروف لك.',
+  },
   'depenses.form.title': { fr: 'Ajouter une dépense', en: 'Add an expense', ar: 'إضافة مصروف' },
   'depenses.form.subtitle': {
     fr: 'Enregistrer une sortie d’argent',

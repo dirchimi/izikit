@@ -5,19 +5,46 @@ import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
+import { api } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
-import {
-  expenses as seedExpenses,
-  expenseCategories,
-  expenseCategoryColor,
-  EXPENSE_TODAY,
-  type Expense,
-} from '@/lib/boutique/fixtures';
+import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
 
+interface ApiExpense {
+  id: string;
+  number: string;
+  label: string;
+  category: string;
+  amount: number;
+  note: string;
+  occurredAt: string; // ISO
+}
+
 type Period = 'month' | 'today';
+
+function sameDay(iso: string, ref: Date): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
+function sameMonth(iso: string, ref: Date): boolean {
+  const d = new Date(iso);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+}
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 export default function DepensesManager() {
   const { toast } = useToast();
@@ -25,44 +52,64 @@ export default function DepensesManager() {
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('month');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [list, setList] = useState<Expense[]>(seedExpenses);
+  const [submitting, setSubmitting] = useState(false);
 
-  const totalMonth = list.reduce((sum, e) => sum + e.amount, 0);
-  const today = list.filter((e) => e.date === EXPENSE_TODAY).reduce((sum, e) => sum + e.amount, 0);
-  const biggest = list.reduce<Expense | null>(
+  const { data, loading, error, refresh } = useApi<{ expenses: ApiExpense[] }>('/api/expenses');
+  const expenses = data?.expenses ?? [];
+  const now = new Date();
+
+  const monthExpenses = expenses.filter((e) => sameMonth(e.occurredAt, now));
+  const totalMonth = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const today = expenses
+    .filter((e) => sameDay(e.occurredAt, now))
+    .reduce((sum, e) => sum + e.amount, 0);
+  const biggest = expenses.reduce<ApiExpense | null>(
     (max, e) => (!max || e.amount > max.amount ? e : max),
     null,
   );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return list.filter(
+    return expenses.filter(
       (e) =>
-        (q === '' || e.label.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)) &&
-        (period === 'month' || e.date === EXPENSE_TODAY) &&
+        (q === '' || e.label.toLowerCase().includes(q) || e.number.toLowerCase().includes(q)) &&
+        (period === 'month' ? sameMonth(e.occurredAt, now) : sameDay(e.occurredAt, now)) &&
         (categoryFilter === '' || e.category === categoryFilter),
     );
-  }, [list, search, period, categoryFilter]);
+  }, [expenses, search, period, categoryFilter]);
 
-  function addExpense(input: NewExpenseInput) {
+  async function addExpense(input: NewExpenseInput) {
     if (!input.label) {
       toast(t('depenses.labelRequired'), 'error');
       return;
     }
-    const maxNum = list.reduce((m, e) => {
-      const n = parseInt(e.id.replace(/\D/g, ''), 10);
-      return Number.isNaN(n) ? m : Math.max(m, n);
-    }, 0);
-    const next: Expense = {
-      id: `D-${maxNum + 1}`,
-      date: EXPENSE_TODAY,
-      label: input.label,
-      category: input.category,
-      amount: input.amount,
-      note: input.note,
-    };
-    setList((prev) => [next, ...prev]);
-    toast(t('depenses.added', { label: next.label, amount: formatFCFA(next.amount) }), 'success');
+    if (input.amount <= 0) {
+      toast(t('depenses.amountInvalid'), 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api('/api/expenses', {
+        method: 'POST',
+        body: {
+          label: input.label,
+          amount: input.amount,
+          category: input.category,
+          ...(input.note ? { note: input.note } : {}),
+        },
+      });
+      toast(
+        t('depenses.added', { label: input.label, amount: formatFCFA(input.amount) }),
+        'success',
+      );
+      await refresh();
+      return true;
+    } catch {
+      toast(t('async.error'), 'error');
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -90,7 +137,7 @@ export default function DepensesManager() {
             />
             <KpiCard
               label={t('depenses.kpi.count')}
-              value={String(list.length)}
+              value={String(expenses.length)}
               sublabel={t('depenses.kpi.countUnit')}
             />
             <KpiCard
@@ -138,81 +185,81 @@ export default function DepensesManager() {
           </div>
 
           {/* Table */}
-          <div className="bg-surface border-border rounded-lg border">
-            <div className="overflow-x-auto">
-              <div className="min-w-[820px]">
-                <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
-                  <span className="font-body text-muted-foreground w-16 text-xs font-semibold">
-                    {t('depenses.col.num')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
-                    {t('common.date')}
-                  </span>
-                  <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
-                    {t('depenses.col.label')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
-                    {t('common.category')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
-                    {t('common.amount')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-28 text-xs font-semibold">
-                    {t('common.note')}
-                  </span>
-                  <span className="w-8" />
-                </div>
+          <AsyncState
+            loading={loading}
+            error={error}
+            onRetry={refresh}
+            isEmpty={expenses.length === 0}
+            emptyLabel={t('depenses.emptyAll')}
+            emptyIcon="receipt"
+          >
+            <div className="bg-surface border-border rounded-lg border">
+              <div className="overflow-x-auto">
+                <div className="min-w-[820px]">
+                  <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
+                    <span className="font-body text-muted-foreground w-16 text-xs font-semibold">
+                      {t('depenses.col.num')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
+                      {t('common.date')}
+                    </span>
+                    <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
+                      {t('depenses.col.label')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
+                      {t('common.category')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                      {t('common.amount')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-28 text-xs font-semibold">
+                      {t('common.note')}
+                    </span>
+                  </div>
 
-                {visible.map((e) => (
-                  <div
-                    key={e.id}
-                    className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
-                  >
-                    <span className="font-body text-muted-foreground w-16 font-mono text-xs">
-                      {e.id}
-                    </span>
-                    <span className="font-body text-muted-foreground w-24 text-xs">{e.date}</span>
-                    <span className="font-body text-foreground flex-1 text-sm font-medium">
-                      {e.label}
-                    </span>
-                    <div className="flex w-24 justify-center">
-                      <span
-                        className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
-                      >
-                        {e.category}
+                  {visible.map((e) => (
+                    <div
+                      key={e.id}
+                      className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
+                    >
+                      <span className="font-body text-muted-foreground w-16 font-mono text-xs">
+                        {e.number}
+                      </span>
+                      <span className="font-body text-muted-foreground w-24 text-xs">
+                        {fmtDate(e.occurredAt)}
+                      </span>
+                      <span className="font-body text-foreground flex-1 text-sm font-medium">
+                        {e.label}
+                      </span>
+                      <div className="flex w-24 justify-center">
+                        <span
+                          className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
+                        >
+                          {e.category}
+                        </span>
+                      </div>
+                      <span className="font-body text-foreground w-28 text-end text-sm font-bold">
+                        {formatFCFA(e.amount)} {t('common.fcfa')}
+                      </span>
+                      <span className="font-body text-muted-foreground w-28 truncate text-xs">
+                        {e.note}
                       </span>
                     </div>
-                    <span className="font-body text-foreground w-28 text-end text-sm font-bold">
-                      {formatFCFA(e.amount)} {t('common.fcfa')}
-                    </span>
-                    <span className="font-body text-muted-foreground w-28 truncate text-xs">
-                      {e.note}
-                    </span>
-                    <div className="flex w-8 justify-center">
-                      <button
-                        type="button"
-                        aria-label={`${t('common.edit')} ${e.label}`}
-                        onClick={() => toast(t('common.editSoonExpense'), 'info')}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Icon i="pencil" size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
 
-                {visible.length === 0 && (
-                  <div className="text-muted-foreground font-body px-5 py-6 text-sm">
-                    {t('depenses.empty')}
-                  </div>
-                )}
+                  {visible.length === 0 && (
+                    <div className="text-muted-foreground font-body px-5 py-6 text-sm">
+                      {t('depenses.empty')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </AsyncState>
         </div>
 
         {/* Formulaire d'ajout */}
-        <AddExpenseForm onSubmit={addExpense} />
+        <AddExpenseForm onSubmit={addExpense} disabled={submitting} />
       </div>
     </>
   );

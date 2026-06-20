@@ -105,6 +105,7 @@ model Organization {
   products  Product[]
   customers Customer[]
   sales     Sale[]
+  expenses  Expense[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -245,6 +246,28 @@ model Repayment {
 
   @@index([organizationId])
   @@index([customerId])
+}
+
+// Dépense de la boutique (Phase 5). `number` séquentiel par boutique (D-0001).
+// `category` = chaîne libre (liste suggérée côté UI). `amount` entier FCFA.
+// `occurredAt` = date de la dépense (saisissable, défaut = maintenant).
+model Expense {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String
+  label          String
+  category       String
+  amount         Int
+  note           String?
+  createdById    String?
+  occurredAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([organizationId, category])
+  @@index([organizationId, occurredAt])
 }
 
 // Profil + préférences d'une boutique (1:1 avec Organization). Créé dans la
