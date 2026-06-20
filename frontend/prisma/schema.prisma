@@ -106,6 +106,7 @@ model Organization {
   customers Customer[]
   sales     Sale[]
   expenses  Expense[]
+  documents Document[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -165,6 +166,7 @@ model Customer {
   sales          Sale[]
   receivables    Receivable[]
   repayments     Repayment[]
+  documents      Document[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -186,6 +188,7 @@ model Sale {
   createdById    String?
   items          SaleItem[]
   receivable     Receivable?
+  document       Document?
   createdAt      DateTime     @default(now())
 
   @@unique([organizationId, number])
@@ -268,6 +271,37 @@ model Expense {
   @@index([organizationId])
   @@index([organizationId, category])
   @@index([organizationId, occurredAt])
+}
+
+// Document commercial (Phase 6) — FACTURE ou PROFORMA. `lines` est un INSTANTANÉ
+// JSON figé à l'émission ([{ article, qty, unitPrice }]) : le document ne change
+// jamais même si le produit est édité/supprimé ou change de prix. `number`
+// séquentiel par (boutique, type) : F-0001 pour les factures, PRO-0001 pour les
+// proformas. `total` = Σ(qty × unitPrice) figé. `status`: PAID | PENDING | CREDIT.
+model Document {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           String // FACTURE | PROFORMA
+  number         String
+  saleId         String?      @unique // facture issue d'une vente (Phase 3)
+  sale           Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  customerId     String?
+  customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  clientName     String // instantané du destinataire
+  clientPhone    String?
+  status         String // PAID | PENDING | CREDIT
+  total          Int // instantané Σ(lignes)
+  note           String?
+  lines          Json // instantané [{ article, qty, unitPrice }]
+  validityDays   Int? // proforma : durée de validité (jours)
+  issuedAt       DateTime     @default(now())
+  createdById    String?
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId, type])
+  @@index([organizationId, issuedAt])
 }
 
 // Profil + préférences d'une boutique (1:1 avec Organization). Créé dans la

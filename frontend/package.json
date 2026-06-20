@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.52.0",
     "@upstash/redis": "^1.34.3",
     "@vercel/otel": "^2.1.2",

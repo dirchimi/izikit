@@ -2,24 +2,26 @@
 
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
-import { docStatusConfig, docTotal, type SaleDocument } from '@/lib/boutique/fixtures';
+import { docStatusConfig } from '@/lib/boutique/fixtures';
+import type { ApiDocument, BoutiqueHeader } from './types';
+
+function fmtLong(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 /**
- * Document imprimable (facture OU proforma) — même gabarit, variantes par `kind` :
- * titre, libellé destinataire, ligne de validité, libellé du total et note de pied.
- * Partagé par les deux onglets de l'écran Documents.
+ * Aperçu imprimable (facture OU proforma) — même gabarit, variantes par `type`.
+ * Alimenté par l'instantané réel du document + l'en-tête de la boutique
+ * (nom + ville, depuis /api/org/current).
  */
-export default function DocumentPreview({
-  doc,
-  kind,
-}: {
-  doc: SaleDocument;
-  kind: 'facture' | 'proforma';
-}) {
+export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: BoutiqueHeader }) {
   const t = useT();
-  const total = docTotal(doc);
+  const isProforma = doc.type === 'PROFORMA';
   const s = docStatusConfig[doc.status];
-  const isProforma = kind === 'proforma';
 
   return (
     <div className="bg-surface border-border flex-1 rounded-lg border">
@@ -27,25 +29,24 @@ export default function DocumentPreview({
       <div className="border-border flex flex-col gap-4 border-b px-5 py-6 sm:flex-row sm:items-start sm:justify-between md:px-8">
         <div>
           <div className="bg-primary mb-3 flex h-10 w-10 items-center justify-center rounded-md">
-            <span className="font-headings text-primary-foreground text-base font-bold">S</span>
+            <span className="font-headings text-primary-foreground text-base font-bold">
+              {org.name.charAt(0).toUpperCase() || 'B'}
+            </span>
           </div>
-          <p className="font-headings text-foreground text-base font-bold">Sahilley</p>
-          <p className="text-muted-foreground font-body mt-1 text-xs">
-            {t('documents.preview.branch')}
-          </p>
-          <p className="text-muted-foreground font-body text-xs">Dakar, Sénégal</p>
+          <p className="font-headings text-foreground text-base font-bold">{org.name}</p>
+          <p className="text-muted-foreground font-body mt-1 text-xs">{org.city}</p>
         </div>
         <div className="sm:text-end">
           <p className="font-headings text-foreground text-2xl font-bold">
             {t(isProforma ? 'documents.preview.proformaTitle' : 'documents.preview.invoiceTitle')}
           </p>
-          <p className="text-muted-foreground font-body mt-1 text-sm">{doc.num}</p>
+          <p className="text-muted-foreground font-body mt-1 text-sm">{doc.number}</p>
           <p className="text-muted-foreground font-body mt-0.5 text-xs">
-            {t('documents.preview.dateLabel')} {doc.date}
+            {t('documents.preview.dateLabel')} {fmtLong(doc.issuedAt)}
           </p>
           {isProforma && (
             <p className="text-muted-foreground font-body mt-0.5 text-xs">
-              {t('documents.preview.validity')}
+              {t('documents.preview.validityDays', { n: doc.validityDays ?? 30 })}
             </p>
           )}
           <span
@@ -61,8 +62,10 @@ export default function DocumentPreview({
         <p className="text-muted-foreground font-body mb-1 text-xs font-semibold">
           {t(isProforma ? 'documents.preview.recipient' : 'documents.preview.billedTo')}
         </p>
-        <p className="font-body text-foreground text-sm font-semibold">{doc.client}</p>
-        <p className="text-muted-foreground font-body text-xs">{doc.clientPhone}</p>
+        <p className="font-body text-foreground text-sm font-semibold">{doc.clientName}</p>
+        {doc.clientPhone && (
+          <p className="text-muted-foreground font-body text-xs">{doc.clientPhone}</p>
+        )}
       </div>
 
       {/* Lignes */}
@@ -111,7 +114,7 @@ export default function DocumentPreview({
               {t('documents.preview.subtotal')}
             </span>
             <span className="font-body text-foreground text-sm font-semibold">
-              {formatFCFA(total)} {t('common.fcfa')}
+              {formatFCFA(doc.total)} {t('common.fcfa')}
             </span>
           </div>
           <div className="border-border mt-1 flex w-64 items-center gap-8 border-t pt-2">
@@ -119,7 +122,7 @@ export default function DocumentPreview({
               {t(isProforma ? 'documents.preview.totalEstimated' : 'common.total')}
             </span>
             <span className="font-headings text-primary text-base font-bold">
-              {formatFCFA(total)} {t('common.fcfa')}
+              {formatFCFA(doc.total)} {t('common.fcfa')}
             </span>
           </div>
         </div>
@@ -128,7 +131,8 @@ export default function DocumentPreview({
       {/* Note de pied */}
       <div className="border-border border-t px-5 py-4 md:px-8">
         <p className="text-muted-foreground font-body text-xs">
-          {t(isProforma ? 'documents.preview.proformaFooter' : 'documents.preview.invoiceFooter')}
+          {doc.note ||
+            t(isProforma ? 'documents.preview.proformaFooter' : 'documents.preview.invoiceFooter')}
         </p>
       </div>
     </div>
