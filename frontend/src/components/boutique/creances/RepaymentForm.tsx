@@ -4,15 +4,21 @@ import { forwardRef, useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
-import { paymentLabelKey } from '@/lib/boutique/payment-label';
-import { creditPaymentMethods } from '@/lib/boutique/fixtures';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
+
+/** Modes de remboursement acceptés par l'API (/api/receivables/[id]/repay). */
+export type RepayMethod = 'cash' | 'mobile';
+const REPAY_METHODS: { value: RepayMethod; key: string }[] = [
+  { value: 'cash', key: 'method.cash' },
+  { value: 'mobile', key: 'method.mobile' },
+];
 
 interface Props {
   debtorName: string;
   maxAmount: number;
-  onSubmit: (amount: number, method: string, note: string) => void;
+  disabled?: boolean;
+  onSubmit: (amount: number, method: RepayMethod, note: string) => void;
 }
 
 /**
@@ -21,12 +27,12 @@ interface Props {
  * lui donner le focus. Remonté à chaque changement de client (clé sur l'id).
  */
 const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm(
-  { debtorName, maxAmount, onSubmit },
+  { debtorName, maxAmount, disabled = false, onSubmit },
   ref,
 ) {
   const t = useT();
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState(creditPaymentMethods[0] ?? 'Espèces');
+  const [method, setMethod] = useState<RepayMethod>('cash');
   const [note, setNote] = useState('');
 
   function handleSubmit(e: FormEvent) {
@@ -78,12 +84,12 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
           <select
             id="rp-method"
             value={method}
-            onChange={(e) => setMethod(e.target.value)}
+            onChange={(e) => setMethod(e.target.value as RepayMethod)}
             className="border-border bg-input text-foreground font-body focus:border-primary rounded-md border px-3 py-2.5 text-sm outline-none"
           >
-            {creditPaymentMethods.map((m) => (
-              <option key={m} value={m}>
-                {t(paymentLabelKey(m))}
+            {REPAY_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {t(m.key)}
               </option>
             ))}
           </select>
@@ -104,7 +110,8 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
 
         <button
           type="submit"
-          className="bg-primary text-primary-foreground font-body flex shrink-0 items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold"
+          disabled={disabled}
+          className="bg-primary text-primary-foreground font-body flex shrink-0 items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold disabled:opacity-60"
         >
           <Icon i="check" size={15} />
           {t('creances.form.validate')}

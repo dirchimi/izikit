@@ -729,6 +729,11 @@ const messages: Record<string, Msg> = {
     en: 'No client matches this search.',
     ar: 'لا يوجد زبون يطابق هذا البحث.',
   },
+  'creances.emptyAll': {
+    fr: 'Aucune créance pour le moment. Les ventes à crédit apparaîtront ici.',
+    en: 'No receivables yet. Credit sales will show up here.',
+    ar: 'لا توجد ديون بعد. ستظهر المبيعات الآجلة هنا.',
+  },
   'creances.clientSince': {
     fr: 'client depuis {since}',
     en: 'client since {since}',

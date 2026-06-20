@@ -162,6 +162,8 @@ model Customer {
   name           String
   phone          String?
   sales          Sale[]
+  receivables    Receivable[]
+  repayments     Repayment[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -182,6 +184,7 @@ model Sale {
   total          Int
   createdById    String?
   items          SaleItem[]
+  receivable     Receivable?
   createdAt      DateTime     @default(now())
 
   @@unique([organizationId, number])
@@ -202,6 +205,46 @@ model SaleItem {
   unitPrice Int
 
   @@index([saleId])
+}
+
+// Créance (Phase 4) — dette née d'une vente à crédit. `amount` = montant initial
+// dû, `amountPaid` = cumul remboursé. `status` stocké pour le filtrage :
+// OPEN (rien payé) | PARTIAL (partiellement) | PAID (soldé). 1:1 avec la Sale à
+// crédit qui l'a engendrée. Montants entiers FCFA.
+model Receivable {
+  id             String   @id @default(cuid())
+  organizationId String
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  saleId         String?  @unique
+  sale           Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  amount         Int
+  amountPaid     Int      @default(0)
+  status         String   @default("OPEN") // OPEN | PARTIAL | PAID
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([organizationId, status])
+}
+
+// Remboursement (Phase 4) — paiement reçu d'un client, alloué à ses créances
+// ouvertes (les plus anciennes d'abord) dans une transaction. `method` :
+// CASH | MOBILE. `amount` = montant effectivement appliqué (≤ dû total).
+model Repayment {
+  id             String   @id @default(cuid())
+  organizationId String
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount         Int
+  method         String // CASH | MOBILE
+  note           String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([customerId])
 }
 
 // Profil + préférences d'une boutique (1:1 avec Organization). Créé dans la

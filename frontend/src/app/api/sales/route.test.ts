@@ -124,6 +124,7 @@ describe('POST /api/sales (checkout)', () => {
     prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
     prismaMock.product.update.mockResolvedValue({} as never);
     prismaMock.stockMovement.create.mockResolvedValue({} as never);
+    prismaMock.receivable.create.mockResolvedValue({} as never);
 
     const res = await POST(
       makePost({
@@ -136,6 +137,17 @@ describe('POST /api/sales (checkout)', () => {
     expect(prismaMock.customer.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ name: 'Moussa', organizationId: 'org1' }),
+      }),
+    );
+    // une vente à crédit ouvre une créance pour le montant total
+    expect(prismaMock.receivable.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 'c1',
+          saleId: 's1',
+          amount: 6000,
+          status: 'OPEN',
+        }),
       }),
     );
   });

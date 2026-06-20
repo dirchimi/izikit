@@ -203,6 +203,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         }
 
+        // Vente à crédit → ouvre une créance (Phase 4). customerId est garanti
+        // ici car CREDIT sans client a déjà renvoyé CREDIT_NO_CUSTOMER plus haut.
+        if (method === 'CREDIT' && customerId) {
+          await tx.receivable.create({
+            data: {
+              organizationId: orgId,
+              customerId,
+              saleId: sale.id,
+              amount: total,
+              status: 'OPEN',
+            },
+          });
+        }
+
         return { kind: 'OK', saleId: sale.id, number, total };
       },
       { isolationLevel: 'Serializable' },
