@@ -22,6 +22,7 @@ const SETTINGS_SELECT = {
   city: true,
   address: true,
   invoiceNote: true,
+  logoUrl: true,
 } as const;
 
 const PatchBody = z.object({
@@ -30,6 +31,7 @@ const PatchBody = z.object({
   city: z.string().trim().max(80).nullable().optional(),
   address: z.string().trim().max(200).nullable().optional(),
   invoiceNote: z.string().trim().max(500).nullable().optional(),
+  logoUrl: z.string().url().max(500).nullable().optional(),
   currency: z
     .string()
     .regex(/^[A-Z]{3}$/)
@@ -104,6 +106,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         city: d.city ?? null,
         address: d.address ?? null,
         invoiceNote: d.invoiceNote ?? null,
+        logoUrl: d.logoUrl ?? null,
       },
       update: {
         ...(d.currency !== undefined ? { currency: d.currency } : {}),
@@ -111,6 +114,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(d.city !== undefined ? { city: d.city } : {}),
         ...(d.address !== undefined ? { address: d.address } : {}),
         ...(d.invoiceNote !== undefined ? { invoiceNote: d.invoiceNote } : {}),
+        ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
       },
       select: SETTINGS_SELECT,
     });

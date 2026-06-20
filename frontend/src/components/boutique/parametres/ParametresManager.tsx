@@ -20,6 +20,7 @@ interface BoutiqueCurrent {
     city: string | null;
     address: string | null;
     invoiceNote: string | null;
+    logoUrl: string | null;
   };
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
@@ -59,6 +60,11 @@ export default function ParametresManager() {
     await refreshBoutique();
   }
 
+  async function saveLogo(logoUrl: string) {
+    await api('/api/org/current', { method: 'PATCH', body: { logoUrl } });
+    await refreshBoutique();
+  }
+
   function renderBoutiquePanel() {
     if (!boutique) {
       return (
@@ -77,8 +83,9 @@ export default function ParametresManager() {
             address: boutique.settings.address ?? '',
             note: boutique.settings.invoiceNote ?? '',
           }}
+          initialLogoUrl={boutique.settings.logoUrl}
           onSave={saveBoutique}
-          onLogo={() => toast(t('parametres.logoSoon'), 'info')}
+          onSaveLogo={saveLogo}
         />
         <UsersSection
           members={members}

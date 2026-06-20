@@ -25,6 +25,7 @@ export interface BoutiqueSettingsView {
   city: string | null;
   address: string | null;
   invoiceNote: string | null;
+  logoUrl: string | null;
 }
 
 export interface BoutiqueContext {
@@ -39,6 +40,7 @@ const SETTINGS_SELECT = {
   city: true,
   address: true,
   invoiceNote: true,
+  logoUrl: true,
 } as const;
 
 /** Nom de boutique par défaut dérivé de l'email (partie locale capitalisée). */
@@ -55,6 +57,7 @@ function viewSettings(s: BoutiqueSettingsView): BoutiqueSettingsView {
     city: s.city,
     address: s.address,
     invoiceNote: s.invoiceNote,
+    logoUrl: s.logoUrl,
   };
 }
 
@@ -126,7 +129,14 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
 
   return {
     organization: created,
-    settings: { currency: 'XAF', phone: null, city: null, address: null, invoiceNote: null },
+    settings: {
+      currency: 'XAF',
+      phone: null,
+      city: null,
+      address: null,
+      invoiceNote: null,
+      logoUrl: null,
+    },
     role: 'OWNER',
   };
 }

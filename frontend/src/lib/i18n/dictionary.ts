@@ -1036,6 +1036,32 @@ const messages: Record<string, Msg> = {
     ar: 'PNG أو JPG، بحد أقصى 1 ميغابايت',
   },
   'parametres.logo.change': { fr: 'Changer le logo', en: 'Change logo', ar: 'تغيير الشعار' },
+  'parametres.logo.uploading': { fr: 'Envoi…', en: 'Uploading…', ar: 'جارٍ الرفع…' },
+  'parametres.logo.updated': {
+    fr: 'Logo mis à jour.',
+    en: 'Logo updated.',
+    ar: 'تم تحديث الشعار.',
+  },
+  'parametres.logo.invalidType': {
+    fr: 'Choisissez une image (PNG, JPG ou WebP).',
+    en: 'Please choose an image (PNG, JPG or WebP).',
+    ar: 'يرجى اختيار صورة (PNG أو JPG أو WebP).',
+  },
+  'parametres.logo.tooLarge': {
+    fr: 'Image trop lourde (max 10 Mo).',
+    en: 'Image too large (max 10 MB).',
+    ar: 'الصورة كبيرة جداً (بحد أقصى 10 ميغابايت).',
+  },
+  'parametres.logo.notConfigured': {
+    fr: 'Stockage d’images non configuré.',
+    en: 'Image storage not configured.',
+    ar: 'تخزين الصور غير مهيأ.',
+  },
+  'parametres.logo.uploadFailed': {
+    fr: 'Échec de l’envoi. Réessayez.',
+    en: 'Upload failed. Please try again.',
+    ar: 'فشل الرفع. حاول مرة أخرى.',
+  },
   'parametres.field.name': { fr: 'Nom de la boutique', en: 'Shop name', ar: 'اسم المتجر' },
   'parametres.field.phone': { fr: 'Numéro de téléphone', en: 'Phone number', ar: 'رقم الهاتف' },
   'parametres.field.city': { fr: 'Ville', en: 'City', ar: 'المدينة' },

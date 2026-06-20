@@ -1,12 +1,17 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import { useToast } from '@/contexts/ToastContext';
+import { ApiError } from '@/lib/api';
+import { uploadImage } from '@/lib/upload';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 const fieldClass =
   'border-border bg-input text-foreground font-body placeholder:text-muted-foreground focus:border-primary rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-60';
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 export interface BoutiqueInfoValues {
   name: string;
@@ -16,23 +21,47 @@ export interface BoutiqueInfoValues {
   note: string;
 }
 
+function logoUploadError(err: unknown, t: Translate): string {
+  if (err instanceof ApiError) {
+    switch (err.code) {
+      case 'FILE_TOO_LARGE':
+        return t('parametres.logo.tooLarge');
+      case 'INVALID_MIME':
+      case 'MAGIC_BYTE_MISMATCH':
+        return t('parametres.logo.invalidType');
+      case 'STORAGE_NOT_CONFIGURED':
+        return t('parametres.logo.notConfigured');
+      default:
+        return t('parametres.logo.uploadFailed');
+    }
+  }
+  return t('parametres.logo.uploadFailed');
+}
+
 /** Carte « Informations de la boutique » — contrôlée par `initial`, save async. */
 export default function BoutiqueInfoForm({
   initial,
+  initialLogoUrl,
   onSave,
-  onLogo,
+  onSaveLogo,
 }: {
   initial: BoutiqueInfoValues;
+  initialLogoUrl: string | null;
   onSave: (values: BoutiqueInfoValues) => Promise<void> | void;
-  onLogo: () => void;
+  onSaveLogo: (logoUrl: string) => Promise<void>;
 }) {
   const t = useT();
+  const { toast } = useToast();
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [city, setCity] = useState(initial.city);
   const [address, setAddress] = useState(initial.address);
   const [note, setNote] = useState(initial.note);
   const [saving, setSaving] = useState(false);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,6 +70,27 @@ export default function BoutiqueInfoForm({
       await onSave({ name, phone, city, address, note });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleLogoFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // autorise la re-sélection du même fichier
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast(t('parametres.logo.invalidType'), 'error');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const { url } = await uploadImage(file);
+      await onSaveLogo(url);
+      setLogoUrl(url);
+      toast(t('parametres.logo.updated'), 'success');
+    } catch (err) {
+      toast(logoUploadError(err, t), 'error');
+    } finally {
+      setUploadingLogo(false);
     }
   }
 
@@ -58,8 +108,18 @@ export default function BoutiqueInfoForm({
       <div className="flex flex-col gap-4 px-5 py-5 md:px-6">
         {/* Logo */}
         <div className="flex items-center gap-5">
-          <div className="bg-primary flex h-16 w-16 shrink-0 items-center justify-center rounded-lg">
-            <span className="font-headings text-primary-foreground text-2xl font-bold">S</span>
+          <div className="bg-primary flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+            {logoUrl ? (
+              // next/image non utilisable : URLs Cloudinary distantes non
+              // déclarées dans next.config (images.remotePatterns absent).
+              <img
+                src={logoUrl}
+                alt={t('parametres.logo.title')}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="font-headings text-primary-foreground text-2xl font-bold">S</span>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <span className="font-body text-foreground text-sm font-semibold">
@@ -68,13 +128,21 @@ export default function BoutiqueInfoForm({
             <span className="text-muted-foreground font-body text-xs">
               {t('parametres.logo.hint')}
             </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleLogoFile}
+              className="hidden"
+            />
             <button
               type="button"
-              onClick={onLogo}
-              className="border-border bg-surface text-foreground font-body mt-1 flex w-fit items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploadingLogo}
+              className="border-border bg-surface text-foreground font-body mt-1 flex w-fit items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
             >
               <Icon i="upload" size={12} />
-              {t('parametres.logo.change')}
+              {uploadingLogo ? t('parametres.logo.uploading') : t('parametres.logo.change')}
             </button>
           </div>
         </div>

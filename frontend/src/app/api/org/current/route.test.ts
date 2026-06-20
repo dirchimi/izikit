@@ -29,7 +29,14 @@ const mockPrimary = vi.mocked(getPrimaryMembership);
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
 const boutiqueCtx = {
   organization: { id: 'org1', slug: 'me', name: 'Me' },
-  settings: { currency: 'XAF', phone: null, city: null, address: null, invoiceNote: null },
+  settings: {
+    currency: 'XAF',
+    phone: null,
+    city: null,
+    address: null,
+    invoiceNote: null,
+    logoUrl: null,
+  },
   role: 'OWNER' as const,
 };
 const orgCtx = {

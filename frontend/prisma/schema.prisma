@@ -318,6 +318,7 @@ model BoutiqueSettings {
   city           String?
   address        String?
   invoiceNote    String?
+  logoUrl        String? // URL Cloudinary publique du logo de la boutique
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
