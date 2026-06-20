@@ -4,18 +4,27 @@ import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
+import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
-import {
-  posCategories,
-  posProducts,
-  posClients,
-  type PaymentMethod,
-  type PosProduct,
-} from '@/lib/boutique/fixtures';
+import { posCategories, posClients, type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
+
+interface ApiProduct {
+  id: string;
+  ref: string;
+  name: string;
+  category: string;
+  buyPrice: number;
+  sellPrice: number;
+  qty: number;
+  threshold: number;
+  status: 'ok' | 'low' | 'out';
+}
 
 const METHODS: PaymentMethod[] = ['cash', 'mobile', 'credit'];
 const METHOD_KEY: Record<PaymentMethod, string> = {
@@ -30,24 +39,23 @@ export default function VendrePos() {
 
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Tous');
-  const [method, setMethod] = useState<PaymentMethod>('credit');
+  const [method, setMethod] = useState<PaymentMethod>('cash');
   const [client, setClient] = useState<string | null>(null);
   const [clientQuery, setClientQuery] = useState('');
+  const [cart, setCart] = useState<CartLineData[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Panier pré-rempli pour refléter l'écran Banani au chargement.
-  const [cart, setCart] = useState<CartLineData[]>([
-    { name: 'Tissu wax 6y', unitPrice: 9000, qty: 2 },
-    { name: 'Huile Tournesol 2L', unitPrice: 2500, qty: 3 },
-  ]);
+  const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
+  const products = data?.products ?? [];
 
   const visibleProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return posProducts.filter(
+    return products.filter(
       (p) =>
         (category === 'Tous' || p.category === category) &&
         (q === '' || p.name.toLowerCase().includes(q)),
     );
-  }, [query, category]);
+  }, [products, query, category]);
 
   const visibleClients = useMemo(() => {
     const q = clientQuery.trim().toLowerCase();
@@ -57,28 +65,40 @@ export default function VendrePos() {
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   const subtotal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
 
-  function addToCart(product: PosProduct) {
+  function addToCart(product: ApiProduct) {
     setCart((prev) => {
-      const existing = prev.find((l) => l.name === product.name);
+      const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
-        return prev.map((l) => (l.name === product.name ? { ...l, qty: l.qty + 1 } : l));
+        return prev.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l));
       }
-      return [...prev, { name: product.name, unitPrice: product.price, qty: 1 }];
+      return [
+        ...prev,
+        { productId: product.id, name: product.name, unitPrice: product.sellPrice, qty: 1 },
+      ];
     });
   }
-  function inc(name: string) {
-    setCart((prev) => prev.map((l) => (l.name === name ? { ...l, qty: l.qty + 1 } : l)));
+  function inc(id: string) {
+    setCart((prev) => prev.map((l) => (l.productId === id ? { ...l, qty: l.qty + 1 } : l)));
   }
-  function dec(name: string) {
+  function dec(id: string) {
     setCart((prev) =>
-      prev.flatMap((l) => (l.name === name ? (l.qty <= 1 ? [] : [{ ...l, qty: l.qty - 1 }]) : [l])),
+      prev.flatMap((l) =>
+        l.productId === id ? (l.qty <= 1 ? [] : [{ ...l, qty: l.qty - 1 }]) : [l],
+      ),
     );
   }
-  function remove(name: string) {
-    setCart((prev) => prev.filter((l) => l.name !== name));
+  function remove(id: string) {
+    setCart((prev) => prev.filter((l) => l.productId !== id));
   }
 
-  function validate() {
+  function checkoutError(err: unknown): string {
+    const code = err instanceof ApiError ? err.code : '';
+    if (code === 'INSUFFICIENT_STOCK') return t('pos.insufficientStock');
+    if (code === 'CREDIT_NEEDS_CUSTOMER') return t('pos.creditNeedsClient');
+    return t('async.error');
+  }
+
+  async function validate() {
     if (cart.length === 0) {
       toast(t('pos.cartEmpty'), 'info');
       return;
@@ -87,9 +107,26 @@ export default function VendrePos() {
       toast(t('pos.creditNeedsClient'), 'error');
       return;
     }
-    toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');
-    setCart([]);
-    setClient(null);
+    setSubmitting(true);
+    try {
+      await api('/api/sales', {
+        method: 'POST',
+        body: {
+          method,
+          items: cart.map((l) => ({ productId: l.productId, qty: l.qty })),
+          ...(method === 'credit' && client ? { customer: { name: client } } : {}),
+        },
+      });
+      toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');
+      setCart([]);
+      setClient(null);
+      setClientQuery('');
+      await refresh(); // le stock a changé
+    } catch (err) {
+      toast(checkoutError(err), 'error');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -135,17 +172,38 @@ export default function VendrePos() {
           </div>
 
           {/* Grille produits */}
-          {visibleProducts.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 md:px-6 lg:grid-cols-4">
-              {visibleProducts.map((p) => (
-                <ProductCard key={p.name} product={p} onAdd={addToCart} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-muted-foreground font-body px-6 pb-6 text-sm">
-              {t('pos.empty', { q: query })}
-            </div>
-          )}
+          <div className="px-4 pb-6 md:px-6">
+            <AsyncState
+              loading={loading}
+              error={error}
+              onRetry={refresh}
+              isEmpty={products.length === 0}
+              emptyLabel={t('pos.catalogEmpty')}
+              emptyIcon="package"
+            >
+              {visibleProducts.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {visibleProducts.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      product={{
+                        name: p.name,
+                        price: p.sellPrice,
+                        stock: p.qty,
+                        category: p.category,
+                        low: p.status !== 'ok',
+                      }}
+                      onAdd={() => addToCart(p)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground font-body text-sm">
+                  {t('pos.empty', { q: query })}
+                </div>
+              )}
+            </AsyncState>
+          </div>
         </div>
 
         {/* Panier */}
@@ -161,11 +219,11 @@ export default function VendrePos() {
           <div className="flex flex-1 flex-col gap-1 px-5 py-3">
             {cart.map((line) => (
               <CartLine
-                key={line.name}
+                key={line.productId}
                 line={line}
-                onInc={() => inc(line.name)}
-                onDec={() => dec(line.name)}
-                onRemove={() => remove(line.name)}
+                onInc={() => inc(line.productId)}
+                onDec={() => dec(line.productId)}
+                onRemove={() => remove(line.productId)}
               />
             ))}
             <div className="text-muted-foreground border-border mt-2 flex items-center gap-2 rounded-md border border-dashed px-3 py-3">
@@ -217,7 +275,7 @@ export default function VendrePos() {
               </div>
             </div>
 
-            {/* Sélecteur client débiteur (crédit) */}
+            {/* Sélecteur client (crédit) */}
             {method === 'credit' && (
               <div className="bg-secondary flex flex-col gap-2 rounded-md px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -231,7 +289,10 @@ export default function VendrePos() {
                   <input
                     type="search"
                     value={clientQuery}
-                    onChange={(e) => setClientQuery(e.target.value)}
+                    onChange={(e) => {
+                      setClientQuery(e.target.value);
+                      setClient(e.target.value.trim() ? e.target.value : null);
+                    }}
                     placeholder={t('common.search.client')}
                     className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-xs outline-none"
                   />
@@ -242,7 +303,10 @@ export default function VendrePos() {
                       <button
                         key={c}
                         type="button"
-                        onClick={() => setClient(c)}
+                        onClick={() => {
+                          setClient(c);
+                          setClientQuery(c);
+                        }}
                         className={`flex items-center gap-3 px-3 py-2.5 text-start transition-colors ${
                           i > 0 ? 'border-border border-t' : ''
                         } ${client === c ? 'bg-secondary' : 'hover:bg-muted'}`}
@@ -258,14 +322,6 @@ export default function VendrePos() {
                     ))}
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => toast(t('pos.newClientSoon'), 'info')}
-                  className="font-body text-primary mt-1 flex items-center gap-2 text-xs font-semibold"
-                >
-                  <Icon i="user-plus" size={13} />
-                  {t('pos.newClient')}
-                </button>
               </div>
             )}
 
@@ -273,7 +329,8 @@ export default function VendrePos() {
             <button
               type="button"
               onClick={validate}
-              className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md py-3 text-base font-bold"
+              disabled={submitting}
+              className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md py-3 text-base font-bold disabled:opacity-60"
             >
               <Icon i="check" size={17} />
               {t('pos.validate')}

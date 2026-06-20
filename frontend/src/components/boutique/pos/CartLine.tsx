@@ -5,6 +5,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
 
 export interface CartLineData {
+  productId: string;
   name: string;
   unitPrice: number;
   qty: number;

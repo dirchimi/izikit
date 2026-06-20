@@ -5,20 +5,45 @@ import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
-import { paymentLabelKey } from '@/lib/boutique/payment-label';
-import {
-  salesTransactions,
-  salesSummary,
-  saleMethods,
-  saleMethodBadge,
-  SALES_TODAY,
-  type SaleMethod,
-} from '@/lib/boutique/fixtures';
+
+type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT';
+interface ApiSale {
+  id: string;
+  number: string;
+  method: ApiMethod;
+  total: number;
+  createdAt: string;
+  customerName: string | null;
+  items: { name: string; qty: number; unitPrice: number }[];
+}
 
 type Period = 'all' | 'today';
-type MethodFilter = SaleMethod | 'all';
+type MethodFilter = ApiMethod | 'all';
+
+const METHOD_LABEL: Record<ApiMethod, string> = {
+  CASH: 'method.cash',
+  MOBILE: 'method.mobile',
+  CREDIT: 'method.credit',
+};
+const METHOD_BADGE: Record<ApiMethod, string> = {
+  CASH: 'bg-badge-cash text-badge-cash-foreground',
+  MOBILE: 'bg-badge-mobile text-badge-mobile-foreground',
+  CREDIT: 'bg-badge-credit text-badge-credit-foreground',
+};
+const METHOD_TABS: MethodFilter[] = ['all', 'CASH', 'MOBILE', 'CREDIT'];
+
+function sameDay(iso: string, ref: Date): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
 
 export default function VentesManager() {
   const t = useT();
@@ -26,18 +51,45 @@ export default function VentesManager() {
   const [period, setPeriod] = useState<Period>('all');
   const [method, setMethod] = useState<MethodFilter>('all');
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return salesTransactions.filter(
-      (tx) =>
-        (q === '' || tx.product.toLowerCase().includes(q) || tx.id.toLowerCase().includes(q)) &&
-        (period === 'all' || tx.date === SALES_TODAY) &&
-        (method === 'all' || tx.method === method),
-    );
-  }, [search, period, method]);
+  const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
+  const sales = data?.sales ?? [];
+  const now = new Date();
 
-  const unsyncedVisible = visible.filter((tx) => !tx.synced).length;
-  const methodTabs: MethodFilter[] = ['all', ...saleMethods];
+  // KPIs « du jour » dérivés des ventes chargées.
+  const todays = sales.filter((s) => sameDay(s.createdAt, now));
+  const caToday = todays.reduce((sum, s) => sum + s.total, 0);
+  const countToday = todays.length;
+  const creditToday = todays
+    .filter((s) => s.method === 'CREDIT')
+    .reduce((sum, s) => sum + s.total, 0);
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sales
+      .filter(
+        (s) =>
+          (period === 'all' || sameDay(s.createdAt, now)) &&
+          (method === 'all' || s.method === method),
+      )
+      .map((s) => {
+        const d = new Date(s.createdAt);
+        const label =
+          (s.items[0]?.name ?? '—') + (s.items.length > 1 ? ` +${s.items.length - 1}` : '');
+        return {
+          id: s.id,
+          number: s.number,
+          date: d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+          time: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          label,
+          qty: s.items.reduce((sum, it) => sum + it.qty, 0),
+          total: s.total,
+          method: s.method,
+        };
+      })
+      .filter(
+        (r) => q === '' || r.label.toLowerCase().includes(q) || r.number.toLowerCase().includes(q),
+      );
+  }, [sales, search, period, method]);
 
   return (
     <>
@@ -49,27 +101,21 @@ export default function VentesManager() {
 
       <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
         {/* KPI */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <KpiCard
             accent
             label={t('ventes.kpi.caToday')}
-            value={formatFCFA(salesSummary.caToday)}
+            value={formatFCFA(caToday)}
             sublabel={t('common.fcfa')}
           />
           <KpiCard
             label={t('depenses.kpi.count')}
-            value={String(salesSummary.txToday)}
+            value={String(countToday)}
             sublabel={t('ventes.kpi.salesUnit')}
           />
           <KpiCard
-            label={t('ventes.kpi.syncPending')}
-            value={String(salesSummary.syncPending)}
-            sublabel={t('common.transactions')}
-            valueClass="text-warning"
-          />
-          <KpiCard
             label={t('ventes.kpi.creditSales')}
-            value={formatFCFA(salesSummary.creditSales)}
+            value={formatFCFA(creditToday)}
             sublabel={t('common.fcfa')}
           />
         </div>
@@ -100,7 +146,7 @@ export default function VentesManager() {
           </div>
 
           <div className="border-border flex flex-wrap items-center overflow-hidden rounded-md border">
-            {methodTabs.map((m) => {
+            {METHOD_TABS.map((m) => {
               const active = method === m;
               return (
                 <button
@@ -113,97 +159,87 @@ export default function VentesManager() {
                       : 'text-muted-foreground'
                   }`}
                 >
-                  {m === 'all' ? t('common.all') : t(paymentLabelKey(m))}
+                  {m === 'all' ? t('common.all') : t(METHOD_LABEL[m])}
                 </button>
               );
             })}
           </div>
-
-          <div className="flex-1" />
-
-          {unsyncedVisible > 0 && (
-            <div className="text-muted-foreground font-body flex items-center gap-1 text-xs">
-              <Icon i="cloud-off" size={12} className="text-warning" />
-              <span>{t('ventes.unsynced', { n: unsyncedVisible })}</span>
-            </div>
-          )}
         </div>
 
         {/* Table */}
-        <div className="bg-surface border-border rounded-lg border">
-          <div className="overflow-x-auto">
-            <div className="min-w-[820px]">
-              <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
-                <span className="font-body text-muted-foreground w-20 text-xs font-semibold">
-                  {t('depenses.col.num')}
-                </span>
-                <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
-                  {t('common.date')}
-                </span>
-                <span className="font-body text-muted-foreground w-14 text-xs font-semibold">
-                  {t('ventes.col.time')}
-                </span>
-                <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
-                  {t('common.article')}
-                </span>
-                <span className="font-body text-muted-foreground w-8 text-center text-xs font-semibold">
-                  {t('common.qty')}
-                </span>
-                <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
-                  {t('common.total')}
-                </span>
-                <span className="font-body text-muted-foreground w-28 text-center text-xs font-semibold">
-                  {t('ventes.col.payment')}
-                </span>
-                <span className="font-body text-muted-foreground w-10 text-center text-xs font-semibold">
-                  {t('ventes.col.sync')}
-                </span>
-              </div>
+        <AsyncState
+          loading={loading}
+          error={error}
+          onRetry={refresh}
+          isEmpty={sales.length === 0}
+          emptyLabel={t('ventes.emptyAll')}
+          emptyIcon="receipt"
+        >
+          <div className="bg-surface border-border rounded-lg border">
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px]">
+                <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
+                  <span className="font-body text-muted-foreground w-20 text-xs font-semibold">
+                    {t('depenses.col.num')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
+                    {t('common.date')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-14 text-xs font-semibold">
+                    {t('ventes.col.time')}
+                  </span>
+                  <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
+                    {t('common.article')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-8 text-center text-xs font-semibold">
+                    {t('common.qty')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                    {t('common.total')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-28 text-center text-xs font-semibold">
+                    {t('ventes.col.payment')}
+                  </span>
+                </div>
 
-              {visible.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
-                >
-                  <span className="font-body text-muted-foreground w-20 font-mono text-xs">
-                    {tx.id}
-                  </span>
-                  <span className="font-body text-muted-foreground w-24 text-xs">{tx.date}</span>
-                  <span className="font-body text-muted-foreground w-14 text-xs">{tx.time}</span>
-                  <span className="font-body text-foreground flex-1 text-sm font-medium">
-                    {tx.product}
-                  </span>
-                  <span className="font-body text-muted-foreground w-8 text-center text-sm">
-                    {tx.qty}
-                  </span>
-                  <span className="font-body text-foreground w-28 text-end text-sm font-bold">
-                    {formatFCFA(tx.total)} {t('common.fcfa')}
-                  </span>
-                  <div className="flex w-28 justify-center">
-                    <span
-                      className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${saleMethodBadge[tx.method]}`}
-                    >
-                      {t(paymentLabelKey(tx.method))}
+                {rows.map((r) => (
+                  <div
+                    key={r.id}
+                    className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
+                  >
+                    <span className="font-body text-muted-foreground w-20 font-mono text-xs">
+                      {r.number}
                     </span>
+                    <span className="font-body text-muted-foreground w-24 text-xs">{r.date}</span>
+                    <span className="font-body text-muted-foreground w-14 text-xs">{r.time}</span>
+                    <span className="font-body text-foreground flex-1 text-sm font-medium">
+                      {r.label}
+                    </span>
+                    <span className="font-body text-muted-foreground w-8 text-center text-sm">
+                      {r.qty}
+                    </span>
+                    <span className="font-body text-foreground w-28 text-end text-sm font-bold">
+                      {formatFCFA(r.total)} {t('common.fcfa')}
+                    </span>
+                    <div className="flex w-28 justify-center">
+                      <span
+                        className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
+                      >
+                        {t(METHOD_LABEL[r.method])}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex w-10 justify-center">
-                    {tx.synced ? (
-                      <Icon i="cloud" size={14} className="text-success" />
-                    ) : (
-                      <Icon i="cloud-off" size={14} className="text-warning" />
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))}
 
-              {visible.length === 0 && (
-                <div className="text-muted-foreground font-body px-5 py-6 text-sm">
-                  {t('ventes.empty')}
-                </div>
-              )}
+                {rows.length === 0 && (
+                  <div className="text-muted-foreground font-body px-5 py-6 text-sm">
+                    {t('ventes.empty')}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </AsyncState>
       </div>
     </>
   );

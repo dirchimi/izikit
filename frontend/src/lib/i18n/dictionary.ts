@@ -993,6 +993,21 @@ const messages: Record<string, Msg> = {
   'async.error': { fr: 'Une erreur est survenue.', en: 'Something went wrong.', ar: 'حدث خطأ ما.' },
   'async.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
   'async.empty': { fr: 'Aucune donnée.', en: 'No data.', ar: 'لا توجد بيانات.' },
+  'pos.insufficientStock': {
+    fr: 'Stock insuffisant pour cette vente.',
+    en: 'Not enough stock for this sale.',
+    ar: 'المخزون غير كافٍ لهذه العملية.',
+  },
+  'pos.catalogEmpty': {
+    fr: 'Aucun produit en stock. Ajoutez des produits dans Stock.',
+    en: 'No products in stock. Add products in Stock.',
+    ar: 'لا توجد منتجات. أضِف منتجات في المخزون.',
+  },
+  'ventes.emptyAll': {
+    fr: 'Aucune vente enregistrée pour le moment.',
+    en: 'No sales recorded yet.',
+    ar: 'لا توجد مبيعات مسجّلة بعد.',
+  },
 
   // ── Vendre (POS) ──────────────────────────────────────────────────────────
   'pos.subtitle': {

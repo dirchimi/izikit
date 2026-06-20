@@ -103,6 +103,8 @@ model Organization {
   members   OrganizationMember[]
   settings  BoutiqueSettings?
   products  Product[]
+  customers Customer[]
+  sales     Sale[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -124,6 +126,7 @@ model Product {
   qty            Int             @default(0) // stock courant (dérivé des mouvements)
   threshold      Int             @default(0) // seuil d'alerte stock faible
   movements      StockMovement[]
+  saleItems      SaleItem[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -148,6 +151,57 @@ model StockMovement {
 
   @@index([organizationId])
   @@index([productId])
+}
+
+// Client d'une boutique (Phase 3). Minimal : nom + téléphone. Sert au POS
+// (vente à crédit) et de base aux créances (Phase 4).
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  sales          Sale[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+// Vente (Phase 3). `number` séquentiel par boutique (ex V-0001). `method`:
+// CASH | MOBILE | CREDIT. `total` = Σ(items) en FCFA entier. La création d'une
+// vente décrémente le stock via des StockMovement OUT dans la même transaction.
+model Sale {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String
+  customerId     String?
+  customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  method         String // CASH | MOBILE | CREDIT
+  total          Int
+  createdById    String?
+  items          SaleItem[]
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+}
+
+// Ligne de vente. `name` et `unitPrice` sont un instantané au moment de la
+// vente (l'historique ne change pas si le produit est édité/supprimé).
+model SaleItem {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name      String
+  qty       Int
+  unitPrice Int
+
+  @@index([saleId])
 }
 
 // Profil + préférences d'une boutique (1:1 avec Organization). Créé dans la
