@@ -739,6 +739,8 @@ const messages: Record<string, Msg> = {
     ar: 'تحليل أداء المتجر',
   },
   'rapports.exportCsv': { fr: 'Exporter en CSV', en: 'Export to CSV', ar: 'تصدير CSV' },
+  'rapports.exportPdf': { fr: 'PDF', en: 'PDF', ar: 'PDF' },
+  'rapports.whatsapp': { fr: 'WhatsApp', en: 'WhatsApp', ar: 'واتساب' },
   'rapports.exportTitle': { fr: 'Rapport', en: 'Report', ar: 'تقرير' },
   'rapports.exported': {
     fr: 'Rapport exporté en CSV.',

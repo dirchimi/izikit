@@ -82,16 +82,58 @@ export default function RapportsManager() {
     toast(t('rapports.exported'), 'success');
   }
 
+  function openPdf() {
+    if (!data) {
+      toast(t('async.error'), 'error');
+      return;
+    }
+    // Le navigateur ouvre le PDF (application/pdf inline) — impression / partage.
+    window.open(`/api/reports/pdf?period=${period}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function shareWhatsapp() {
+    if (!summary) {
+      toast(t('async.error'), 'error');
+      return;
+    }
+    const text =
+      `${t('rapports.exportTitle')} — ${t(`rapports.period.${period}`)}\n` +
+      `${t('rapports.kpi.revenue')}: ${formatFCFA(summary.revenue)} ${t('common.fcfa')}\n` +
+      `${t('rapports.kpi.netProfit')}: ${formatFCFA(summary.netProfit)} ${t('common.fcfa')}`;
+    // Pas de numéro : WhatsApp laisse l'utilisateur choisir le destinataire.
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }
+
   const exportBtn = (
-    <button
-      type="button"
-      onClick={exportCsv}
-      disabled={loading || !data}
-      className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
-    >
-      <Icon i="download" size={14} />
-      {t('rapports.exportCsv')}
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={openPdf}
+        disabled={loading || !data}
+        className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
+      >
+        <Icon i="file-text" size={14} />
+        {t('rapports.exportPdf')}
+      </button>
+      <button
+        type="button"
+        onClick={shareWhatsapp}
+        disabled={loading || !data}
+        className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
+      >
+        <Icon i="message-circle" size={14} />
+        {t('rapports.whatsapp')}
+      </button>
+      <button
+        type="button"
+        onClick={exportCsv}
+        disabled={loading || !data}
+        className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
+      >
+        <Icon i="download" size={14} />
+        {t('rapports.exportCsv')}
+      </button>
+    </div>
   );
 
   return (
