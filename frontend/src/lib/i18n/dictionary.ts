@@ -636,6 +636,31 @@ const messages: Record<string, Msg> = {
     ar: 'اسم المنتج مطلوب.',
   },
   'stock.form.title': { fr: 'Ajouter un produit', en: 'Add a product', ar: 'إضافة منتج' },
+  'stock.photo.label': { fr: 'Photo du produit', en: 'Product photo', ar: 'صورة المنتج' },
+  'stock.photo.add': { fr: 'Ajouter une photo', en: 'Add a photo', ar: 'إضافة صورة' },
+  'stock.photo.change': { fr: 'Changer la photo', en: 'Change photo', ar: 'تغيير الصورة' },
+  'stock.photo.uploading': { fr: 'Envoi…', en: 'Uploading…', ar: 'جارٍ الرفع…' },
+  'stock.photo.updated': { fr: 'Photo mise à jour.', en: 'Photo updated.', ar: 'تم تحديث الصورة.' },
+  'stock.photo.invalidType': {
+    fr: 'Choisissez une image (PNG, JPG ou WebP).',
+    en: 'Please choose an image (PNG, JPG or WebP).',
+    ar: 'يرجى اختيار صورة (PNG أو JPG أو WebP).',
+  },
+  'stock.photo.tooLarge': {
+    fr: 'Image trop lourde (max 10 Mo).',
+    en: 'Image too large (max 10 MB).',
+    ar: 'الصورة كبيرة جداً (بحد أقصى 10 ميغابايت).',
+  },
+  'stock.photo.notConfigured': {
+    fr: 'Stockage d’images non configuré.',
+    en: 'Image storage not configured.',
+    ar: 'تخزين الصور غير مهيأ.',
+  },
+  'stock.photo.failed': {
+    fr: 'Échec de l’envoi. Réessayez.',
+    en: 'Upload failed. Please try again.',
+    ar: 'فشل الرفع. حاول مرة أخرى.',
+  },
   'stock.form.subtitle': {
     fr: 'Nouvelle référence en stock',
     en: 'New stock reference',

@@ -127,6 +127,7 @@ model Product {
   sellPrice      Int             @default(0) // prix de vente (FCFA entier)
   qty            Int             @default(0) // stock courant (dérivé des mouvements)
   threshold      Int             @default(0) // seuil d'alerte stock faible
+  imageUrl       String? // URL Cloudinary publique de la photo du produit
   movements      StockMovement[]
   saleItems      SaleItem[]
   createdAt      DateTime        @default(now())

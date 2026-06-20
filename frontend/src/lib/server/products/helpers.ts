@@ -24,6 +24,7 @@ export const PRODUCT_SELECT = {
   sellPrice: true,
   qty: true,
   threshold: true,
+  imageUrl: true,
 } as const;
 
 export interface ProductRow {
@@ -35,6 +36,7 @@ export interface ProductRow {
   sellPrice: number;
   qty: number;
   threshold: number;
+  imageUrl: string | null;
 }
 
 /** Vue API d'un produit : colonnes + statut stock dérivé. */

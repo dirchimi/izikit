@@ -10,7 +10,7 @@ export default function ProductCard({
   product,
   onAdd,
 }: {
-  product: PosProduct;
+  product: PosProduct & { imageUrl?: string | null };
   onAdd: (product: PosProduct) => void;
 }) {
   const t = useT();
@@ -22,9 +22,18 @@ export default function ProductCard({
         product.low ? 'border-warning' : 'border-border'
       }`}
     >
-      <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-md">
-        <Icon i="package" size={16} className="text-muted-foreground" />
-      </div>
+      {product.imageUrl ? (
+        // next/image non utilisable (URLs Cloudinary distantes non déclarées).
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          className="bg-muted h-20 w-full rounded-md object-cover"
+        />
+      ) : (
+        <div className="bg-muted flex h-20 w-full items-center justify-center rounded-md">
+          <Icon i="package" size={20} className="text-muted-foreground" />
+        </div>
+      )}
       <span className="font-body text-foreground text-sm leading-tight font-semibold">
         {product.name}
       </span>

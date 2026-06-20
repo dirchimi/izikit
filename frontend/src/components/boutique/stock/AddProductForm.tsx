@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import { useToast } from '@/contexts/ToastContext';
+import { ApiError } from '@/lib/api';
+import { uploadImage } from '@/lib/upload';
 import { posCategories } from '@/lib/boutique/fixtures';
 
 export interface NewProductInput {
@@ -12,6 +15,27 @@ export interface NewProductInput {
   sellPrice: number;
   qty: number;
   threshold: number;
+  imageUrl: string | null;
+}
+
+function imageUploadError(
+  err: unknown,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (err instanceof ApiError) {
+    switch (err.code) {
+      case 'FILE_TOO_LARGE':
+        return t('stock.photo.tooLarge');
+      case 'INVALID_MIME':
+      case 'MAGIC_BYTE_MISMATCH':
+        return t('stock.photo.invalidType');
+      case 'STORAGE_NOT_CONFIGURED':
+        return t('stock.photo.notConfigured');
+      default:
+        return t('stock.photo.failed');
+    }
+  }
+  return t('stock.photo.failed');
 }
 
 const categoryOptions = posCategories.filter((c) => c !== 'Tous');
@@ -30,6 +54,7 @@ export default function AddProductForm({
   onSubmit: (p: NewProductInput) => Promise<boolean> | boolean;
 }) {
   const t = useT();
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
@@ -37,6 +62,29 @@ export default function AddProductForm({
   const [qty, setQty] = useState('');
   const [threshold, setThreshold] = useState('5');
   const [submitting, setSubmitting] = useState(false);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  async function handleImageFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast(t('stock.photo.invalidType'), 'error');
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const { url } = await uploadImage(file);
+      setImageUrl(url);
+    } catch (err) {
+      toast(imageUploadError(err, t), 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -49,6 +97,7 @@ export default function AddProductForm({
         sellPrice: Number(sellPrice) || 0,
         qty: Number(qty) || 0,
         threshold: Number(threshold) || 0,
+        imageUrl,
       });
       if (ok) {
         setName('');
@@ -57,6 +106,7 @@ export default function AddProductForm({
         setSellPrice('');
         setQty('');
         setThreshold('5');
+        setImageUrl(null);
       }
     } finally {
       setSubmitting(false);
@@ -72,6 +122,45 @@ export default function AddProductForm({
         <p className="text-muted-foreground font-body mt-0.5 text-xs">{t('stock.form.subtitle')}</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 py-5">
+        {/* Photo */}
+        <div className="flex items-center gap-3">
+          <div className="bg-muted border-border flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border">
+            {imageUrl ? (
+              // next/image non utilisable (URLs Cloudinary distantes non déclarées).
+              <img
+                src={imageUrl}
+                alt={t('stock.photo.label')}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Icon i="image" size={18} className="text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className={labelClass}>{t('stock.photo.label')}</span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleImageFile}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploadingImage}
+              className="border-border bg-surface text-foreground font-body flex w-fit items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+            >
+              <Icon i="upload" size={12} />
+              {uploadingImage
+                ? t('stock.photo.uploading')
+                : imageUrl
+                  ? t('stock.photo.change')
+                  : t('stock.photo.add')}
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-1">
           <label className={labelClass} htmlFor="np-name">
             {t('stock.form.name')}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
@@ -10,6 +10,7 @@ import { formatFCFA } from '@/lib/boutique/format';
 import { posCategories, stockStatusConfig } from '@/lib/boutique/fixtures';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/useApi';
+import { uploadImage } from '@/lib/upload';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
@@ -24,6 +25,7 @@ interface ApiProduct {
   qty: number;
   threshold: number;
   status: 'ok' | 'low' | 'out';
+  imageUrl: string | null;
 }
 
 type StatusFilter = 'all' | 'low' | 'out';
@@ -36,6 +38,26 @@ const STATUS_TABS: { key: StatusFilter; labelKey: string }[] = [
 
 const categoryOptions = posCategories.filter((c) => c !== 'Tous');
 
+function photoUploadError(
+  err: unknown,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (err instanceof ApiError) {
+    switch (err.code) {
+      case 'FILE_TOO_LARGE':
+        return t('stock.photo.tooLarge');
+      case 'INVALID_MIME':
+      case 'MAGIC_BYTE_MISMATCH':
+        return t('stock.photo.invalidType');
+      case 'STORAGE_NOT_CONFIGURED':
+        return t('stock.photo.notConfigured');
+      default:
+        return t('stock.photo.failed');
+    }
+  }
+  return t('stock.photo.failed');
+}
+
 export default function StockManager() {
   const { toast } = useToast();
   const t = useT();
@@ -45,6 +67,38 @@ export default function StockManager() {
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+
+  function openPhotoPicker(productId: string) {
+    setPhotoTargetId(productId);
+    photoInputRef.current?.click();
+  }
+
+  async function handlePhotoFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const productId = photoTargetId;
+    if (!file || !productId) return;
+    if (!file.type.startsWith('image/')) {
+      toast(t('stock.photo.invalidType'), 'error');
+      return;
+    }
+    setUploadingPhotoId(productId);
+    try {
+      const { url } = await uploadImage(file);
+      await api(`/api/products/${productId}`, { method: 'PATCH', body: { imageUrl: url } });
+      toast(t('stock.photo.updated'), 'success');
+      await refresh();
+    } catch (err) {
+      toast(photoUploadError(err, t), 'error');
+    } finally {
+      setUploadingPhotoId(null);
+      setPhotoTargetId(null);
+    }
+  }
 
   const totalProduits = products.length;
   const stockValue = products.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
@@ -76,6 +130,7 @@ export default function StockManager() {
           sellPrice: input.sellPrice,
           qty: input.qty,
           threshold: input.threshold,
+          ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
         },
       });
       toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
@@ -171,6 +226,15 @@ export default function StockManager() {
             </div>
           </div>
 
+          {/* Champ fichier partagé pour changer la photo d'un produit */}
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handlePhotoFile}
+            className="hidden"
+          />
+
           {/* Table */}
           <AsyncState
             loading={loading}
@@ -223,9 +287,31 @@ export default function StockManager() {
                           {p.ref}
                         </span>
                         <div className="flex flex-1 items-center gap-2">
-                          <div className="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
-                            <Icon i="package" size={13} className="text-muted-foreground" />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openPhotoPicker(p.id)}
+                            disabled={uploadingPhotoId === p.id}
+                            aria-label={t('stock.photo.change')}
+                            title={t('stock.photo.change')}
+                            className="bg-muted border-border hover:border-primary flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border transition-colors disabled:opacity-60"
+                          >
+                            {uploadingPhotoId === p.id ? (
+                              <Icon
+                                i="loader"
+                                size={13}
+                                className="text-muted-foreground animate-spin"
+                              />
+                            ) : p.imageUrl ? (
+                              // next/image non utilisable (URLs Cloudinary distantes non déclarées).
+                              <img
+                                src={p.imageUrl}
+                                alt={p.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Icon i="camera" size={13} className="text-muted-foreground" />
+                            )}
+                          </button>
                           <span className="font-body text-foreground text-sm font-medium">
                             {p.name}
                           </span>

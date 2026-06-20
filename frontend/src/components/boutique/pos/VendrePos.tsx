@@ -24,6 +24,7 @@ interface ApiProduct {
   qty: number;
   threshold: number;
   status: 'ok' | 'low' | 'out';
+  imageUrl: string | null;
 }
 
 const METHODS: PaymentMethod[] = ['cash', 'mobile', 'credit'];
@@ -192,6 +193,7 @@ export default function VendrePos() {
                         stock: p.qty,
                         category: p.category,
                         low: p.status !== 'ok',
+                        imageUrl: p.imageUrl,
                       }}
                       onAdd={() => addToCart(p)}
                     />
