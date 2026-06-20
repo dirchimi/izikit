@@ -7,16 +7,24 @@ import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
-import {
-  posCategories,
-  stockProducts,
-  stockSummary,
-  stockStatusConfig,
-  deriveStockStatus,
-  type StockProduct,
-} from '@/lib/boutique/fixtures';
+import { posCategories, stockStatusConfig } from '@/lib/boutique/fixtures';
+import { api, ApiError } from '@/lib/api';
+import { useApi } from '@/lib/useApi';
 import KpiCard from '@/components/boutique/KpiCard';
+import AsyncState from '@/components/boutique/AsyncState';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
+
+interface ApiProduct {
+  id: string;
+  ref: string;
+  name: string;
+  category: string;
+  buyPrice: number;
+  sellPrice: number;
+  qty: number;
+  threshold: number;
+  status: 'ok' | 'low' | 'out';
+}
 
 type StatusFilter = 'all' | 'low' | 'out';
 
@@ -27,7 +35,6 @@ const STATUS_TABS: { key: StatusFilter; labelKey: string }[] = [
 ];
 
 const categoryOptions = posCategories.filter((c) => c !== 'Tous');
-const INITIAL_VALUE = stockProducts.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
 
 export default function StockManager() {
   const { toast } = useToast();
@@ -35,11 +42,12 @@ export default function StockManager() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [products, setProducts] = useState<StockProduct[]>(stockProducts);
 
-  const totalProduits = stockSummary.totalRefs + (products.length - stockProducts.length);
-  const currentValue = products.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
-  const stockValue = stockSummary.stockValue + (currentValue - INITIAL_VALUE);
+  const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
+  const products = data?.products ?? [];
+
+  const totalProduits = products.length;
+  const stockValue = products.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
   const lowCount = products.filter((p) => p.status === 'low').length;
   const outCount = products.filter((p) => p.status === 'out').length;
 
@@ -53,27 +61,31 @@ export default function StockManager() {
     );
   }, [products, search, categoryFilter, statusFilter]);
 
-  function addProduct(input: NewProductInput) {
+  async function addProduct(input: NewProductInput): Promise<boolean> {
     if (!input.name) {
       toast(t('stock.nameRequired'), 'error');
-      return;
+      return false;
     }
-    const maxNum = products.reduce((m, p) => {
-      const n = parseInt(p.ref.replace(/\D/g, ''), 10);
-      return Number.isNaN(n) ? m : Math.max(m, n);
-    }, 0);
-    const next: StockProduct = {
-      ref: `P-${String(maxNum + 1).padStart(3, '0')}`,
-      name: input.name,
-      category: input.category,
-      buyPrice: input.buyPrice,
-      sellPrice: input.sellPrice,
-      qty: input.qty,
-      threshold: input.threshold,
-      status: deriveStockStatus(input.qty, input.threshold),
-    };
-    setProducts((prev) => [next, ...prev]);
-    toast(t('stock.added', { name: next.name, ref: next.ref }), 'success');
+    try {
+      const res = await api<{ product: { name: string; ref: string } }>('/api/products', {
+        method: 'POST',
+        body: {
+          name: input.name,
+          category: input.category,
+          buyPrice: input.buyPrice,
+          sellPrice: input.sellPrice,
+          qty: input.qty,
+          threshold: input.threshold,
+        },
+      });
+      toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
+      await refresh();
+      return true;
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      toast(code === 'REF_TAKEN' ? t('stock.refTaken') : t('async.error'), 'error');
+      return false;
+    }
   }
 
   return (
@@ -160,108 +172,117 @@ export default function StockManager() {
           </div>
 
           {/* Table */}
-          <div className="bg-surface border-border rounded-lg border">
-            <div className="overflow-x-auto">
-              <div className="min-w-[860px]">
-                {/* En-tête */}
-                <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
-                  <span className="font-body text-muted-foreground w-16 text-xs font-semibold">
-                    {t('stock.col.ref')}
-                  </span>
-                  <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
-                    {t('common.product')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
-                    {t('common.category')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
-                    {t('stock.col.buyPrice')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
-                    {t('stock.col.sellPrice')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
-                    {t('stock.col.stock')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
-                    {t('stock.col.threshold')}
-                  </span>
-                  <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
-                    {t('common.status')}
-                  </span>
-                  <span className="w-8" />
-                </div>
-
-                {visible.map((p) => {
-                  const s = stockStatusConfig[p.status];
-                  return (
-                    <div
-                      key={p.ref}
-                      className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
-                    >
-                      <span className="font-body text-muted-foreground w-16 font-mono text-xs">
-                        {p.ref}
-                      </span>
-                      <div className="flex flex-1 items-center gap-2">
-                        <div className="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
-                          <Icon i="package" size={13} className="text-muted-foreground" />
-                        </div>
-                        <span className="font-body text-foreground text-sm font-medium">
-                          {p.name}
-                        </span>
-                      </div>
-                      <span className="font-body text-muted-foreground w-24 text-xs">
-                        {p.category}
-                      </span>
-                      <span className="font-body text-muted-foreground w-28 text-end text-sm">
-                        {formatFCFA(p.buyPrice)} {t('common.fcfa')}
-                      </span>
-                      <span className="font-body text-foreground w-28 text-end text-sm font-semibold">
-                        {formatFCFA(p.sellPrice)} {t('common.fcfa')}
-                      </span>
-                      <span
-                        className={`font-body w-16 text-center text-sm font-bold ${
-                          p.status === 'out'
-                            ? 'text-danger'
-                            : p.status === 'low'
-                              ? 'text-warning'
-                              : 'text-foreground'
-                        }`}
-                      >
-                        {p.qty}
-                      </span>
-                      <span className="font-body text-muted-foreground w-16 text-center text-xs">
-                        {p.threshold}
-                      </span>
-                      <div className="flex w-24 justify-center">
-                        <span
-                          className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
-                        >
-                          {t(`stock.status.${p.status}`)}
-                        </span>
-                      </div>
-                      <div className="flex w-8 justify-center">
-                        <button
-                          type="button"
-                          aria-label={`${t('common.edit')} ${p.name}`}
-                          onClick={() => toast(t('common.editSoonProduct'), 'info')}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <Icon i="pencil" size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {visible.length === 0 && (
-                  <div className="text-muted-foreground font-body px-5 py-6 text-sm">
-                    {t('stock.empty')}
+          <AsyncState
+            loading={loading}
+            error={error}
+            onRetry={refresh}
+            isEmpty={products.length === 0}
+            emptyLabel={t('stock.emptyAll')}
+            emptyIcon="package"
+          >
+            <div className="bg-surface border-border rounded-lg border">
+              <div className="overflow-x-auto">
+                <div className="min-w-[860px]">
+                  {/* En-tête */}
+                  <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
+                    <span className="font-body text-muted-foreground w-16 text-xs font-semibold">
+                      {t('stock.col.ref')}
+                    </span>
+                    <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
+                      {t('common.product')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
+                      {t('common.category')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                      {t('stock.col.buyPrice')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                      {t('stock.col.sellPrice')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
+                      {t('stock.col.stock')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
+                      {t('stock.col.threshold')}
+                    </span>
+                    <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
+                      {t('common.status')}
+                    </span>
+                    <span className="w-8" />
                   </div>
-                )}
+
+                  {visible.map((p) => {
+                    const s = stockStatusConfig[p.status];
+                    return (
+                      <div
+                        key={p.id}
+                        className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
+                      >
+                        <span className="font-body text-muted-foreground w-16 font-mono text-xs">
+                          {p.ref}
+                        </span>
+                        <div className="flex flex-1 items-center gap-2">
+                          <div className="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
+                            <Icon i="package" size={13} className="text-muted-foreground" />
+                          </div>
+                          <span className="font-body text-foreground text-sm font-medium">
+                            {p.name}
+                          </span>
+                        </div>
+                        <span className="font-body text-muted-foreground w-24 text-xs">
+                          {p.category}
+                        </span>
+                        <span className="font-body text-muted-foreground w-28 text-end text-sm">
+                          {formatFCFA(p.buyPrice)} {t('common.fcfa')}
+                        </span>
+                        <span className="font-body text-foreground w-28 text-end text-sm font-semibold">
+                          {formatFCFA(p.sellPrice)} {t('common.fcfa')}
+                        </span>
+                        <span
+                          className={`font-body w-16 text-center text-sm font-bold ${
+                            p.status === 'out'
+                              ? 'text-danger'
+                              : p.status === 'low'
+                                ? 'text-warning'
+                                : 'text-foreground'
+                          }`}
+                        >
+                          {p.qty}
+                        </span>
+                        <span className="font-body text-muted-foreground w-16 text-center text-xs">
+                          {p.threshold}
+                        </span>
+                        <div className="flex w-24 justify-center">
+                          <span
+                            className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
+                          >
+                            {t(`stock.status.${p.status}`)}
+                          </span>
+                        </div>
+                        <div className="flex w-8 justify-center">
+                          <button
+                            type="button"
+                            aria-label={`${t('common.edit')} ${p.name}`}
+                            onClick={() => toast(t('common.editSoonProduct'), 'info')}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <Icon i="pencil" size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {visible.length === 0 && (
+                    <div className="text-muted-foreground font-body px-5 py-6 text-sm">
+                      {t('stock.empty')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </AsyncState>
         </div>
 
         {/* Formulaire d'ajout */}

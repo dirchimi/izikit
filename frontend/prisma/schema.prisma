@@ -102,10 +102,52 @@ model Organization {
   owner     User     @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members   OrganizationMember[]
   settings  BoutiqueSettings?
+  products  Product[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+// Produit du catalogue d'une boutique (Phase 2). Montants entiers en FCFA.
+// La quantité (`qty`) ne doit JAMAIS être mutée sans un StockMovement
+// correspondant (ledger d'inventaire) — voir /api/products routes.
+model Product {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ref            String // référence/SKU, unique par boutique
+  name           String
+  category       String
+  buyPrice       Int             @default(0) // prix d'achat (FCFA entier)
+  sellPrice      Int             @default(0) // prix de vente (FCFA entier)
+  qty            Int             @default(0) // stock courant (dérivé des mouvements)
+  threshold      Int             @default(0) // seuil d'alerte stock faible
+  movements      StockMovement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([organizationId, ref])
+  @@index([organizationId])
+  @@index([organizationId, category])
+}
+
+// Mouvement de stock (ledger). type: IN (entrée) | OUT (sortie) | ADJUST
+// (correction). `delta` est signé. `organizationId` est un scalaire de scoping
+// (pas de relation inverse pour ne pas alourdir Organization).
+model StockMovement {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type           String // IN | OUT | ADJUST
+  delta          Int // variation signée de quantité
+  reason         String?
+  createdById    String? // utilisateur à l'origine du mouvement
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([productId])
 }
 
 // Profil + préférences d'une boutique (1:1 avec Organization). Créé dans la

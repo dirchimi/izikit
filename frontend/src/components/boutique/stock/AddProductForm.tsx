@@ -20,8 +20,15 @@ const fieldClass =
   'border-border bg-input text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none focus:border-primary';
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 
-/** Formulaire d'ajout de produit (contrôlé). Appelle onSubmit puis se réinitialise. */
-export default function AddProductForm({ onSubmit }: { onSubmit: (p: NewProductInput) => void }) {
+/**
+ * Formulaire d'ajout de produit (contrôlé). Appelle onSubmit (async) et ne se
+ * réinitialise QUE si la création a réussi (sinon l'utilisateur garde sa saisie).
+ */
+export default function AddProductForm({
+  onSubmit,
+}: {
+  onSubmit: (p: NewProductInput) => Promise<boolean> | boolean;
+}) {
   const t = useT();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
@@ -29,23 +36,31 @@ export default function AddProductForm({ onSubmit }: { onSubmit: (p: NewProductI
   const [sellPrice, setSellPrice] = useState('');
   const [qty, setQty] = useState('');
   const [threshold, setThreshold] = useState('5');
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit({
-      name: name.trim(),
-      category: category || 'Alimentation',
-      buyPrice: Number(buyPrice) || 0,
-      sellPrice: Number(sellPrice) || 0,
-      qty: Number(qty) || 0,
-      threshold: Number(threshold) || 0,
-    });
-    setName('');
-    setCategory('');
-    setBuyPrice('');
-    setSellPrice('');
-    setQty('');
-    setThreshold('5');
+    setSubmitting(true);
+    try {
+      const ok = await onSubmit({
+        name: name.trim(),
+        category: category || 'Alimentation',
+        buyPrice: Number(buyPrice) || 0,
+        sellPrice: Number(sellPrice) || 0,
+        qty: Number(qty) || 0,
+        threshold: Number(threshold) || 0,
+      });
+      if (ok) {
+        setName('');
+        setCategory('');
+        setBuyPrice('');
+        setSellPrice('');
+        setQty('');
+        setThreshold('5');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -153,7 +168,8 @@ export default function AddProductForm({ onSubmit }: { onSubmit: (p: NewProductI
 
         <button
           type="submit"
-          className="bg-primary text-primary-foreground font-body mt-1 flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold"
+          disabled={submitting}
+          className="bg-primary text-primary-foreground font-body mt-1 flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold disabled:opacity-60"
         >
           <Icon i="plus" size={15} />
           {t('stock.form.submit')}
