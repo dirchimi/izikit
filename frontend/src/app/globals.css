@@ -1,1 +1,115 @@
 @import 'tailwindcss';
+
+/* =========================================================================
+ * Design tokens — Sahilley Boutique (imported 1:1 from the Banani flow
+ * "Sahilley Boutique Offline"). Consumed via Tailwind v4 utilities:
+ * bg-background, text-primary, bg-sidebar, text-muted-foreground, …
+ * ========================================================================= */
+@theme {
+  --color-background: #faf8f3;
+  --color-foreground: #1a1a1a;
+  --color-border: #e4e0d6;
+  --color-input: #f0ede4;
+  --color-primary: #0e9f6e;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #d1f0e5;
+  --color-secondary-foreground: #066b49;
+  --color-badge-cash: #dcfce7;
+  --color-badge-cash-foreground: #166534;
+  --color-badge-mobile: #dbeafe;
+  --color-badge-mobile-foreground: #1e40af;
+  --color-badge-credit: #fef3c7;
+  --color-badge-credit-foreground: #92400e;
+  --color-muted: #eae6dc;
+  --color-muted-foreground: #7a7468;
+  --color-surface: #ffffff;
+  --color-surface-foreground: #1a1a1a;
+  --color-success: #0e9f6e;
+  --color-success-foreground: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-foreground: #ffffff;
+  --color-danger: #dc2626;
+  --color-danger-foreground: #ffffff;
+  --color-offline: #374151;
+  --color-offline-foreground: #f9fafb;
+  --color-sidebar: #0a3d2e;
+  --color-sidebar-foreground: #e8f5ef;
+  --color-sidebar-muted: #0f5240;
+  --color-sidebar-active: #0e9f6e;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+
+  /* DM Sans is loaded by next/font in app/layout.tsx → --font-dm-sans */
+  --font-body: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-headings: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 38px;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Défilement doux pour les ancres de la landing (#fonctionnalites, #tarifs, #contact). */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Police arabe moderne (Tajawal) — appliquée uniquement en arabe.
+ * Surcharge les tokens de police consommés par `font-body` / `font-headings`. */
+html[lang='ar'] {
+  --font-body: var(--font-tajawal), ui-sans-serif, system-ui, sans-serif;
+  --font-headings: var(--font-tajawal), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* =========================================================================
+ * Mode nuit — la classe `dark` (posée sur <html>) surcharge les tokens de
+ * couleur. Tout le reste suit automatiquement via les variables CSS, donc
+ * aucun composant n'a besoin de variantes `dark:`. Palette dérivée des tons
+ * Banani (crème/vert) en version sombre et chaude.
+ * ========================================================================= */
+html.dark {
+  color-scheme: dark;
+  --color-background: #14120d;
+  --color-foreground: #f1eee6;
+  --color-border: #2c2820;
+  --color-input: #221f18;
+  --color-primary: #13b886;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #123a2c;
+  --color-secondary-foreground: #8fe3c4;
+  --color-badge-cash: #14331f;
+  --color-badge-cash-foreground: #86efac;
+  --color-badge-mobile: #16264d;
+  --color-badge-mobile-foreground: #93c5fd;
+  --color-badge-credit: #3a2a0a;
+  --color-badge-credit-foreground: #fcd34d;
+  --color-muted: #221e16;
+  --color-muted-foreground: #a8a294;
+  --color-surface: #1b1812;
+  --color-surface-foreground: #f1eee6;
+  --color-success: #13b886;
+  --color-success-foreground: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-foreground: #1a1206;
+  --color-danger: #ef4444;
+  --color-danger-foreground: #ffffff;
+  --color-offline: #4b5563;
+  --color-offline-foreground: #f9fafb;
+  --color-sidebar: #0a3d2e;
+  --color-sidebar-foreground: #e8f5ef;
+  --color-sidebar-muted: #0f5240;
+  --color-sidebar-active: #13b886;
+}

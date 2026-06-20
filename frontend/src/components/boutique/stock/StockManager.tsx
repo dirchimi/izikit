@@ -1,0 +1,272 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import Icon from '@/components/ui/Icon';
+import TopBar from '@/components/boutique/TopBar';
+import ScreenTopActions from '@/components/boutique/ScreenTopActions';
+import { useToast } from '@/contexts/ToastContext';
+import { useT } from '@/contexts/LocaleContext';
+import { formatFCFA } from '@/lib/boutique/format';
+import {
+  posCategories,
+  stockProducts,
+  stockSummary,
+  stockStatusConfig,
+  deriveStockStatus,
+  type StockProduct,
+} from '@/lib/boutique/fixtures';
+import KpiCard from '@/components/boutique/KpiCard';
+import AddProductForm, { type NewProductInput } from './AddProductForm';
+
+type StatusFilter = 'all' | 'low' | 'out';
+
+const STATUS_TABS: { key: StatusFilter; labelKey: string }[] = [
+  { key: 'all', labelKey: 'stock.tab.all' },
+  { key: 'low', labelKey: 'stock.status.low' },
+  { key: 'out', labelKey: 'stock.status.out' },
+];
+
+const categoryOptions = posCategories.filter((c) => c !== 'Tous');
+const INITIAL_VALUE = stockProducts.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
+
+export default function StockManager() {
+  const { toast } = useToast();
+  const t = useT();
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [products, setProducts] = useState<StockProduct[]>(stockProducts);
+
+  const totalProduits = stockSummary.totalRefs + (products.length - stockProducts.length);
+  const currentValue = products.reduce((sum, p) => sum + p.qty * p.buyPrice, 0);
+  const stockValue = stockSummary.stockValue + (currentValue - INITIAL_VALUE);
+  const lowCount = products.filter((p) => p.status === 'low').length;
+  const outCount = products.filter((p) => p.status === 'out').length;
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter(
+      (p) =>
+        (q === '' || p.name.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q)) &&
+        (categoryFilter === '' || p.category === categoryFilter) &&
+        (statusFilter === 'all' || p.status === statusFilter),
+    );
+  }, [products, search, categoryFilter, statusFilter]);
+
+  function addProduct(input: NewProductInput) {
+    if (!input.name) {
+      toast(t('stock.nameRequired'), 'error');
+      return;
+    }
+    const maxNum = products.reduce((m, p) => {
+      const n = parseInt(p.ref.replace(/\D/g, ''), 10);
+      return Number.isNaN(n) ? m : Math.max(m, n);
+    }, 0);
+    const next: StockProduct = {
+      ref: `P-${String(maxNum + 1).padStart(3, '0')}`,
+      name: input.name,
+      category: input.category,
+      buyPrice: input.buyPrice,
+      sellPrice: input.sellPrice,
+      qty: input.qty,
+      threshold: input.threshold,
+      status: deriveStockStatus(input.qty, input.threshold),
+    };
+    setProducts((prev) => [next, ...prev]);
+    toast(t('stock.added', { name: next.name, ref: next.ref }), 'success');
+  }
+
+  return (
+    <>
+      <TopBar
+        title={t('nav.stock')}
+        subtitle={t('stock.subtitle')}
+        actions={<ScreenTopActions />}
+      />
+
+      <div className="flex flex-col xl:flex-row">
+        {/* Liste produits */}
+        <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+          {/* KPI */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label={t('stock.kpi.totalProducts')}
+              value={String(totalProduits)}
+              sublabel={t('stock.kpi.refs')}
+            />
+            <KpiCard
+              accent
+              label={t('stock.kpi.stockValue')}
+              value={formatFCFA(stockValue)}
+              sublabel={t('common.fcfa')}
+            />
+            <KpiCard
+              label={t('stock.kpi.low')}
+              value={String(lowCount)}
+              sublabel={t('stock.kpi.products')}
+              valueClass="text-warning"
+            />
+            <KpiCard
+              label={t('stock.kpi.out')}
+              value={String(outCount)}
+              sublabel={t('stock.kpi.products')}
+              valueClass="text-danger"
+            />
+          </div>
+
+          {/* Filtres */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="border-border bg-input flex w-full items-center gap-2 rounded-md border px-3 py-2 sm:w-[260px]">
+              <Icon i="search" size={14} className="text-muted-foreground" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('common.search.product')}
+                className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
+              />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
+            >
+              <option value="">{t('common.allCategories')}</option>
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <div className="border-border flex items-center overflow-hidden rounded-md border">
+              {STATUS_TABS.map((tab) => {
+                const active = statusFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.key)}
+                    className={`font-body border-border border-s px-3 py-2 text-xs first:border-s-0 ${
+                      active
+                        ? 'bg-primary text-primary-foreground font-semibold'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {t(tab.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-surface border-border rounded-lg border">
+            <div className="overflow-x-auto">
+              <div className="min-w-[860px]">
+                {/* En-tête */}
+                <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
+                  <span className="font-body text-muted-foreground w-16 text-xs font-semibold">
+                    {t('stock.col.ref')}
+                  </span>
+                  <span className="font-body text-muted-foreground flex-1 text-xs font-semibold">
+                    {t('common.product')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
+                    {t('common.category')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                    {t('stock.col.buyPrice')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                    {t('stock.col.sellPrice')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
+                    {t('stock.col.stock')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
+                    {t('stock.col.threshold')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
+                    {t('common.status')}
+                  </span>
+                  <span className="w-8" />
+                </div>
+
+                {visible.map((p) => {
+                  const s = stockStatusConfig[p.status];
+                  return (
+                    <div
+                      key={p.ref}
+                      className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
+                    >
+                      <span className="font-body text-muted-foreground w-16 font-mono text-xs">
+                        {p.ref}
+                      </span>
+                      <div className="flex flex-1 items-center gap-2">
+                        <div className="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
+                          <Icon i="package" size={13} className="text-muted-foreground" />
+                        </div>
+                        <span className="font-body text-foreground text-sm font-medium">
+                          {p.name}
+                        </span>
+                      </div>
+                      <span className="font-body text-muted-foreground w-24 text-xs">
+                        {p.category}
+                      </span>
+                      <span className="font-body text-muted-foreground w-28 text-end text-sm">
+                        {formatFCFA(p.buyPrice)} {t('common.fcfa')}
+                      </span>
+                      <span className="font-body text-foreground w-28 text-end text-sm font-semibold">
+                        {formatFCFA(p.sellPrice)} {t('common.fcfa')}
+                      </span>
+                      <span
+                        className={`font-body w-16 text-center text-sm font-bold ${
+                          p.status === 'out'
+                            ? 'text-danger'
+                            : p.status === 'low'
+                              ? 'text-warning'
+                              : 'text-foreground'
+                        }`}
+                      >
+                        {p.qty}
+                      </span>
+                      <span className="font-body text-muted-foreground w-16 text-center text-xs">
+                        {p.threshold}
+                      </span>
+                      <div className="flex w-24 justify-center">
+                        <span
+                          className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
+                        >
+                          {t(`stock.status.${p.status}`)}
+                        </span>
+                      </div>
+                      <div className="flex w-8 justify-center">
+                        <button
+                          type="button"
+                          aria-label={`${t('common.edit')} ${p.name}`}
+                          onClick={() => toast(t('common.editSoonProduct'), 'info')}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Icon i="pencil" size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {visible.length === 0 && (
+                  <div className="text-muted-foreground font-body px-5 py-6 text-sm">
+                    {t('stock.empty')}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Formulaire d'ajout */}
+        <AddProductForm onSubmit={addProduct} />
+      </div>
+    </>
+  );
+}
