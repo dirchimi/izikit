@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import LanguageSwitcher from './LanguageSwitcher';
+import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
 
 /**
@@ -29,27 +30,32 @@ export default function TopBar({
         {subtitle && <p className="text-muted-foreground font-body mt-0.5 text-xs">{subtitle}</p>}
       </div>
 
-      {actions ?? (
-        <div className="flex items-center gap-3">
-          <div className="hidden md:block">
-            <LanguageSwitcher />
-          </div>
+      {/* La cloche est TOUJOURS présente (avant les actions propres à l'écran),
+          quel que soit le `actions` passé par la page. */}
+      <div className="flex items-center gap-2">
+        <NotificationBell />
+        {actions ?? (
+          <div className="flex items-center gap-3">
+            <div className="hidden md:block">
+              <LanguageSwitcher />
+            </div>
 
-          {/* Toggle thème (fonctionnel) */}
-          <div className="hidden md:block">
-            <ThemeToggle />
-          </div>
+            {/* Toggle thème (fonctionnel) */}
+            <div className="hidden md:block">
+              <ThemeToggle />
+            </div>
 
-          {/* CTA nouvelle vente */}
-          <Link
-            href="/vendre"
-            className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
-          >
-            <Icon i="plus" size={15} />
-            {t('topbar.newSale')}
-          </Link>
-        </div>
-      )}
+            {/* CTA nouvelle vente */}
+            <Link
+              href="/vendre"
+              className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              <Icon i="plus" size={15} />
+              {t('topbar.newSale')}
+            </Link>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

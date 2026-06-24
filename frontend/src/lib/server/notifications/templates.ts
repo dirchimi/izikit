@@ -21,6 +21,92 @@
 
 import type { CreateNotificationInput } from './index';
 
+/**
+ * Notification destinée au propriétaire de la boutique : même forme que
+ * `CreateNotificationInput` mais sans `userId` (résolu par `notifyOwner` à
+ * partir de `Organization.ownerId`).
+ */
+export type OwnerNotification = Omit<CreateNotificationInput, 'userId'>;
+
+/** Types d'alertes boutique (clés stables — réutilisées par la cloche + les réglages). */
+export const BOUTIQUE_NOTIFICATION_TYPES = [
+  'LOW_STOCK',
+  'RECEIVABLE_OVERDUE',
+  'SALE_MADE',
+  'BIG_EXPENSE',
+] as const;
+
+export type BoutiqueNotificationType = (typeof BOUTIQUE_NOTIFICATION_TYPES)[number];
+
+/** Montant FCFA → chaîne lisible (séparateurs de milliers FR). */
+function fmtAmount(n: number): string {
+  return n.toLocaleString('fr-FR');
+}
+
+/** Stock d'un produit repassé sous son seuil d'alerte. dedupeKey à granularité
+ * journalière : se redéclenche si le stock rechute un autre jour, sans spammer. */
+export function lowStockNotification(
+  productId: string,
+  productName: string,
+  qty: number,
+  dateKey: string,
+): OwnerNotification {
+  return {
+    type: 'LOW_STOCK',
+    title: 'Stock bas',
+    body:
+      qty <= 0
+        ? `${productName} : rupture de stock !`
+        : `${productName} : il ne reste que ${qty} en stock.`,
+    data: { productId, qty },
+    dedupeKey: `low-stock:${productId}:${dateKey}`,
+  };
+}
+
+/** Créance impayée au-delà du délai réglé. Une seule alerte par créance. */
+export function receivableOverdueNotification(
+  receivableId: string,
+  customerName: string,
+  remaining: number,
+  currency: string,
+): OwnerNotification {
+  return {
+    type: 'RECEIVABLE_OVERDUE',
+    title: 'Créance en retard',
+    body: `${customerName} doit encore ${fmtAmount(remaining)} ${currency}.`,
+    data: { receivableId, remaining },
+    dedupeKey: `receivable-overdue:${receivableId}`,
+  };
+}
+
+/** Vente enregistrée par un employé (le patron n'est pas notifié de ses propres ventes). */
+export function saleMadeNotification(
+  sale: { id: string; number: string; total: number },
+  currency: string,
+): OwnerNotification {
+  return {
+    type: 'SALE_MADE',
+    title: 'Nouvelle vente',
+    body: `Vente ${sale.number} : ${fmtAmount(sale.total)} ${currency}.`,
+    data: { saleId: sale.id, number: sale.number, total: sale.total },
+    dedupeKey: `sale-made:${sale.id}`,
+  };
+}
+
+/** Dépense ≥ seuil réglé, saisie par un employé (pas par le patron lui-même). */
+export function bigExpenseNotification(
+  expense: { id: string; label: string; amount: number },
+  currency: string,
+): OwnerNotification {
+  return {
+    type: 'BIG_EXPENSE',
+    title: 'Grosse dépense',
+    body: `${expense.label} : ${fmtAmount(expense.amount)} ${currency}.`,
+    data: { expenseId: expense.id, amount: expense.amount },
+    dedupeKey: `big-expense:${expense.id}`,
+  };
+}
+
 export function welcomeNotification(userId: string, email: string): CreateNotificationInput {
   return {
     userId,

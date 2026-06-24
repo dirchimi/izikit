@@ -14,6 +14,8 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { onExpenseCreated } from '@/lib/server/notifications/boutique-events';
+import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
@@ -126,6 +128,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         select: EXPENSE_SELECT,
       });
     });
+
+    // Alerte post-réponse (best-effort) : « grosse dépense » si ≥ seuil et
+    // saisie par un employé (le patron n'est pas notifié de ses propres dépenses).
+    notifyAfterResponse(() =>
+      onExpenseCreated(prisma, {
+        orgId: org.orgId,
+        creatorId: org.userSub,
+        expense: { id: expense.id, label: expense.label, amount: expense.amount },
+      }),
+    );
 
     return NextResponse.json(
       { expense: expenseView(expense) },

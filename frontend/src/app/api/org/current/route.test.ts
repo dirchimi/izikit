@@ -36,6 +36,8 @@ const boutiqueCtx = {
     address: null,
     invoiceNote: null,
     logoUrl: null,
+    overdueDays: 30,
+    bigExpenseThreshold: 50000,
   },
   role: 'OWNER' as const,
 };
@@ -130,6 +132,41 @@ describe('PATCH /api/org/current', () => {
     expect(body.settings.phone).toBe('+235 66 11');
     expect(prismaMock.organization.update).toHaveBeenCalled();
     expect(prismaMock.boutiqueSettings.upsert).toHaveBeenCalled();
+  });
+
+  it('persiste les seuils de notifications (overdueDays + bigExpenseThreshold)', async () => {
+    mockPrimary.mockResolvedValueOnce({ organizationId: 'org1', role: 'OWNER' });
+    mockRequireOrgRole.mockResolvedValueOnce(orgCtx);
+    prismaMock.organization.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 'org1',
+      slug: 'me',
+      name: 'Me',
+    } as never);
+    prismaMock.boutiqueSettings.upsert.mockResolvedValueOnce({
+      currency: 'XAF',
+      phone: null,
+      city: null,
+      address: null,
+      invoiceNote: null,
+      logoUrl: null,
+      overdueDays: 15,
+      bigExpenseThreshold: 100000,
+    } as never);
+
+    const res = await PATCH(makePatch({ overdueDays: 15, bigExpenseThreshold: 100000 }));
+    expect(res.status).toBe(200);
+    const upsertArg = prismaMock.boutiqueSettings.upsert.mock.calls[0]![0] as {
+      update: { overdueDays?: number; bigExpenseThreshold?: number };
+    };
+    expect(upsertArg.update.overdueDays).toBe(15);
+    expect(upsertArg.update.bigExpenseThreshold).toBe(100000);
+  });
+
+  it('rejette un overdueDays hors bornes (400)', async () => {
+    mockPrimary.mockResolvedValueOnce({ organizationId: 'org1', role: 'OWNER' });
+    mockRequireOrgRole.mockResolvedValueOnce(orgCtx);
+    const res = await PATCH(makePatch({ overdueDays: 0 }));
+    expect(res.status).toBe(400);
   });
 });
 

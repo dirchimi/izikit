@@ -26,6 +26,8 @@ export interface BoutiqueSettingsView {
   address: string | null;
   invoiceNote: string | null;
   logoUrl: string | null;
+  overdueDays: number;
+  bigExpenseThreshold: number;
 }
 
 export interface BoutiqueContext {
@@ -41,6 +43,8 @@ const SETTINGS_SELECT = {
   address: true,
   invoiceNote: true,
   logoUrl: true,
+  overdueDays: true,
+  bigExpenseThreshold: true,
 } as const;
 
 /** Nom de boutique par défaut dérivé de l'email (partie locale capitalisée). */
@@ -58,6 +62,8 @@ function viewSettings(s: BoutiqueSettingsView): BoutiqueSettingsView {
     address: s.address,
     invoiceNote: s.invoiceNote,
     logoUrl: s.logoUrl,
+    overdueDays: s.overdueDays,
+    bigExpenseThreshold: s.bigExpenseThreshold,
   };
 }
 
@@ -136,6 +142,8 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
       address: null,
       invoiceNote: null,
       logoUrl: null,
+      overdueDays: 30,
+      bigExpenseThreshold: 50000,
     },
     role: 'OWNER',
   };

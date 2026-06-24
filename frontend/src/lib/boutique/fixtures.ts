@@ -710,6 +710,7 @@ export const settingsSections: SettingsSection[] = [
   { key: 'devise', icon: 'coins', label: 'Devise' },
   { key: 'langue', icon: 'languages', label: 'Langue' },
   { key: 'utilisateurs', icon: 'users', label: 'Utilisateurs' },
+  { key: 'notifications', icon: 'bell', label: 'Notifications' },
   { key: 'mobile-money', icon: 'smartphone', label: 'Mobile Money' },
   { key: 'sync', icon: 'cloud', label: 'Synchronisation' },
 ];

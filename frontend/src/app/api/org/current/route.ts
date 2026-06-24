@@ -23,6 +23,8 @@ const SETTINGS_SELECT = {
   address: true,
   invoiceNote: true,
   logoUrl: true,
+  overdueDays: true,
+  bigExpenseThreshold: true,
 } as const;
 
 const PatchBody = z.object({
@@ -36,6 +38,9 @@ const PatchBody = z.object({
     .string()
     .regex(/^[A-Z]{3}$/)
     .optional(),
+  // Seuils de notifications (réglés dans Paramètres).
+  overdueDays: z.number().int().min(1).max(365).optional(),
+  bigExpenseThreshold: z.number().int().min(0).max(1_000_000_000).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -107,6 +112,10 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         address: d.address ?? null,
         invoiceNote: d.invoiceNote ?? null,
         logoUrl: d.logoUrl ?? null,
+        ...(d.overdueDays !== undefined ? { overdueDays: d.overdueDays } : {}),
+        ...(d.bigExpenseThreshold !== undefined
+          ? { bigExpenseThreshold: d.bigExpenseThreshold }
+          : {}),
       },
       update: {
         ...(d.currency !== undefined ? { currency: d.currency } : {}),
@@ -115,6 +124,10 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(d.address !== undefined ? { address: d.address } : {}),
         ...(d.invoiceNote !== undefined ? { invoiceNote: d.invoiceNote } : {}),
         ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
+        ...(d.overdueDays !== undefined ? { overdueDays: d.overdueDays } : {}),
+        ...(d.bigExpenseThreshold !== undefined
+          ? { bigExpenseThreshold: d.bigExpenseThreshold }
+          : {}),
       },
       select: SETTINGS_SELECT,
     });

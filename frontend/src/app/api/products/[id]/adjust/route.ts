@@ -14,6 +14,8 @@ import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { productView, PRODUCT_SELECT } from '@/lib/server/products/helpers';
+import { onProductAdjusted } from '@/lib/server/notifications/boutique-events';
+import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
@@ -101,6 +103,10 @@ export async function POST(
         { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
+    // Alerte post-réponse (best-effort) : « stock bas » si l'ajustement laisse
+    // le produit sous son seuil d'alerte.
+    notifyAfterResponse(() => onProductAdjusted(prisma, { orgId, productId: id }));
+
     return NextResponse.json(
       { product: productView(result.product) },
       { status: 200, headers: { 'x-request-id': reqCtx.requestId } },

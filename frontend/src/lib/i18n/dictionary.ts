@@ -36,6 +36,16 @@ const messages: Record<string, Msg> = {
   'topbar.light': { fr: 'Clair', en: 'Light', ar: 'فاتح' },
   'topbar.dark': { fr: 'Sombre', en: 'Dark', ar: 'داكن' },
   'topbar.newSale': { fr: 'Nouvelle vente', en: 'New sale', ar: 'بيع جديد' },
+  // ── Cloche de notifications ──────────────────────────────────────────────
+  'notif.aria': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
+  'notif.title': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
+  'notif.empty': { fr: 'Aucune notification', en: 'No notifications', ar: 'لا توجد إشعارات' },
+  'notif.markAll': { fr: 'Tout marquer comme lu', en: 'Mark all as read', ar: 'تحديد الكل كمقروء' },
+  'notif.loading': { fr: 'Chargement…', en: 'Loading…', ar: 'جارٍ التحميل…' },
+  'notif.ago.now': { fr: "À l'instant", en: 'Just now', ar: 'الآن' },
+  'notif.ago.min': { fr: 'il y a {n} min', en: '{n} min ago', ar: 'قبل {n} دقيقة' },
+  'notif.ago.hour': { fr: 'il y a {n} h', en: '{n} h ago', ar: 'قبل {n} ساعة' },
+  'notif.ago.day': { fr: 'il y a {n} j', en: '{n} d ago', ar: 'قبل {n} يوم' },
   'common.edit': { fr: 'Modifier', en: 'Edit', ar: 'تعديل' },
 
   // ── Authentification ──────────────────────────────────────────────────────
@@ -1020,8 +1030,48 @@ const messages: Record<string, Msg> = {
   'parametres.section.devise': { fr: 'Devise', en: 'Currency', ar: 'العملة' },
   'parametres.section.langue': { fr: 'Langue', en: 'Language', ar: 'اللغة' },
   'parametres.section.utilisateurs': { fr: 'Utilisateurs', en: 'Users', ar: 'المستخدمون' },
+  'parametres.section.notifications': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
   'parametres.section.mobile-money': { fr: 'Mobile Money', en: 'Mobile Money', ar: 'Mobile Money' },
   'parametres.section.sync': { fr: 'Synchronisation', en: 'Sync', ar: 'المزامنة' },
+  // ── Réglages des notifications ───────────────────────────────────────────
+  'parametres.notif.title': {
+    fr: 'Alertes & seuils',
+    en: 'Alerts & thresholds',
+    ar: 'التنبيهات والحدود',
+  },
+  'parametres.notif.subtitle': {
+    fr: 'Choisissez quand être prévenu dans la cloche.',
+    en: 'Choose when the bell should alert you.',
+    ar: 'اختر متى يتم تنبيهك في الجرس.',
+  },
+  'parametres.notif.overdueDays': {
+    fr: 'Créance « en retard » après (jours)',
+    en: 'Receivable "overdue" after (days)',
+    ar: 'الدين «متأخر» بعد (أيام)',
+  },
+  'parametres.notif.bigExpense': {
+    fr: '« Grosse » dépense à partir de (FCFA)',
+    en: '"Big" expense from (FCFA)',
+    ar: 'مصروف «كبير» ابتداءً من (فرنك)',
+  },
+  'parametres.notif.types': { fr: "Types d'alertes", en: 'Alert types', ar: 'أنواع التنبيهات' },
+  'parametres.notif.type.LOW_STOCK': { fr: 'Stock bas', en: 'Low stock', ar: 'مخزون منخفض' },
+  'parametres.notif.type.RECEIVABLE_OVERDUE': {
+    fr: 'Créance en retard',
+    en: 'Overdue receivable',
+    ar: 'دين متأخر',
+  },
+  'parametres.notif.type.SALE_MADE': { fr: 'Vente réalisée', en: 'Sale made', ar: 'تمت عملية بيع' },
+  'parametres.notif.type.BIG_EXPENSE': {
+    fr: 'Grosse dépense',
+    en: 'Big expense',
+    ar: 'مصروف كبير',
+  },
+  'parametres.notif.saved': {
+    fr: 'Réglages de notifications enregistrés.',
+    en: 'Notification settings saved.',
+    ar: 'تم حفظ إعدادات الإشعارات.',
+  },
   'parametres.soon': {
     fr: 'Cette section arrive bientôt.',
     en: 'This section is coming soon.',

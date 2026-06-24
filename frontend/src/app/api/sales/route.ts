@@ -16,6 +16,8 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { onSaleCommitted } from '@/lib/server/notifications/boutique-events';
+import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
@@ -241,6 +243,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 422, headers: { 'x-request-id': ctx.requestId } },
       );
     }
+    // Alertes post-réponse (best-effort) : « nouvelle vente » (si un employé l'a
+    // faite) + « stock bas » pour les produits repassés sous leur seuil.
+    notifyAfterResponse(() =>
+      onSaleCommitted(prisma, {
+        orgId,
+        sellerId: userSub,
+        sale: { id: result.saleId, number: result.number, total: result.total },
+        productIds: items.map((i) => i.productId),
+      }),
+    );
+
     return NextResponse.json(
       { sale: { id: result.saleId, number: result.number, total: result.total } },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },

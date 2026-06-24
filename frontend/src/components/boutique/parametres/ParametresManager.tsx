@@ -10,6 +10,7 @@ import { useApi } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { settingsSections } from '@/lib/boutique/fixtures';
 import BoutiqueInfoForm, { type BoutiqueInfoValues } from './BoutiqueInfoForm';
+import NotificationSettings from './NotificationSettings';
 import UsersSection, { type OrgMember } from './UsersSection';
 
 interface BoutiqueCurrent {
@@ -21,6 +22,8 @@ interface BoutiqueCurrent {
     address: string | null;
     invoiceNote: string | null;
     logoUrl: string | null;
+    overdueDays: number;
+    bigExpenseThreshold: number;
   };
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
@@ -142,7 +145,20 @@ export default function ParametresManager() {
             />
           )}
 
-          {active !== 'boutique' && active !== 'utilisateurs' && (
+          {active === 'notifications' &&
+            (boutique ? (
+              <NotificationSettings
+                initialOverdueDays={boutique.settings.overdueDays}
+                initialBigExpense={boutique.settings.bigExpenseThreshold}
+                onSavedThresholds={refreshBoutique}
+              />
+            ) : (
+              <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
+                {t('common.loading')}
+              </div>
+            ))}
+
+          {active !== 'boutique' && active !== 'utilisateurs' && active !== 'notifications' && (
             <div className="bg-surface border-border flex flex-col items-center gap-2 rounded-lg border px-6 py-12 text-center">
               <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
                 <Icon i={current?.icon ?? 'settings'} size={20} />
