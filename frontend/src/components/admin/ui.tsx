@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Icon from '@/components/ui/Icon';
 
 export function AdminHeader({
   title,
@@ -40,6 +41,151 @@ export function Badge({ tone = 'neutral', children }: { tone?: string; children:
     >
       {children}
     </span>
+  );
+}
+
+/** Carte KPI du tableau de bord admin. `accent` = carte verte mise en avant. */
+export function StatCard({
+  label,
+  value,
+  sub,
+  icon,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-lg border px-5 py-5 ${
+        accent ? 'bg-primary border-primary' : 'bg-surface border-border'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={`font-body text-sm font-medium ${
+            accent ? 'text-primary-foreground/80' : 'text-muted-foreground'
+          }`}
+        >
+          {label}
+        </span>
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-md ${
+            accent ? 'bg-primary-foreground/20' : 'bg-muted'
+          }`}
+        >
+          <Icon
+            i={icon}
+            size={16}
+            className={accent ? 'text-primary-foreground' : 'text-muted-foreground'}
+          />
+        </div>
+      </div>
+      <span
+        className={`font-headings text-3xl leading-none font-bold ${
+          accent ? 'text-primary-foreground' : 'text-foreground'
+        }`}
+      >
+        {value}
+      </span>
+      {sub ? (
+        <span
+          className={`font-body text-xs ${
+            accent ? 'text-primary-foreground/70' : 'text-muted-foreground'
+          }`}
+        >
+          {sub}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Carte/section avec en-tête + contenu. */
+export function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-surface border-border flex flex-col rounded-lg border">
+      <div className="border-border flex items-center justify-between border-b px-4 py-3">
+        <h2 className="font-headings text-foreground text-sm font-bold">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Mini graphe en barres (CSS only), hauteurs normalisées sur le max. */
+export function MiniBars({
+  data,
+}: {
+  data: Array<{ label: string; value: number; hint?: string }>;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div className="flex h-28 items-end gap-1.5">
+      {data.map((d, i) => (
+        <div key={`${d.label}-${i}`} className="group flex flex-1 flex-col items-center gap-1">
+          <div className="flex w-full flex-1 items-end">
+            <div
+              title={d.hint ?? `${d.label}: ${d.value}`}
+              className="bg-primary/80 hover:bg-primary w-full rounded-sm transition-colors"
+              style={{ height: `${Math.max(2, (d.value / max) * 100)}%` }}
+            />
+          </div>
+          <span className="text-muted-foreground font-body text-[10px]">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Barre de progression horizontale (répartitions par rôle / statut). */
+export function StatBar({
+  label,
+  value,
+  total,
+  tone = 'blue',
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone?: string;
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  const fill: Record<string, string> = {
+    blue: 'bg-blue-500',
+    green: 'bg-emerald-500',
+    amber: 'bg-amber-500',
+    red: 'bg-red-500',
+    purple: 'bg-purple-500',
+    neutral: 'bg-muted-foreground',
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="font-body text-foreground text-xs font-medium">{label}</span>
+        <span className="font-body text-muted-foreground text-xs">
+          {value} · {pct}%
+        </span>
+      </div>
+      <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+        <div
+          className={`h-full rounded-full ${fill[tone] ?? fill.blue}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 

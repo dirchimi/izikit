@@ -13,6 +13,7 @@ interface AdminMeResponse {
 }
 
 const NAV = [
+  { href: '/admin', label: 'Tableau de bord', icon: 'layout-dashboard', exact: true },
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/orders', label: 'Commandes', icon: 'shopping-bag' },
   { href: '/admin/withdrawals', label: 'Retraits', icon: 'banknote' },
@@ -71,7 +72,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </div>
           <nav className="flex flex-col gap-1">
             {NAV.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              const active =
+                'exact' in item && item.exact
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link
                   key={item.href}
