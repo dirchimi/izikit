@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { DM_Sans, Tajawal } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LocaleProvider } from '@/contexts/LocaleContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -23,9 +24,47 @@ const tajawal = Tajawal({
   display: 'swap',
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sahilley.com';
+
 export const metadata: Metadata = {
-  title: 'Sahilley — Gestion de boutique',
-  description: 'Caisse, stock, ventes, créances et dépenses pour votre boutique.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Sahilley — Gestion de boutique',
+    template: '%s · Sahilley',
+  },
+  description:
+    'Caisse, stock, ventes à crédit, dépenses et rapports pour votre boutique. En FCFA, trilingue, simple.',
+  applicationName: 'Sahilley',
+  keywords: [
+    'gestion boutique',
+    'caisse',
+    'point de vente',
+    'stock',
+    'ventes à crédit',
+    'créances',
+    'dépenses',
+    'FCFA',
+    'Tchad',
+    'CEMAC',
+    'commerce',
+  ],
+  authors: [{ name: 'Sahilley' }],
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Sahilley',
+    title: 'Sahilley — Gérez votre boutique',
+    description:
+      'Caisse, stock, ventes à crédit, dépenses et rapports. En FCFA, trilingue, simple.',
+    url: SITE_URL,
+    locale: 'fr_FR',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Sahilley — Gérez votre boutique',
+    description: 'Caisse, stock, ventes à crédit, dépenses et rapports. En FCFA, trilingue.',
+  },
+  robots: { index: true, follow: true },
 };
 
 export default async function RootLayout({
@@ -42,11 +81,13 @@ export default async function RootLayout({
     >
       <body>
         <ToastProvider>
-          <LocaleProvider initialLocale={locale}>
-            <ThemeProvider initialTheme={theme}>
-              <AuthProvider>{children}</AuthProvider>
-            </ThemeProvider>
-          </LocaleProvider>
+          <ConfirmProvider>
+            <LocaleProvider initialLocale={locale}>
+              <ThemeProvider initialTheme={theme}>
+                <AuthProvider>{children}</AuthProvider>
+              </ThemeProvider>
+            </LocaleProvider>
+          </ConfirmProvider>
         </ToastProvider>
       </body>
     </html>

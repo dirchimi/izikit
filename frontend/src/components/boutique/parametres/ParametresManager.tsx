@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { settingsSections } from '@/lib/boutique/fixtures';
 import BoutiqueInfoForm, { type BoutiqueInfoValues } from './BoutiqueInfoForm';
 import NotificationSettings from './NotificationSettings';
+import SecuritySection from './SecuritySection';
 import UsersSection, { type OrgMember } from './UsersSection';
 
 interface BoutiqueCurrent {
@@ -145,6 +146,8 @@ export default function ParametresManager() {
             />
           )}
 
+          {active === 'securite' && <SecuritySection />}
+
           {active === 'notifications' &&
             (boutique ? (
               <NotificationSettings
@@ -158,17 +161,20 @@ export default function ParametresManager() {
               </div>
             ))}
 
-          {active !== 'boutique' && active !== 'utilisateurs' && active !== 'notifications' && (
-            <div className="bg-surface border-border flex flex-col items-center gap-2 rounded-lg border px-6 py-12 text-center">
-              <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
-                <Icon i={current?.icon ?? 'settings'} size={20} />
+          {active !== 'boutique' &&
+            active !== 'utilisateurs' &&
+            active !== 'securite' &&
+            active !== 'notifications' && (
+              <div className="bg-surface border-border flex flex-col items-center gap-2 rounded-lg border px-6 py-12 text-center">
+                <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
+                  <Icon i={current?.icon ?? 'settings'} size={20} />
+                </div>
+                <p className="font-headings text-foreground text-base font-bold">
+                  {t(`parametres.section.${active}`)}
+                </p>
+                <p className="text-muted-foreground font-body text-sm">{t('parametres.soon')}</p>
               </div>
-              <p className="font-headings text-foreground text-base font-bold">
-                {t(`parametres.section.${active}`)}
-              </p>
-              <p className="text-muted-foreground font-body text-sm">{t('parametres.soon')}</p>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </>

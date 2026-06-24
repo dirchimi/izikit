@@ -67,25 +67,66 @@ function htmlEscape(s: string): string {
  * be earlier than promised, never later.
  */
 function ttlWording(expiresAtIso: string | undefined): string {
-  if (!expiresAtIso) return 'soon';
+  if (!expiresAtIso) return 'bientôt';
   const expiresMs = Date.parse(expiresAtIso);
-  if (Number.isNaN(expiresMs)) return 'soon';
+  if (Number.isNaN(expiresMs)) return 'bientôt';
   const remainingMs = expiresMs - Date.now();
-  if (remainingMs <= 0) return 'soon'; // expired by the time we render; pre-cron drift
+  if (remainingMs <= 0) return 'bientôt'; // expired by the time we render; pre-cron drift
   const minutes = Math.floor(remainingMs / 60_000);
-  if (minutes < 1) return 'in less than a minute';
-  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  if (minutes < 1) return "dans moins d'une minute";
+  if (minutes < 60) return `dans ${minutes} minute${minutes === 1 ? '' : 's'}`;
   const hours = Math.floor(minutes / 60);
-  return `in ${hours} hour${hours === 1 ? '' : 's'}`;
+  return `dans ${hours} heure${hours === 1 ? '' : 's'}`;
+}
+
+/**
+ * Coque HTML brandée Sahilley — volontairement SOBRE (anti-spam) : pas d'image
+ * externe, CSS inline minimal, table-based (compatibilité clients mail), un
+ * seul accent vert, et un fort équilibre texte/HTML. `intro`, `lead` et `outro`
+ * doivent être déjà sûrs (texte fixe). Seul `code` est interpolé (déjà échappé).
+ */
+function brandedHtml(opts: { heading: string; lead: string; code: string; ttl: string }): string {
+  return `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#faf8f3;font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f3;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e0d6;border-radius:16px;overflow:hidden;">
+<tr><td style="background:#0a3d2e;padding:18px 24px;">
+<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Sahilley</span>
+</td></tr>
+<tr><td style="padding:28px 24px 8px 24px;">
+<h1 style="margin:0 0 8px 0;font-size:19px;font-weight:700;color:#1a1a1a;">${opts.heading}</h1>
+<p style="margin:0;font-size:14px;line-height:1.6;color:#5b5648;">${opts.lead}</p>
+</td></tr>
+<tr><td style="padding:16px 24px;">
+<div style="background:#f0ede4;border:1px solid #e4e0d6;border-radius:12px;padding:18px;text-align:center;">
+<div style="font-size:30px;font-weight:700;letter-spacing:6px;color:#0e9f6e;">${opts.code}</div>
+</div>
+<p style="margin:12px 0 0 0;font-size:13px;color:#7a7468;text-align:center;">Ce code expire ${opts.ttl}.</p>
+</td></tr>
+<tr><td style="padding:8px 24px 24px 24px;">
+<p style="margin:0;font-size:12px;line-height:1.6;color:#9a9486;">Si tu n'es pas à l'origine de cette demande, ignore simplement cet email.</p>
+</td></tr>
+<tr><td style="background:#faf8f3;border-top:1px solid #e4e0d6;padding:14px 24px;">
+<p style="margin:0;font-size:11px;color:#9a9486;">Sahilley — Gestion de boutique.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
 }
 
 export function verificationEmail(args: VerificationEmailArgs): EmailTemplate {
   const code = htmlEscape(args.code);
   const ttl = ttlWording(args.expiresAt);
   return {
-    subject: 'Verify your email',
-    html: `<p>Hi,</p><p>Your verification code is <strong>${code}</strong>.</p><p>It expires ${ttl}. If you did not request this, ignore this email.</p>`,
-    text: `Your verification code is ${args.code}. It expires ${ttl}. If you did not request this, ignore this email.`,
+    subject: 'Votre code de vérification Sahilley',
+    html: brandedHtml({
+      heading: 'Confirme ton adresse email',
+      lead: 'Saisis ce code pour activer ton compte Sahilley.',
+      code,
+      ttl,
+    }),
+    text: `Sahilley — Confirme ton adresse email.\n\nTon code de vérification est ${args.code}. Il expire ${ttl}.\n\nSi tu n'es pas à l'origine de cette demande, ignore cet email.`,
   };
 }
 
@@ -93,8 +134,13 @@ export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate 
   const code = htmlEscape(args.code);
   const ttl = ttlWording(args.expiresAt);
   return {
-    subject: 'Reset your password',
-    html: `<p>Hi,</p><p>Your password reset code is <strong>${code}</strong>.</p><p>It expires ${ttl}. If you did not request this, ignore this email.</p>`,
-    text: `Your password reset code is ${args.code}. It expires ${ttl}. If you did not request this, ignore this email.`,
+    subject: 'Réinitialisation de votre mot de passe',
+    html: brandedHtml({
+      heading: 'Réinitialise ton mot de passe',
+      lead: 'Saisis ce code pour choisir un nouveau mot de passe.',
+      code,
+      ttl,
+    }),
+    text: `Sahilley — Réinitialise ton mot de passe.\n\nTon code de réinitialisation est ${args.code}. Il expire ${ttl}.\n\nSi tu n'es pas à l'origine de cette demande, ignore cet email.`,
   };
 }

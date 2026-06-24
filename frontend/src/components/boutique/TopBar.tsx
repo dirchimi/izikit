@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import GlobalSearch from './GlobalSearch';
 import LanguageSwitcher from './LanguageSwitcher';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
@@ -25,14 +26,19 @@ export default function TopBar({
   const t = useT();
   return (
     <div className="border-border bg-surface flex flex-wrap items-center justify-between gap-3 border-b px-4 py-4 md:px-8">
-      <div className="min-w-0">
+      <div className="min-w-0 shrink-0">
         <h1 className="font-headings text-foreground truncate text-xl font-bold">{title}</h1>
         {subtitle && <p className="text-muted-foreground font-body mt-0.5 text-xs">{subtitle}</p>}
       </div>
 
+      {/* Recherche globale — visible à partir de md, prend l'espace central libéré. */}
+      <div className="order-last hidden min-w-0 flex-1 justify-center px-2 md:order-none md:flex lg:px-6">
+        <GlobalSearch />
+      </div>
+
       {/* La cloche est TOUJOURS présente (avant les actions propres à l'écran),
           quel que soit le `actions` passé par la page. */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <NotificationBell />
         {actions ?? (
           <div className="flex items-center gap-3">

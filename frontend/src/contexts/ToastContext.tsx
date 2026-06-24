@@ -1,8 +1,15 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react';
+import Icon from '@/components/ui/Icon';
 
 type ToastType = 'success' | 'error' | 'info';
+
+const TOAST_ICON: Record<ToastType, string> = {
+  success: 'check-circle-2',
+  error: 'alert-circle',
+  info: 'info',
+};
 
 interface Toast {
   id: number;
@@ -51,18 +58,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 rounded-2xl border px-5 py-3.5 text-sm font-medium shadow-lg transition-opacity ${
-              t.exiting ? 'opacity-0' : 'opacity-100'
-            } ${
-              t.type === 'success'
-                ? 'border-green-200 bg-white text-green-700'
-                : t.type === 'error'
-                  ? 'border-red-200 bg-white text-red-700'
-                  : 'border-gray-200 bg-white text-gray-700'
+            className={`bg-surface border-border pointer-events-auto flex items-center gap-3 rounded-2xl border px-5 py-3.5 text-sm font-semibold shadow-xl transition-opacity ${
+              t.exiting ? 'opacity-0' : 'animate-slide-in-right opacity-100'
             }`}
             style={{ maxWidth: '90vw' }}
           >
-            {t.message}
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                t.type === 'success'
+                  ? 'bg-primary/15 text-primary'
+                  : t.type === 'error'
+                    ? 'bg-danger/15 text-danger'
+                    : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Icon i={TOAST_ICON[t.type]} size={16} />
+            </span>
+            <span className="text-foreground">{t.message}</span>
           </div>
         ))}
       </div>

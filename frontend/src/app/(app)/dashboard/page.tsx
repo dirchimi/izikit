@@ -2,6 +2,8 @@ import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import StatCard from '@/components/boutique/StatCard';
+import PremiumBanner from '@/components/boutique/PremiumBanner';
+import OnboardingModal from '@/components/boutique/OnboardingModal';
 import MiniBarChart from '@/components/boutique/MiniBarChart';
 import StockAlertRow from '@/components/boutique/StockAlertRow';
 import RecentSaleRow from '@/components/boutique/RecentSaleRow';
@@ -31,10 +33,11 @@ export default async function DashboardPage() {
   return (
     <>
       <TopBar title={t('nav.dashboard')} subtitle={t('dash.date')} />
+      <OnboardingModal />
 
       <div className="flex flex-col gap-6 px-4 py-6 md:px-8">
         {/* KPI */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {dashboardKpis.map((kpi) => {
             const meta = KPI_KEYS[kpi.label];
             return (
@@ -159,6 +162,9 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Teaser premium — capte l'intérêt (liste d'attente) */}
+        <PremiumBanner />
       </div>
     </>
   );

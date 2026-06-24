@@ -20,6 +20,72 @@ const messages: Record<string, Msg> = {
   'nav.parametres': { fr: 'Paramètres', en: 'Settings', ar: 'الإعدادات' },
   'nav.logout': { fr: 'Déconnexion', en: 'Log out', ar: 'تسجيل الخروج' },
   'nav.admin': { fr: 'Admin', en: 'Admin', ar: 'الإدارة' },
+  'nav.section.vente': { fr: 'Vente', en: 'Selling', ar: 'البيع' },
+  'nav.section.boutique': { fr: 'Boutique', en: 'Shop', ar: 'المتجر' },
+  'nav.section.analyse': { fr: 'Analyse', en: 'Analytics', ar: 'تحليلات' },
+  'common.cancel': { fr: 'Annuler', en: 'Cancel', ar: 'إلغاء' },
+  'logout.confirmTitle': { fr: 'Se déconnecter ?', en: 'Log out?', ar: 'تسجيل الخروج؟' },
+  'logout.confirmMsg': {
+    fr: 'Tu devras te reconnecter pour accéder à ta boutique.',
+    en: "You'll need to log in again to access your shop.",
+    ar: 'ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى متجرك.',
+  },
+  // ── Premium (teaser + liste d'attente) ───────────────────────────────────
+  'premium.card.title': { fr: 'Passez à Premium', en: 'Go Premium', ar: 'انتقل إلى Premium' },
+  'premium.card.sub': {
+    fr: 'Débloquez tout le potentiel',
+    en: 'Unlock everything',
+    ar: 'افتح كل الإمكانيات',
+  },
+  'premium.cta': { fr: 'Être prévenu', en: 'Notify me', ar: 'أبلغني' },
+  'premium.banner.title': {
+    fr: 'Sahilley Premium arrive bientôt ✨',
+    en: 'Sahilley Premium is coming soon ✨',
+    ar: 'Sahilley Premium قادم قريبًا ✨',
+  },
+  'premium.banner.sub': {
+    fr: 'Multi-boutiques, sauvegarde cloud, rapports avancés et plus.',
+    en: 'Multi-shop, cloud backup, advanced reports and more.',
+    ar: 'متاجر متعددة، نسخ احتياطي سحابي، تقارير متقدمة والمزيد.',
+  },
+  'premium.modal.title': {
+    fr: 'Sahilley Premium ✨',
+    en: 'Sahilley Premium ✨',
+    ar: 'Sahilley Premium ✨',
+  },
+  'premium.modal.pitch': {
+    fr: 'Bientôt disponible. Inscris-toi pour être prévenu en premier au lancement.',
+    en: 'Coming soon. Join to be the first to know at launch.',
+    ar: 'قادم قريبًا. سجّل لتكون أول من يعرف عند الإطلاق.',
+  },
+  'premium.modal.note': {
+    fr: 'Aucun paiement maintenant — juste un signal d’intérêt.',
+    en: 'No payment now — just register your interest.',
+    ar: 'لا دفع الآن — فقط سجّل اهتمامك.',
+  },
+  'premium.feat.multi': { fr: 'Plusieurs boutiques', en: 'Multiple shops', ar: 'متاجر متعددة' },
+  'premium.feat.backup': { fr: 'Sauvegarde cloud', en: 'Cloud backup', ar: 'نسخ احتياطي سحابي' },
+  'premium.feat.reports': { fr: 'Rapports avancés', en: 'Advanced reports', ar: 'تقارير متقدمة' },
+  'premium.feat.support': {
+    fr: 'Support prioritaire',
+    en: 'Priority support',
+    ar: 'دعم ذو أولوية',
+  },
+  'premium.join': {
+    fr: "Rejoindre la liste d'attente",
+    en: 'Join the waitlist',
+    ar: 'انضم إلى قائمة الانتظار',
+  },
+  'premium.joined': {
+    fr: 'Tu es sur la liste ! On te préviendra. ✨',
+    en: "You're on the list! We'll let you know. ✨",
+    ar: 'أنت على القائمة! سنخبرك. ✨',
+  },
+  'premium.joinedToast': {
+    fr: 'Inscrit à la liste Premium ✨',
+    en: 'Added to the Premium list ✨',
+    ar: 'تمت الإضافة إلى قائمة Premium ✨',
+  },
   'role.patron': { fr: 'Patron', en: 'Owner', ar: 'المالك' },
   'offline.syncPending': {
     fr: 'Hors ligne — sync en attente',
@@ -36,6 +102,14 @@ const messages: Record<string, Msg> = {
   'topbar.light': { fr: 'Clair', en: 'Light', ar: 'فاتح' },
   'topbar.dark': { fr: 'Sombre', en: 'Dark', ar: 'داكن' },
   'topbar.newSale': { fr: 'Nouvelle vente', en: 'New sale', ar: 'بيع جديد' },
+  // ── Recherche globale ────────────────────────────────────────────────────
+  'search.placeholder': {
+    fr: 'Rechercher produits, clients, ventes…',
+    en: 'Search products, customers, sales…',
+    ar: 'البحث عن المنتجات والعملاء والمبيعات…',
+  },
+  'search.searching': { fr: 'Recherche…', en: 'Searching…', ar: 'جارٍ البحث…' },
+  'search.empty': { fr: 'Aucun résultat', en: 'No results', ar: 'لا توجد نتائج' },
   // ── Cloche de notifications ──────────────────────────────────────────────
   'notif.aria': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
   'notif.title': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
@@ -1030,6 +1104,11 @@ const messages: Record<string, Msg> = {
   'parametres.section.devise': { fr: 'Devise', en: 'Currency', ar: 'العملة' },
   'parametres.section.langue': { fr: 'Langue', en: 'Language', ar: 'اللغة' },
   'parametres.section.utilisateurs': { fr: 'Utilisateurs', en: 'Users', ar: 'المستخدمون' },
+  'parametres.section.securite': {
+    fr: 'Sécurité & connexion',
+    en: 'Security & sign-in',
+    ar: 'الأمان وتسجيل الدخول',
+  },
   'parametres.section.notifications': { fr: 'Notifications', en: 'Notifications', ar: 'الإشعارات' },
   'parametres.section.mobile-money': { fr: 'Mobile Money', en: 'Mobile Money', ar: 'Mobile Money' },
   'parametres.section.sync': { fr: 'Synchronisation', en: 'Sync', ar: 'المزامنة' },
@@ -1282,6 +1361,36 @@ const messages: Record<string, Msg> = {
   'cart.decrease': { fr: 'Diminuer', en: 'Decrease', ar: 'إنقاص' },
   'cart.increase': { fr: 'Augmenter', en: 'Increase', ar: 'زيادة' },
   'cart.remove': { fr: 'Retirer', en: 'Remove', ar: 'إزالة' },
+  // ── Onboarding (accueil premier lancement) ───────────────────────────────
+  'onb.title': {
+    fr: 'Bienvenue sur Sahilley !',
+    en: 'Welcome to Sahilley!',
+    ar: 'مرحبًا بك في Sahilley!',
+  },
+  'onb.sub': {
+    fr: 'Votre boutique est prête. Voici trois étapes pour bien démarrer.',
+    en: 'Your shop is ready. Here are three steps to get started.',
+    ar: 'متجرك جاهز. إليك ثلاث خطوات للبدء.',
+  },
+  'onb.s1.title': { fr: 'Ajoutez vos produits', en: 'Add your products', ar: 'أضف منتجاتك' },
+  'onb.s1.body': {
+    fr: 'Constituez votre stock en quelques secondes.',
+    en: 'Build your inventory in seconds.',
+    ar: 'كوّن مخزونك في ثوانٍ.',
+  },
+  'onb.s2.title': { fr: 'Enregistrez une vente', en: 'Record a sale', ar: 'سجّل عملية بيع' },
+  'onb.s2.body': {
+    fr: 'Encaissez et suivez vos ventes au quotidien.',
+    en: 'Cash in and track your daily sales.',
+    ar: 'حصّل وتابع مبيعاتك اليومية.',
+  },
+  'onb.s3.title': { fr: 'Suivez vos résultats', en: 'Track your results', ar: 'تابع نتائجك' },
+  'onb.s3.body': {
+    fr: 'Rapports clairs : chiffre d’affaires, marges, dépenses.',
+    en: 'Clear reports: revenue, margins, expenses.',
+    ar: 'تقارير واضحة: الإيرادات والهوامش والمصاريف.',
+  },
+  'onb.start': { fr: 'C’est parti', en: 'Let’s go', ar: 'لنبدأ' },
   // ── Tableau de bord ───────────────────────────────────────────────────────
   'dash.date': {
     fr: 'Mercredi 15 janvier 2025',

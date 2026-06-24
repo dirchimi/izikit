@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
 
@@ -15,6 +16,7 @@ import SidebarNav from './SidebarNav';
 export default function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const close = () => setDrawerOpen(false);
+  const pathname = usePathname();
 
   return (
     <div className="bg-background font-body flex min-h-screen">
@@ -34,7 +36,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             onClick={close}
             className="absolute inset-0 bg-black/40"
           />
-          <div className="absolute inset-y-0 start-0 w-[260px] max-w-[80%] shadow-xl">
+          <div className="animate-slide-in-right absolute inset-y-0 start-0 w-[260px] max-w-[80%] shadow-xl">
             <SidebarNav onNavigate={close} />
           </div>
         </div>
@@ -62,7 +64,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main key={pathname} className="animate-fade-in min-w-0 flex-1">
+          {children}
+        </main>
       </div>
     </div>
   );

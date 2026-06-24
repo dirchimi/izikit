@@ -24,7 +24,7 @@ export default function StatCard({
 }: StatCardProps) {
   return (
     <div
-      className={`flex flex-col gap-3 rounded-lg border px-5 py-5 ${
+      className={`hover-lift flex flex-col gap-3 rounded-lg border px-5 py-5 ${
         accent ? 'bg-primary border-primary' : 'bg-surface border-border'
       }`}
     >

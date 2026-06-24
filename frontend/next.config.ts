@@ -30,6 +30,13 @@ const config: NextConfig = {
   // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
   // Has no impact on `next dev` / `next start` workflows.
   output: 'standalone',
+  // Masque l'en-tête `X-Powered-By: Next.js` (durcissement léger).
+  poweredByHeader: false,
+  // Autorise l'optimisation d'images depuis Cloudinary (logos/photos produits)
+  // — permet d'utiliser <Image> sur les URLs distantes sans les déclarer une à une.
+  images: {
+    remotePatterns: [{ protocol: 'https', hostname: 'res.cloudinary.com' }],
+  },
   async headers() {
     return [
       {

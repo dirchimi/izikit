@@ -31,6 +31,9 @@ model User {
   // refused with 403 ACCOUNT_SUSPENDED. Mutated via /api/admin/users/[id]/status
   // (ADMIN can suspend; only SUPERADMIN can restore).
   status            String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  // Liste d'attente Premium (teaser) : horodatage quand l'utilisateur clique
+  // « Être prévenu ». null = pas (encore) intéressé. Sert au comptage de la demande.
+  premiumInterestAt DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
