@@ -330,6 +330,9 @@ model BoutiqueSettings {
   address        String?
   invoiceNote    String?
   logoUrl        String? // URL Cloudinary publique du logo de la boutique
+  // Type de commerce, renseigné à l'onboarding (clé : alimentation, vetements,
+  // electronique, pharmacie, cosmetiques, quincaillerie, restauration, autre).
+  businessType   String?
   // Seuils de notifications, réglables par le patron dans Paramètres.
   overdueDays         Int @default(30) // créance « en retard » après N jours
   bigExpenseThreshold Int @default(50000) // « grosse » dépense ≥ ce montant (FCFA)

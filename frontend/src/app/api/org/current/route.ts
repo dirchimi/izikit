@@ -23,6 +23,7 @@ const SETTINGS_SELECT = {
   address: true,
   invoiceNote: true,
   logoUrl: true,
+  businessType: true,
   overdueDays: true,
   bigExpenseThreshold: true,
 } as const;
@@ -34,6 +35,7 @@ const PatchBody = z.object({
   address: z.string().trim().max(200).nullable().optional(),
   invoiceNote: z.string().trim().max(500).nullable().optional(),
   logoUrl: z.string().url().max(500).nullable().optional(),
+  businessType: z.string().trim().max(40).nullable().optional(),
   currency: z
     .string()
     .regex(/^[A-Z]{3}$/)
@@ -112,6 +114,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         address: d.address ?? null,
         invoiceNote: d.invoiceNote ?? null,
         logoUrl: d.logoUrl ?? null,
+        businessType: d.businessType ?? null,
         ...(d.overdueDays !== undefined ? { overdueDays: d.overdueDays } : {}),
         ...(d.bigExpenseThreshold !== undefined
           ? { bigExpenseThreshold: d.bigExpenseThreshold }
@@ -124,6 +127,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(d.address !== undefined ? { address: d.address } : {}),
         ...(d.invoiceNote !== undefined ? { invoiceNote: d.invoiceNote } : {}),
         ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
+        ...(d.businessType !== undefined ? { businessType: d.businessType } : {}),
         ...(d.overdueDays !== undefined ? { overdueDays: d.overdueDays } : {}),
         ...(d.bigExpenseThreshold !== undefined
           ? { bigExpenseThreshold: d.bigExpenseThreshold }

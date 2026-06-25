@@ -36,6 +36,7 @@ const boutiqueCtx = {
     address: null,
     invoiceNote: null,
     logoUrl: null,
+    businessType: null,
     overdueDays: 30,
     bigExpenseThreshold: 50000,
   },

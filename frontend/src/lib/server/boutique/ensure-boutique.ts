@@ -26,6 +26,7 @@ export interface BoutiqueSettingsView {
   address: string | null;
   invoiceNote: string | null;
   logoUrl: string | null;
+  businessType: string | null;
   overdueDays: number;
   bigExpenseThreshold: number;
 }
@@ -43,6 +44,7 @@ const SETTINGS_SELECT = {
   address: true,
   invoiceNote: true,
   logoUrl: true,
+  businessType: true,
   overdueDays: true,
   bigExpenseThreshold: true,
 } as const;
@@ -62,6 +64,7 @@ function viewSettings(s: BoutiqueSettingsView): BoutiqueSettingsView {
     address: s.address,
     invoiceNote: s.invoiceNote,
     logoUrl: s.logoUrl,
+    businessType: s.businessType,
     overdueDays: s.overdueDays,
     bigExpenseThreshold: s.bigExpenseThreshold,
   };
@@ -142,6 +145,7 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
       address: null,
       invoiceNote: null,
       logoUrl: null,
+      businessType: null,
       overdueDays: 30,
       bigExpenseThreshold: 50000,
     },
