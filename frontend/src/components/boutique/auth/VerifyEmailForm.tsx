@@ -36,7 +36,9 @@ export default function VerifyEmailForm() {
   const [email, setEmail] = useState(params.get('email') ?? '');
   const [code, setCode] = useState((params.get('code') ?? '').toUpperCase());
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   async function verify(emailValue: string, codeValue: string) {
     setSubmitting(true);
@@ -66,6 +68,32 @@ export default function VerifyEmailForm() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     void verify(email, code);
+  }
+
+  // Renvoi du code — la route est anti-énumération (200 dans tous les cas), donc
+  // on affiche un message neutre qui ne révèle pas si l'email a un compte.
+  async function resend() {
+    if (!email.trim()) {
+      setError(t('auth.err.validationEmail'));
+      return;
+    }
+    setResending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api('/api/auth/resend-verification', { method: 'POST', body: { email } });
+      setNotice(t('auth.codeResent'));
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'TOO_MANY_RESEND_ATTEMPTS') {
+        setError(t('auth.err.tooManyResend'));
+      } else if (err instanceof ApiError && err.code === 'RATE_LIMIT_UNAVAILABLE') {
+        setError(t('auth.err.resendUnavailable'));
+      } else {
+        setError(t('auth.err.verifyNetwork'));
+      }
+    } finally {
+      setResending(false);
+    }
   }
 
   return (
@@ -119,16 +147,41 @@ export default function VerifyEmailForm() {
         </p>
       )}
 
+      {notice && (
+        <p role="status" className="text-primary font-body text-xs">
+          {notice}
+        </p>
+      )}
+
       <button type="submit" disabled={submitting} className={authSubmit}>
         {submitting ? t('auth.verifying') : t('auth.verify')}
       </button>
 
+      {/* Renvoyer le code (compte non vérifié dont le code s'est perdu). */}
       <p className="text-muted-foreground font-body text-center text-xs">
         {t('auth.codeNotReceived')}{' '}
-        <Link href="/inscription" className="text-primary font-semibold">
-          {t('auth.retrySignup')}
-        </Link>
+        <button
+          type="button"
+          onClick={resend}
+          disabled={resending}
+          className="text-primary font-semibold disabled:opacity-60"
+        >
+          {resending ? t('auth.resending') : t('auth.resendCode')}
+        </button>
       </p>
+
+      {/* Sorties pour quelqu'un qui a en fait déjà un compte (email déjà inscrit). */}
+      <div className="border-border mt-1 flex flex-col items-center gap-1 border-t pt-3">
+        <p className="text-muted-foreground font-body text-center text-xs">
+          {t('auth.haveAccount')}{' '}
+          <Link href="/connexion" className="text-primary font-semibold">
+            {t('auth.login')}
+          </Link>
+        </p>
+        <Link href="/mot-de-passe-oublie" className="text-muted-foreground font-body text-xs">
+          {t('auth.forgot')}
+        </Link>
+      </div>
     </form>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
+import ComboBox from '@/components/ui/ComboBox';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
@@ -11,12 +12,25 @@ const labelClass = 'text-foreground font-body text-xs font-semibold';
 const fieldClass =
   'border-border bg-input text-foreground font-body placeholder:text-muted-foreground focus:border-primary rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-60';
 
+// Mêmes clés que l'assistant d'onboarding ; libellés via les clés i18n onb.type.*.
+const BIZ_KEYS = [
+  'alimentation',
+  'vetements',
+  'electronique',
+  'cosmetiques',
+  'pharmacie',
+  'quincaillerie',
+  'restauration',
+  'autre',
+] as const;
+
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 export interface BoutiqueInfoValues {
   name: string;
   phone: string;
   city: string;
+  businessType: string;
   address: string;
   note: string;
 }
@@ -55,9 +69,15 @@ export default function BoutiqueInfoForm({
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [city, setCity] = useState(initial.city);
+  const [businessType, setBusinessType] = useState(initial.businessType);
   const [address, setAddress] = useState(initial.address);
   const [note, setNote] = useState(initial.note);
   const [saving, setSaving] = useState(false);
+
+  // ComboBox affiche la valeur (un libellé) ; on convertit clé ↔ libellé.
+  const bizLabel = (key: string) => (key ? t(`onb.type.${key}`) : '');
+  const bizOptions = BIZ_KEYS.map((k) => t(`onb.type.${k}`));
+  const keyFromLabel = (label: string) => BIZ_KEYS.find((k) => t(`onb.type.${k}`) === label) ?? '';
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl);
@@ -67,7 +87,7 @@ export default function BoutiqueInfoForm({
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({ name, phone, city, address, note });
+      await onSave({ name, phone, city, businessType, address, note });
     } finally {
       setSaving(false);
     }
@@ -180,6 +200,16 @@ export default function BoutiqueInfoForm({
               value={city}
               onChange={(e) => setCity(e.target.value)}
               className={fieldClass}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className={labelClass}>{t('parametres.field.businessType')}</label>
+            <ComboBox
+              value={bizLabel(businessType)}
+              onChange={(label) => setBusinessType(keyFromLabel(label))}
+              options={bizOptions}
+              allLabel={t('parametres.field.businessTypeNone')}
+              placeholder={t('parametres.field.businessTypePlaceholder')}
             />
           </div>
           <div className="flex flex-col gap-1">

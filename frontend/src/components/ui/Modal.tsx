@@ -16,6 +16,7 @@ export default function Modal({
   children,
   size = 'md',
   hideClose = false,
+  solidBackdrop = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -23,6 +24,8 @@ export default function Modal({
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
   hideClose?: boolean;
+  /** Fond plein (cache l'arrière-plan) au lieu du voile semi-transparent. */
+  solidBackdrop?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -52,7 +55,11 @@ export default function Modal({
         type="button"
         aria-label="Fermer"
         onClick={onClose}
-        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+        className={
+          solidBackdrop
+            ? 'bg-background absolute inset-0'
+            : 'absolute inset-0 bg-black/45 backdrop-blur-[2px]'
+        }
       />
       <div
         className={`animate-scale-in bg-surface border-border relative z-10 flex max-h-[90vh] w-full flex-col ${width} overflow-hidden rounded-2xl border shadow-2xl`}

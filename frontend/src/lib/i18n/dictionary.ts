@@ -202,6 +202,23 @@ const messages: Record<string, Msg> = {
     ar: 'لم تستلم الرمز؟',
   },
   'auth.retrySignup': { fr: 'Recommencer l’inscription', en: 'Sign up again', ar: 'إعادة التسجيل' },
+  'auth.resendCode': { fr: 'Renvoyer le code', en: 'Resend the code', ar: 'إعادة إرسال الرمز' },
+  'auth.resending': { fr: 'Envoi…', en: 'Sending…', ar: 'جارٍ الإرسال…' },
+  'auth.codeResent': {
+    fr: 'Si un compte en attente existe pour cet e-mail, un nouveau code vient d’être envoyé.',
+    en: 'If a pending account exists for this email, a new code has just been sent.',
+    ar: 'إذا كان هناك حساب قيد الانتظار لهذا البريد، فقد أُرسل رمز جديد للتو.',
+  },
+  'auth.err.tooManyResend': {
+    fr: 'Trop de demandes de code. Réessaie dans quelques minutes.',
+    en: 'Too many code requests. Try again in a few minutes.',
+    ar: 'طلبات رمز كثيرة جدًا. حاول مرة أخرى بعد دقائق.',
+  },
+  'auth.err.resendUnavailable': {
+    fr: 'Service momentanément indisponible. Réessaie dans un instant.',
+    en: 'Service temporarily unavailable. Try again shortly.',
+    ar: 'الخدمة غير متاحة مؤقتًا. حاول مرة أخرى بعد قليل.',
+  },
   'auth.err.invalidCredentials': {
     fr: 'E-mail ou mot de passe incorrect.',
     en: 'Incorrect email or password.',
@@ -1219,6 +1236,21 @@ const messages: Record<string, Msg> = {
   'parametres.field.name': { fr: 'Nom de la boutique', en: 'Shop name', ar: 'اسم المتجر' },
   'parametres.field.phone': { fr: 'Numéro de téléphone', en: 'Phone number', ar: 'رقم الهاتف' },
   'parametres.field.city': { fr: 'Ville', en: 'City', ar: 'المدينة' },
+  'parametres.field.businessType': {
+    fr: 'Type de commerce',
+    en: 'Business type',
+    ar: 'نوع النشاط',
+  },
+  'parametres.field.businessTypePlaceholder': {
+    fr: 'Choisir un type…',
+    en: 'Choose a type…',
+    ar: 'اختر نوعًا…',
+  },
+  'parametres.field.businessTypeNone': {
+    fr: 'Non précisé',
+    en: 'Not specified',
+    ar: 'غير محدد',
+  },
   'parametres.field.address': {
     fr: 'Quartier / Adresse',
     en: 'Neighborhood / Address',

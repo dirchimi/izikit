@@ -20,6 +20,7 @@ interface BoutiqueCurrent {
     currency: string;
     phone: string | null;
     city: string | null;
+    businessType: string | null;
     address: string | null;
     invoiceNote: string | null;
     logoUrl: string | null;
@@ -56,6 +57,7 @@ export default function ParametresManager() {
         name: v.name,
         phone: v.phone || null,
         city: v.city || null,
+        businessType: v.businessType || null,
         address: v.address || null,
         invoiceNote: v.note || null,
       },
@@ -84,6 +86,7 @@ export default function ParametresManager() {
             name: boutique.organization.name,
             phone: boutique.settings.phone ?? '',
             city: boutique.settings.city ?? '',
+            businessType: boutique.settings.businessType ?? '',
             address: boutique.settings.address ?? '',
             note: boutique.settings.invoiceNote ?? '',
           }}

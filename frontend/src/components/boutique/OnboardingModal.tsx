@@ -8,6 +8,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/lib/api';
+import { setCache } from '@/lib/useApi';
 
 /**
  * Assistant de configuration au PREMIER lancement (une seule fois, à vie, par
@@ -120,7 +121,9 @@ export default function OnboardingModal() {
   async function finishSetup() {
     setSaving(true);
     try {
-      await api('/api/org/current', {
+      // La réponse du PATCH a la même forme que GET /api/org/current : on remplit
+      // le cache pour que Paramètres affiche les données saisies sans rafraîchir.
+      const updated = await api<unknown>('/api/org/current', {
         method: 'PATCH',
         body: {
           ...(name.trim() ? { name: name.trim() } : {}),
@@ -129,6 +132,7 @@ export default function OnboardingModal() {
           phone: phone.trim() || null,
         },
       });
+      setCache('/api/org/current', updated);
       toast(t('onb.savedToast'), 'success');
     } catch {
       toast(t('async.error'), 'error');
@@ -140,7 +144,7 @@ export default function OnboardingModal() {
   }
 
   return (
-    <Modal open={open} onClose={skip} size="md" hideClose>
+    <Modal open={open} onClose={skip} size="md" hideClose solidBackdrop>
       {step < TOTAL_STEPS ? (
         <div className="flex flex-col">
           {/* Progression + Passer */}
