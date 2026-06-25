@@ -41,14 +41,11 @@ export default function TopBar({
       <div className="flex shrink-0 items-center gap-2">
         <NotificationBell />
         {actions ?? (
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block">
-              <LanguageSwitcher />
-            </div>
-
-            {/* Toggle thème (fonctionnel) */}
-            <div className="hidden md:block">
-              <ThemeToggle />
+          <div className="flex items-center gap-2">
+            {/* Langue + thème : compacts et côte à côte pour gagner de la place */}
+            <div className="hidden items-center gap-1.5 md:flex">
+              <LanguageSwitcher compact />
+              <ThemeToggle compact />
             </div>
 
             {/* CTA nouvelle vente */}

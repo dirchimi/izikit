@@ -44,36 +44,42 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const variant = opts?.variant ?? 'primary';
-  const confirmClass =
-    variant === 'danger'
-      ? 'bg-danger text-danger-foreground'
-      : 'bg-primary text-primary-foreground';
-  const iconWrap = variant === 'danger' ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary';
+  const isDanger = variant === 'danger';
+  const confirmClass = isDanger
+    ? 'bg-danger text-danger-foreground shadow-sm shadow-danger/30'
+    : 'bg-primary text-primary-foreground shadow-sm shadow-primary/30';
+  // Halo concentrique autour de l'icône (effet premium, doux).
+  const haloOuter = isDanger ? 'bg-danger/5' : 'bg-primary/5';
+  const haloInner = isDanger ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary';
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      <Modal open={opts !== null} onClose={() => settle(false)} hideClose>
+      <Modal open={opts !== null} onClose={() => settle(false)} hideClose size="sm">
         {opts && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${iconWrap}`}>
-              <Icon
-                i={opts.icon ?? (variant === 'danger' ? 'alert-triangle' : 'help-circle')}
-                size={24}
-              />
+          <div className="flex flex-col items-center gap-5 px-1 py-1 text-center">
+            {/* Icône avec halo doux */}
+            <div className={`flex h-20 w-20 items-center justify-center rounded-full ${haloOuter}`}>
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-full ${haloInner}`}
+              >
+                <Icon i={opts.icon ?? (isDanger ? 'alert-triangle' : 'help-circle')} size={26} />
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <h3 className="font-headings text-foreground text-lg font-bold">{opts.title}</h3>
+            <div className="flex flex-col gap-1.5">
+              <h3 className="font-headings text-foreground text-xl font-bold">{opts.title}</h3>
               {opts.message && (
-                <p className="text-muted-foreground font-body text-sm">{opts.message}</p>
+                <p className="text-muted-foreground font-body max-w-xs text-sm leading-relaxed">
+                  {opts.message}
+                </p>
               )}
             </div>
-            <div className="mt-1 flex w-full gap-3">
+            <div className="mt-1 flex w-full flex-col-reverse gap-2.5 sm:flex-row">
               <button
                 type="button"
                 onClick={() => settle(false)}
                 disabled={busy}
-                className="border-border bg-surface text-foreground font-body flex-1 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
+                className="border-border bg-surface text-foreground font-body flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
               >
                 {opts.cancelLabel ?? 'Annuler'}
               </button>
@@ -84,7 +90,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   settle(true);
                 }}
                 disabled={busy}
-                className={`font-body flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50 ${confirmClass}`}
+                className={`font-body flex-1 rounded-xl px-4 py-3 text-sm font-bold transition-transform hover:scale-[1.02] disabled:opacity-50 ${confirmClass}`}
               >
                 {opts.confirmLabel ?? 'Confirmer'}
               </button>

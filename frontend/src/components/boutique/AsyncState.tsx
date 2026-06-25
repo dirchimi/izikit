@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Icon from '@/components/ui/Icon';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/contexts/LocaleContext';
 
 /**
@@ -22,6 +23,8 @@ export default function AsyncState({
   onRetry,
   emptyLabel,
   emptyIcon = 'inbox',
+  skeleton,
+  skeletonRows = 5,
   children,
 }: {
   loading: boolean;
@@ -30,19 +33,21 @@ export default function AsyncState({
   onRetry?: () => void;
   emptyLabel?: string;
   emptyIcon?: string;
+  /** Squelette de chargement sur mesure. Par défaut : lignes shimmer (charte). */
+  skeleton?: ReactNode;
+  /** Nombre de lignes du squelette par défaut. */
+  skeletonRows?: number;
   children: ReactNode;
 }) {
   const t = useT();
 
   if (loading) {
+    // Chargement « premium » : squelette shimmer aux couleurs de la charte
+    // plutôt qu'un simple spinner. `skeleton` permet un gabarit sur mesure.
     return (
-      <div
-        role="status"
-        aria-busy="true"
-        className="text-muted-foreground font-body flex items-center justify-center gap-2 px-6 py-12 text-sm"
-      >
-        <Icon i="loader-2" size={16} className="animate-spin" />
-        {t('common.loading')}
+      <div role="status" aria-busy="true" className="animate-fade-in px-4 py-4">
+        <span className="sr-only">{t('common.loading')}</span>
+        {skeleton ?? <SkeletonRows rows={skeletonRows} />}
       </div>
     );
   }

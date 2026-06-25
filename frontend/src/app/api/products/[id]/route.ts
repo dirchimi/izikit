@@ -23,6 +23,7 @@ const PatchBody = z.object({
   sellPrice: z.number().int().min(0).optional(),
   threshold: z.number().int().min(0).optional(),
   imageUrl: z.string().url().max(500).nullable().optional(),
+  barcode: z.string().trim().max(64).nullable().optional(),
 });
 
 async function resolveOrg(
@@ -84,6 +85,9 @@ export async function PATCH(
       ...(d.sellPrice !== undefined ? { sellPrice: d.sellPrice } : {}),
       ...(d.threshold !== undefined ? { threshold: d.threshold } : {}),
       ...(d.imageUrl !== undefined ? { imageUrl: d.imageUrl } : {}),
+      ...(d.barcode !== undefined
+        ? { barcode: d.barcode && d.barcode.length > 0 ? d.barcode : null }
+        : {}),
     };
 
     try {

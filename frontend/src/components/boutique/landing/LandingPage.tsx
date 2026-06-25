@@ -114,7 +114,7 @@ const socials = [
 const ctaPrimary =
   'bg-primary text-primary-foreground font-body rounded-md font-bold transition hover:opacity-90 focus-visible:ring-primary focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none';
 
-export default async function LandingPage() {
+export default async function LandingPage({ authenticated = false }: { authenticated?: boolean }) {
   const { t } = await getServerT();
 
   return (
@@ -150,15 +150,27 @@ export default async function LandingPage() {
             <div className="hidden md:block">
               <ThemeToggle />
             </div>
-            <Link
-              href="/connexion"
-              className="text-foreground font-body hidden text-sm font-semibold sm:inline-flex"
-            >
-              {t('landing.cta.login')}
-            </Link>
-            <Link href="/inscription" className={`${ctaPrimary} px-5 py-2 text-sm`}>
-              {t('landing.cta.trial')}
-            </Link>
+            {authenticated ? (
+              <Link
+                href="/dashboard"
+                className={`${ctaPrimary} flex items-center gap-2 px-5 py-2 text-sm`}
+              >
+                <Icon i="layout-dashboard" size={15} />
+                {t('landing.cta.myDashboard')}
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/connexion"
+                  className="text-foreground font-body hidden text-sm font-semibold sm:inline-flex"
+                >
+                  {t('landing.cta.login')}
+                </Link>
+                <Link href="/inscription" className={`${ctaPrimary} px-5 py-2 text-sm`}>
+                  {t('landing.cta.trial')}
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>

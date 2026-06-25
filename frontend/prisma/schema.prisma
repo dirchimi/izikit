@@ -136,6 +136,7 @@ model Product {
   qty            Int             @default(0) // stock courant (dérivé des mouvements)
   threshold      Int             @default(0) // seuil d'alerte stock faible
   imageUrl       String? // URL Cloudinary publique de la photo du produit
+  barcode        String? // code-barres (EAN/UPC…) saisi ou scanné ; null = aucun
   movements      StockMovement[]
   saleItems      SaleItem[]
   createdAt      DateTime        @default(now())
@@ -143,6 +144,7 @@ model Product {
 
   @@unique([organizationId, ref])
   @@index([organizationId])
+  @@index([organizationId, barcode])
   @@index([organizationId, category])
 }
 

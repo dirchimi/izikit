@@ -70,10 +70,10 @@ export default function NewProformaForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+    <div className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface border-border flex max-h-[90vh] w-full flex-col rounded-t-xl border sm:max-w-xl sm:rounded-xl"
+        className="bg-surface border-border animate-scale-in flex max-h-[90vh] w-full flex-col rounded-t-2xl border shadow-xl sm:max-w-xl sm:rounded-2xl"
       >
         <div className="border-border flex items-center justify-between border-b px-5 py-4">
           <h2 className="font-headings text-foreground text-base font-bold">

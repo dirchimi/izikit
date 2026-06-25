@@ -65,6 +65,7 @@ const messages: Record<string, Msg> = {
   'notif.ago.hour': { fr: 'il y a {n} h', en: '{n} h ago', ar: 'قبل {n} ساعة' },
   'notif.ago.day': { fr: 'il y a {n} j', en: '{n} d ago', ar: 'قبل {n} يوم' },
   'common.edit': { fr: 'Modifier', en: 'Edit', ar: 'تعديل' },
+  'common.delete': { fr: 'Supprimer', en: 'Delete', ar: 'حذف' },
 
   // ── Authentification ──────────────────────────────────────────────────────
   'auth.tagline': {
@@ -312,6 +313,11 @@ const messages: Record<string, Msg> = {
   'landing.nav.contact': { fr: 'Contact', en: 'Contact', ar: 'تواصل' },
   'landing.cta.trial': { fr: 'Essai gratuit', en: 'Free trial', ar: 'تجربة مجانية' },
   'landing.cta.login': { fr: 'Se connecter', en: 'Log in', ar: 'تسجيل الدخول' },
+  'landing.cta.myDashboard': {
+    fr: 'Mon tableau de bord',
+    en: 'My dashboard',
+    ar: 'لوحة التحكم',
+  },
   'landing.cta.start': { fr: 'Commencer gratuitement', en: 'Get started free', ar: 'ابدأ مجاناً' },
   'landing.cta.demo': { fr: 'Voir une démo', en: 'Watch a demo', ar: 'شاهد عرضاً توضيحياً' },
   'landing.hero.badge': {
@@ -654,6 +660,37 @@ const messages: Record<string, Msg> = {
     en: 'This product reference already exists.',
     ar: 'هذه المرجعية موجودة بالفعل.',
   },
+  'stock.updated': {
+    fr: 'Produit « {name} » modifié.',
+    en: 'Product “{name}” updated.',
+    ar: 'تم تحديث المنتج «{name}».',
+  },
+  'stock.deleted': {
+    fr: 'Produit « {name} » supprimé.',
+    en: 'Product “{name}” deleted.',
+    ar: 'تم حذف المنتج «{name}».',
+  },
+  'stock.edit.title': { fr: 'Modifier le produit', en: 'Edit product', ar: 'تعديل المنتج' },
+  'stock.edit.submit': {
+    fr: 'Enregistrer les modifications',
+    en: 'Save changes',
+    ar: 'حفظ التعديلات',
+  },
+  'stock.edit.qtyNote': {
+    fr: 'La quantité se modifie via un mouvement de stock, pas ici.',
+    en: 'Quantity is changed via a stock movement, not here.',
+    ar: 'تُعدّل الكمية عبر حركة مخزون، وليس من هنا.',
+  },
+  'stock.delete.confirmTitle': {
+    fr: 'Supprimer ce produit ?',
+    en: 'Delete this product?',
+    ar: 'حذف هذا المنتج؟',
+  },
+  'stock.delete.confirmMsg': {
+    fr: '« {name} » sera définitivement supprimé du catalogue.',
+    en: '“{name}” will be permanently removed from the catalogue.',
+    ar: 'سيُحذف «{name}» نهائيًا من الكتالوج.',
+  },
   'stock.emptyAll': {
     fr: 'Aucun produit pour le moment. Ajoutez votre premier produit.',
     en: 'No products yet. Add your first product.',
@@ -700,6 +737,22 @@ const messages: Record<string, Msg> = {
     fr: 'Ex: Savon Monganga ×12',
     en: 'e.g. Monganga Soap ×12',
     ar: 'مثال: صابون Monganga ×12',
+  },
+  'stock.form.categoryPlaceholder': {
+    fr: 'Choisir ou créer…',
+    en: 'Choose or create…',
+    ar: 'اختر أو أنشئ…',
+  },
+  'stock.form.categoryHint': {
+    fr: 'Tapez pour créer votre propre catégorie.',
+    en: 'Type to create your own category.',
+    ar: 'اكتب لإنشاء فئتك الخاصة.',
+  },
+  'stock.form.barcode': { fr: 'Code-barres', en: 'Barcode', ar: 'الرمز الشريطي' },
+  'stock.form.barcodePlaceholder': {
+    fr: 'Scanner ou saisir le code…',
+    en: 'Scan or type the code…',
+    ar: 'امسح أو اكتب الرمز…',
   },
   'stock.form.qtyField': { fr: 'Quantité', en: 'Quantity', ar: 'الكمية' },
   'stock.form.thresholdField': { fr: 'Seuil alerte', en: 'Alert threshold', ar: 'حد التنبيه' },

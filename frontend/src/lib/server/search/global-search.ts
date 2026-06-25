@@ -44,7 +44,7 @@ export async function globalSearch(
 
   const [products, customers, sales, expenses] = await Promise.all([
     prisma.product.findMany({
-      where: { organizationId: orgId, OR: [{ name: ci }, { ref: ci }] },
+      where: { organizationId: orgId, OR: [{ name: ci }, { ref: ci }, { barcode: ci }] },
       take: PER_GROUP,
       select: { id: true, name: true, ref: true, qty: true, sellPrice: true },
     }),

@@ -55,10 +55,10 @@ export default function Modal({
         className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
       />
       <div
-        className={`animate-scale-in bg-surface border-border relative z-10 w-full ${width} overflow-hidden rounded-2xl border shadow-2xl`}
+        className={`animate-scale-in bg-surface border-border relative z-10 flex max-h-[90vh] w-full flex-col ${width} overflow-hidden rounded-2xl border shadow-2xl`}
       >
         {(title || !hideClose) && (
-          <div className="border-border flex items-center justify-between gap-3 border-b px-5 py-4">
+          <div className="border-border flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
             <h2 className="font-headings text-foreground text-base font-bold">{title}</h2>
             {!hideClose && (
               <button
@@ -72,7 +72,7 @@ export default function Modal({
             )}
           </div>
         )}
-        <div className="px-5 py-5">{children}</div>
+        <div className="overflow-y-auto px-5 py-5">{children}</div>
       </div>
     </div>
   );

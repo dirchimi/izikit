@@ -14,7 +14,7 @@ import ThemeToggle from './ThemeToggle';
 export default function ScreenTopActions({ extra }: { extra?: ReactNode }) {
   const t = useT();
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <div className="bg-offline flex items-center gap-2 rounded-md px-3 py-2">
         <div className="bg-offline-foreground h-2 w-2 shrink-0 rounded-full opacity-70" />
         <span className="text-offline-foreground font-body text-xs font-semibold">
@@ -22,11 +22,9 @@ export default function ScreenTopActions({ extra }: { extra?: ReactNode }) {
         </span>
       </div>
       {extra}
-      <div className="hidden sm:block">
-        <LanguageSwitcher />
-      </div>
-      <div className="hidden sm:block">
-        <ThemeToggle />
+      <div className="hidden items-center gap-1.5 sm:flex">
+        <LanguageSwitcher compact />
+        <ThemeToggle compact />
       </div>
     </div>
   );

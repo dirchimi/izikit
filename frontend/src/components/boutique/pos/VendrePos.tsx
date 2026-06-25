@@ -10,7 +10,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
-import { posCategories, posClients, type PaymentMethod } from '@/lib/boutique/fixtures';
+import { posClients, type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
 
@@ -48,6 +48,12 @@ export default function VendrePos() {
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
+
+  // Chips catégories : « Tous » + les catégories réelles de la boutique.
+  const categories = useMemo(
+    () => ['Tous', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort()],
+    [products],
+  );
 
   const visibleProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -153,7 +159,7 @@ export default function VendrePos() {
 
           {/* Chips catégories */}
           <div className="flex flex-wrap items-center gap-2 px-4 pb-4 md:px-6">
-            {posCategories.map((cat) => {
+            {categories.map((cat) => {
               const active = category === cat;
               return (
                 <button

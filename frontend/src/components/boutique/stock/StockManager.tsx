@@ -7,13 +7,17 @@ import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
-import { posCategories, stockStatusConfig } from '@/lib/boutique/fixtures';
+import { stockStatusConfig } from '@/lib/boutique/fixtures';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/useApi';
 import { uploadImage } from '@/lib/upload';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
+import ComboBox from '@/components/ui/ComboBox';
+import Modal from '@/components/ui/Modal';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
+import EditProductForm, { type EditProductInput } from './EditProductForm';
+import { useConfirm } from '@/contexts/ConfirmContext';
 
 interface ApiProduct {
   id: string;
@@ -26,6 +30,7 @@ interface ApiProduct {
   threshold: number;
   status: 'ok' | 'low' | 'out';
   imageUrl: string | null;
+  barcode: string | null;
 }
 
 type StatusFilter = 'all' | 'low' | 'out';
@@ -35,8 +40,6 @@ const STATUS_TABS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'low', labelKey: 'stock.status.low' },
   { key: 'out', labelKey: 'stock.status.out' },
 ];
-
-const categoryOptions = posCategories.filter((c) => c !== 'Tous');
 
 function photoUploadError(
   err: unknown,
@@ -61,12 +64,23 @@ function photoUploadError(
 export default function StockManager() {
   const { toast } = useToast();
   const t = useT();
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ApiProduct | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
+
+  // Catégories propres à la boutique : dérivées des produits déjà saisis
+  // (chaque boutique a donc SES catégories, créées au fil de l'ajout).
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(),
+    [products],
+  );
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
@@ -131,6 +145,7 @@ export default function StockManager() {
           qty: input.qty,
           threshold: input.threshold,
           ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
+          ...(input.barcode ? { barcode: input.barcode } : {}),
         },
       });
       toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
@@ -143,6 +158,45 @@ export default function StockManager() {
     }
   }
 
+  async function updateProduct(id: string, patch: EditProductInput): Promise<boolean> {
+    if (!patch.name) {
+      toast(t('stock.nameRequired'), 'error');
+      return false;
+    }
+    try {
+      await api(`/api/products/${id}`, { method: 'PATCH', body: patch });
+      toast(t('stock.updated', { name: patch.name }), 'success');
+      await refresh();
+      return true;
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      toast(code === 'REF_TAKEN' ? t('stock.refTaken') : t('async.error'), 'error');
+      return false;
+    }
+  }
+
+  async function deleteProduct(p: ApiProduct) {
+    const ok = await confirm({
+      title: t('stock.delete.confirmTitle'),
+      message: t('stock.delete.confirmMsg', { name: p.name }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
+      variant: 'danger',
+      icon: 'trash-2',
+    });
+    if (!ok) return;
+    setDeletingId(p.id);
+    try {
+      await api(`/api/products/${p.id}`, { method: 'DELETE' });
+      toast(t('stock.deleted', { name: p.name }), 'success');
+      await refresh();
+    } catch {
+      toast(t('async.error'), 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
       <TopBar
@@ -151,7 +205,7 @@ export default function StockManager() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-col xl:flex-row">
+      <div className="flex flex-col">
         {/* Liste produits */}
         <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
           {/* KPI */}
@@ -193,18 +247,14 @@ export default function StockManager() {
                 className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               />
             </div>
-            <select
+            <ComboBox
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-            >
-              <option value="">{t('common.allCategories')}</option>
-              {categoryOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryFilter}
+              options={categories}
+              allLabel={t('common.allCategories')}
+              searchable={categories.length > 8}
+              className="w-full sm:w-[200px]"
+            />
             <div className="border-border flex items-center overflow-hidden rounded-md border">
               {STATUS_TABS.map((tab) => {
                 const active = statusFilter === tab.key;
@@ -224,6 +274,16 @@ export default function StockManager() {
                 );
               })}
             </div>
+
+            {/* Ajouter un produit — ouvre la modale (plus de formulaire collé) */}
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold sm:ms-auto"
+            >
+              <Icon i="plus" size={15} />
+              {t('stock.form.title')}
+            </button>
           </div>
 
           {/* Champ fichier partagé pour changer la photo d'un produit */}
@@ -273,7 +333,7 @@ export default function StockManager() {
                     <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
                       {t('common.status')}
                     </span>
-                    <span className="w-8" />
+                    <span className="w-16" />
                   </div>
 
                   {visible.map((p) => {
@@ -346,14 +406,29 @@ export default function StockManager() {
                             {t(`stock.status.${p.status}`)}
                           </span>
                         </div>
-                        <div className="flex w-8 justify-center">
+                        <div className="flex w-16 items-center justify-center gap-1">
                           <button
                             type="button"
                             aria-label={`${t('common.edit')} ${p.name}`}
-                            onClick={() => toast(t('common.editSoonProduct'), 'info')}
-                            className="text-muted-foreground hover:text-foreground"
+                            title={t('common.edit')}
+                            onClick={() => setEditing(p)}
+                            className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 w-7 items-center justify-center rounded-md transition-colors"
                           >
                             <Icon i="pencil" size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`${t('common.delete')} ${p.name}`}
+                            title={t('common.delete')}
+                            onClick={() => deleteProduct(p)}
+                            disabled={deletingId === p.id}
+                            className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-50"
+                          >
+                            <Icon
+                              i={deletingId === p.id ? 'loader-2' : 'trash-2'}
+                              size={13}
+                              className={deletingId === p.id ? 'animate-spin' : ''}
+                            />
                           </button>
                         </div>
                       </div>
@@ -370,10 +445,33 @@ export default function StockManager() {
             </div>
           </AsyncState>
         </div>
-
-        {/* Formulaire d'ajout */}
-        <AddProductForm onSubmit={addProduct} />
       </div>
+
+      {/* Formulaire d'ajout — en modale, ouvert au clic sur « Ajouter un produit » */}
+      <Modal open={adding} onClose={() => setAdding(false)} title={t('stock.form.title')} size="md">
+        <AddProductForm
+          onSubmit={addProduct}
+          onDone={() => setAdding(false)}
+          categories={categories}
+        />
+      </Modal>
+
+      {/* Édition d'un produit */}
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={t('stock.edit.title')}
+        size="md"
+      >
+        {editing && (
+          <EditProductForm
+            product={editing}
+            categories={categories}
+            onSave={updateProduct}
+            onDone={() => setEditing(null)}
+          />
+        )}
+      </Modal>
     </>
   );
 }

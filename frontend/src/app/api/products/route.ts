@@ -31,6 +31,7 @@ const PostBody = z.object({
   qty: z.number().int().min(0).default(0),
   threshold: z.number().int().min(0).default(0),
   imageUrl: z.string().url().max(500).nullable().optional(),
+  barcode: z.string().trim().max(64).nullable().optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             qty: d.qty,
             threshold: d.threshold,
             imageUrl: d.imageUrl ?? null,
+            barcode: d.barcode && d.barcode.length > 0 ? d.barcode : null,
           },
           select: PRODUCT_SELECT,
         });
