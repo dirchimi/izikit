@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
+import InstallPrompt from '@/components/pwa/InstallPrompt';
 
 /**
  * Responsive dashboard shell.
@@ -68,6 +69,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Bannière d'installation PWA (in-app, comme les apps de référence) */}
+      <InstallPrompt />
     </div>
   );
 }

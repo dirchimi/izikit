@@ -19,6 +19,18 @@ const messages: Record<string, Msg> = {
   'nav.rapports': { fr: 'Rapports', en: 'Reports', ar: 'التقارير' },
   'nav.parametres': { fr: 'Paramètres', en: 'Settings', ar: 'الإعدادات' },
   'nav.appearance': { fr: 'Apparence & langue', en: 'Appearance & language', ar: 'المظهر واللغة' },
+  'pwa.install.title': {
+    fr: 'Installer l’application',
+    en: 'Install the app',
+    ar: 'ثبّت التطبيق',
+  },
+  'pwa.install.body': {
+    fr: 'Accès rapide depuis votre écran d’accueil.',
+    en: 'Quick access from your home screen.',
+    ar: 'وصول سريع من شاشتك الرئيسية.',
+  },
+  'pwa.install.cta': { fr: 'Installer', en: 'Install', ar: 'تثبيت' },
+  'pwa.install.later': { fr: 'Plus tard', en: 'Later', ar: 'لاحقًا' },
   'nav.logout': { fr: 'Déconnexion', en: 'Log out', ar: 'تسجيل الخروج' },
   'nav.admin': { fr: 'Admin', en: 'Admin', ar: 'الإدارة' },
   'nav.section.vente': { fr: 'Vente', en: 'Selling', ar: 'البيع' },

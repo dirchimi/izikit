@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { DM_Sans, Tajawal } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
@@ -9,6 +9,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { getServerLocale } from '@/lib/i18n/server';
 import { dir } from '@/lib/i18n/config';
 import { getServerTheme } from '@/lib/theme/server';
+import PwaRegistrar from '@/components/pwa/PwaRegistrar';
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -67,6 +68,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+export const viewport: Viewport = {
+  themeColor: '#0a3d2e',
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -80,6 +85,7 @@ export default async function RootLayout({
       className={`${dmSans.variable} ${tajawal.variable}${theme === 'dark' ? ' dark' : ''}`}
     >
       <body>
+        <PwaRegistrar />
         <ToastProvider>
           <ConfirmProvider>
             <LocaleProvider initialLocale={locale}>
