@@ -34,6 +34,11 @@ model User {
   // Liste d'attente Premium (teaser) : horodatage quand l'utilisateur clique
   // « Être prévenu ». null = pas (encore) intéressé. Sert au comptage de la demande.
   premiumInterestAt DateTime?
+  // Onboarding : horodatage de la fermeture de la modale de bienvenue.
+  // null = jamais vue → on l'affiche une seule fois, à vie, après création du
+  // compte. Renseigné via POST /api/auth/onboarded. Les comptes existants sont
+  // rétro-remplis (migration) pour ne PAS revoir l'accueil.
+  onboardedAt       DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

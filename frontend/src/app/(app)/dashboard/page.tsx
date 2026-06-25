@@ -2,7 +2,6 @@ import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import StatCard from '@/components/boutique/StatCard';
-import PremiumBanner from '@/components/boutique/PremiumBanner';
 import OnboardingModal from '@/components/boutique/OnboardingModal';
 import MiniBarChart from '@/components/boutique/MiniBarChart';
 import StockAlertRow from '@/components/boutique/StockAlertRow';
@@ -162,9 +161,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
-
-        {/* Teaser premium — capte l'intérêt (liste d'attente) */}
-        <PremiumBanner />
       </div>
     </>
   );

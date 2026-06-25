@@ -30,62 +30,6 @@ const messages: Record<string, Msg> = {
     en: "You'll need to log in again to access your shop.",
     ar: 'ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى متجرك.',
   },
-  // ── Premium (teaser + liste d'attente) ───────────────────────────────────
-  'premium.card.title': { fr: 'Passez à Premium', en: 'Go Premium', ar: 'انتقل إلى Premium' },
-  'premium.card.sub': {
-    fr: 'Débloquez tout le potentiel',
-    en: 'Unlock everything',
-    ar: 'افتح كل الإمكانيات',
-  },
-  'premium.cta': { fr: 'Être prévenu', en: 'Notify me', ar: 'أبلغني' },
-  'premium.banner.title': {
-    fr: 'Sahilley Premium arrive bientôt ✨',
-    en: 'Sahilley Premium is coming soon ✨',
-    ar: 'Sahilley Premium قادم قريبًا ✨',
-  },
-  'premium.banner.sub': {
-    fr: 'Multi-boutiques, sauvegarde cloud, rapports avancés et plus.',
-    en: 'Multi-shop, cloud backup, advanced reports and more.',
-    ar: 'متاجر متعددة، نسخ احتياطي سحابي، تقارير متقدمة والمزيد.',
-  },
-  'premium.modal.title': {
-    fr: 'Sahilley Premium ✨',
-    en: 'Sahilley Premium ✨',
-    ar: 'Sahilley Premium ✨',
-  },
-  'premium.modal.pitch': {
-    fr: 'Bientôt disponible. Inscris-toi pour être prévenu en premier au lancement.',
-    en: 'Coming soon. Join to be the first to know at launch.',
-    ar: 'قادم قريبًا. سجّل لتكون أول من يعرف عند الإطلاق.',
-  },
-  'premium.modal.note': {
-    fr: 'Aucun paiement maintenant — juste un signal d’intérêt.',
-    en: 'No payment now — just register your interest.',
-    ar: 'لا دفع الآن — فقط سجّل اهتمامك.',
-  },
-  'premium.feat.multi': { fr: 'Plusieurs boutiques', en: 'Multiple shops', ar: 'متاجر متعددة' },
-  'premium.feat.backup': { fr: 'Sauvegarde cloud', en: 'Cloud backup', ar: 'نسخ احتياطي سحابي' },
-  'premium.feat.reports': { fr: 'Rapports avancés', en: 'Advanced reports', ar: 'تقارير متقدمة' },
-  'premium.feat.support': {
-    fr: 'Support prioritaire',
-    en: 'Priority support',
-    ar: 'دعم ذو أولوية',
-  },
-  'premium.join': {
-    fr: "Rejoindre la liste d'attente",
-    en: 'Join the waitlist',
-    ar: 'انضم إلى قائمة الانتظار',
-  },
-  'premium.joined': {
-    fr: 'Tu es sur la liste ! On te préviendra. ✨',
-    en: "You're on the list! We'll let you know. ✨",
-    ar: 'أنت على القائمة! سنخبرك. ✨',
-  },
-  'premium.joinedToast': {
-    fr: 'Inscrit à la liste Premium ✨',
-    en: 'Added to the Premium list ✨',
-    ar: 'تمت الإضافة إلى قائمة Premium ✨',
-  },
   'role.patron': { fr: 'Patron', en: 'Owner', ar: 'المالك' },
   'offline.syncPending': {
     fr: 'Hors ligne — sync en attente',

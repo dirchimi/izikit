@@ -16,6 +16,9 @@ export interface User {
   hasPassword: boolean;
   /** Provider names already linked, e.g. ['google']. Empty for pure email/password accounts. */
   linkedProviders: string[];
+  /** ISO timestamp set when the welcome/onboarding modal was first dismissed.
+   *  null = never onboarded → show the first-run welcome once. */
+  onboardedAt: string | null;
 }
 
 interface AuthContextValue {

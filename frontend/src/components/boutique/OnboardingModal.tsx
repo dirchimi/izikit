@@ -6,11 +6,13 @@ import Icon from '@/components/ui/Icon';
 import Modal from '@/components/ui/Modal';
 import { useT } from '@/contexts/LocaleContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 
 /**
- * Accueil premier lancement — modale de bienvenue affichée une seule fois par
- * utilisateur (drapeau localStorage `sah_onboarded_<userId>`). Aucune dépendance
- * serveur : purement côté client, sûre à monter dans une page serveur.
+ * Accueil premier lancement — modale de bienvenue affichée UNE SEULE FOIS, à vie,
+ * par compte. L'état vit côté serveur (`User.onboardedAt`, exposé via /api/auth/me) :
+ * la modale ne réapparaît donc pas en changeant d'appareil, de navigateur ou en
+ * vidant le cache. À la fermeture, on marque le compte via POST /api/auth/onboarded.
  */
 const STEPS: Array<{ icon: string; titleKey: string; bodyKey: string; href: string }> = [
   { icon: 'package-plus', titleKey: 'onb.s1.title', bodyKey: 'onb.s1.body', href: '/stock' },
@@ -28,25 +30,17 @@ export default function OnboardingModal() {
   const { user, loading } = useAuth();
   const [open, setOpen] = useState(false);
 
+  // Un compte jamais accueilli (onboardedAt === null) voit la modale une fois.
   useEffect(() => {
     if (loading || !user) return;
-    const key = `sah_onboarded_${user.id}`;
-    try {
-      if (!window.localStorage.getItem(key)) setOpen(true);
-    } catch {
-      /* localStorage indisponible (mode privé) — on n'affiche rien. */
-    }
+    if (user.onboardedAt === null) setOpen(true);
   }, [loading, user]);
 
   function dismiss() {
     setOpen(false);
-    if (user) {
-      try {
-        window.localStorage.setItem(`sah_onboarded_${user.id}`, '1');
-      } catch {
-        /* ignore */
-      }
-    }
+    // Marque le compte côté serveur (idempotent). On n'attend pas la réponse :
+    // la modale est déjà fermée localement, et la prochaine session lira le flag.
+    void api('/api/auth/onboarded', { method: 'POST' }).catch(() => {});
   }
 
   return (

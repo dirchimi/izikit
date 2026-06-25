@@ -44,6 +44,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         emailVerifiedAt: true,
         createdAt: true,
         updatedAt: true,
+        onboardedAt: true,
         passwordHash: true,
         oauthAccounts: { select: { provider: true } },
       },
@@ -72,6 +73,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         : null,
       hasPassword: !!dbUser?.passwordHash,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
+      onboardedAt: dbUser?.onboardedAt
+        ? dbUser.onboardedAt instanceof Date
+          ? dbUser.onboardedAt.toISOString()
+          : dbUser.onboardedAt
+        : null,
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
