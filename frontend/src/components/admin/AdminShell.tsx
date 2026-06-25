@@ -62,15 +62,25 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <AdminProvider value={admin}>
-      <div className="bg-background flex min-h-screen">
-        <aside className="bg-sidebar border-sidebar-muted w-56 shrink-0 border-e p-4">
-          <div className="mb-6 flex items-center gap-2">
-            <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
-              <Icon i="shield" size={16} className="text-primary-foreground" />
+      <div className="bg-background flex min-h-screen flex-col md:flex-row">
+        <aside className="bg-sidebar border-sidebar-muted shrink-0 border-b p-4 md:w-56 md:border-e md:border-b-0">
+          <div className="mb-3 flex items-center justify-between gap-2 md:mb-6">
+            <div className="flex items-center gap-2">
+              <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
+                <Icon i="shield" size={16} className="text-primary-foreground" />
+              </div>
+              <span className="font-headings text-sidebar-foreground text-lg font-bold">Admin</span>
             </div>
-            <span className="font-headings text-sidebar-foreground text-lg font-bold">Admin</span>
+            {/* Retour boutique — compact, visible en haut sur mobile uniquement */}
+            <Link
+              href="/dashboard"
+              aria-label="Retour à la boutique"
+              className="text-sidebar-foreground flex h-9 w-9 items-center justify-center rounded-md opacity-70 hover:opacity-100 md:hidden"
+            >
+              <Icon i="arrow-left" size={16} />
+            </Link>
           </div>
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-row gap-1 overflow-x-auto md:flex-col">
             {NAV.map((item) => {
               const active =
                 'exact' in item && item.exact
@@ -80,7 +90,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`font-body flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                  className={`font-body flex shrink-0 items-center gap-3 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                     active
                       ? 'bg-sidebar-active text-primary-foreground'
                       : 'text-sidebar-foreground opacity-70 hover:opacity-100'
@@ -92,7 +102,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <div className="mt-8 flex flex-col gap-1">
+          {/* Retour + identité — masqués sur mobile (le retour est en haut) */}
+          <div className="mt-8 hidden flex-col gap-1 md:flex">
             <Link
               href="/dashboard"
               className="font-body text-sidebar-foreground flex items-center gap-2 rounded-md px-3 py-2 text-xs opacity-60 hover:opacity-100"
@@ -106,7 +117,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             </p>
           </div>
         </aside>
-        <main className="flex-1 overflow-auto p-6 md:p-8">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-8">{children}</main>
       </div>
     </AdminProvider>
   );

@@ -18,6 +18,7 @@ const messages: Record<string, Msg> = {
   'nav.documents': { fr: 'Documents', en: 'Documents', ar: 'المستندات' },
   'nav.rapports': { fr: 'Rapports', en: 'Reports', ar: 'التقارير' },
   'nav.parametres': { fr: 'Paramètres', en: 'Settings', ar: 'الإعدادات' },
+  'nav.appearance': { fr: 'Apparence & langue', en: 'Appearance & language', ar: 'المظهر واللغة' },
   'nav.logout': { fr: 'Déconnexion', en: 'Log out', ar: 'تسجيل الخروج' },
   'nav.admin': { fr: 'Admin', en: 'Admin', ar: 'الإدارة' },
   'nav.section.vente': { fr: 'Vente', en: 'Selling', ar: 'البيع' },

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
+import LanguageSwitcher from './LanguageSwitcher';
+import ThemeToggle from './ThemeToggle';
 import { useT } from '@/contexts/LocaleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
@@ -163,6 +165,20 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
           </div>
         ))}
       </nav>
+
+      {/* Apparence & langue — mobile uniquement (le desktop les a dans la TopBar).
+          Posés sur une carte bg-surface pour un contraste correct sur la sidebar. */}
+      <div className="px-3 pb-1 lg:hidden">
+        <div className="bg-surface flex flex-col gap-2 rounded-lg p-3">
+          <span className="text-muted-foreground font-body text-[10px] font-bold tracking-wider uppercase">
+            {t('nav.appearance')}
+          </span>
+          <div className="flex items-center justify-between gap-2">
+            <LanguageSwitcher compact />
+            <ThemeToggle compact />
+          </div>
+        </div>
+      </div>
 
       {/* Réglages + admin + user */}
       <div className="border-sidebar-muted border-t px-3 pt-2 pb-3">

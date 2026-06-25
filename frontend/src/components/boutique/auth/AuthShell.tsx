@@ -19,9 +19,9 @@ export default async function AuthShell({
   const { t } = await getServerT();
   return (
     <main className="bg-background relative flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="absolute top-5 end-6 hidden items-center gap-2 sm:flex">
-        <LanguageSwitcher />
-        <ThemeToggle />
+      <div className="absolute end-4 top-4 flex items-center gap-2 sm:end-6 sm:top-5">
+        <LanguageSwitcher compact />
+        <ThemeToggle compact />
       </div>
 
       <div className="bg-surface border-border flex w-full max-w-[420px] flex-col items-center gap-6 rounded-xl border px-6 py-9 sm:px-10 sm:py-10">

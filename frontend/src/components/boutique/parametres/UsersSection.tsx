@@ -180,7 +180,7 @@ export default function UsersSection({
                     </span>
                   )}
                 </div>
-                <span className="text-muted-foreground font-body truncate text-xs">{m.email}</span>
+                <span className="text-muted-foreground font-body text-xs break-all">{m.email}</span>
               </div>
 
               {editable ? (

@@ -31,8 +31,9 @@ export default function TopBar({
         {subtitle && <p className="text-muted-foreground font-body mt-0.5 text-xs">{subtitle}</p>}
       </div>
 
-      {/* Recherche globale — visible à partir de md, prend l'espace central libéré. */}
-      <div className="order-last hidden min-w-0 flex-1 justify-center px-2 md:order-none md:flex lg:px-6">
+      {/* Recherche globale — sur mobile : rangée pleine largeur sous le titre
+          (basis-full → passe à la ligne). À partir de md : centrée, inline. */}
+      <div className="order-last flex w-full min-w-0 basis-full justify-center px-0 md:order-none md:w-auto md:flex-1 md:basis-auto md:px-2 lg:px-6">
         <GlobalSearch />
       </div>
 
