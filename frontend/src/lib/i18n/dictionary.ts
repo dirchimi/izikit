@@ -654,6 +654,7 @@ const messages: Record<string, Msg> = {
   'common.today': { fr: 'Aujourd’hui', en: 'Today', ar: 'اليوم' },
   'common.thisMonth': { fr: 'Ce mois', en: 'This month', ar: 'هذا الشهر' },
   'common.pickDate': { fr: 'Date précise…', en: 'Pick a date…', ar: 'تاريخ محدّد…' },
+  'common.clear': { fr: 'Effacer', en: 'Clear', ar: 'مسح' },
   'common.transactions': { fr: 'transactions', en: 'transactions', ar: 'معاملات' },
   'common.product': { fr: 'Produit', en: 'Product', ar: 'المنتج' },
   'common.qty': { fr: 'Qté', en: 'Qty', ar: 'الكمية' },
@@ -1223,6 +1224,27 @@ const messages: Record<string, Msg> = {
     en: 'Shop info saved.',
     ar: 'تم حفظ معلومات المتجر.',
   },
+  'parametres.facturation.title': {
+    fr: 'Apparence du reçu',
+    en: 'Receipt appearance',
+    ar: 'مظهر الإيصال',
+  },
+  'parametres.facturation.subtitle': {
+    fr: 'Logo, coordonnées et message affichés sur le reçu de vente.',
+    en: 'Logo, contact details and message shown on the sale receipt.',
+    ar: 'الشعار وبيانات الاتصال والرسالة الظاهرة على الإيصال.',
+  },
+  'parametres.facturation.hint': {
+    fr: 'Laissez un champ vide pour ne pas l’afficher sur le reçu.',
+    en: 'Leave a field empty to hide it from the receipt.',
+    ar: 'اترك الحقل فارغًا لإخفائه من الإيصال.',
+  },
+  'parametres.facturation.note': {
+    fr: 'Message de bas de reçu',
+    en: 'Receipt footer message',
+    ar: 'رسالة أسفل الإيصال',
+  },
+  'parametres.facturation.previewTitle': { fr: 'Aperçu', en: 'Preview', ar: 'معاينة' },
   'parametres.logoSoon': {
     fr: 'Changement de logo à venir.',
     en: 'Logo change coming soon.',
@@ -1623,6 +1645,16 @@ const messages: Record<string, Msg> = {
     ar: '{n} بانتظار المزامنة',
   },
   'dash.seeAll': { fr: 'Voir toutes', en: 'See all', ar: 'عرض الكل' },
+  'dash.noAlerts': {
+    fr: 'Tout est bien approvisionné 👍',
+    en: 'Everything is well stocked 👍',
+    ar: 'كل شيء متوفّر 👍',
+  },
+  'dash.noSales': {
+    fr: 'Aucune vente pour le moment.',
+    en: 'No sales yet.',
+    ar: 'لا توجد مبيعات بعد.',
+  },
   'dash.weekTitle': { fr: 'Ventes de la semaine', en: 'This week’s sales', ar: 'مبيعات الأسبوع' },
   // i18n:append-here (ne pas supprimer — point d'insertion des écrans)
 };

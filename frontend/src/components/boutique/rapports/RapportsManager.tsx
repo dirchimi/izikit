@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import DatePicker from '@/components/ui/DatePicker';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
@@ -224,23 +225,10 @@ export default function RapportsManager() {
           {/* Plage de dates personnalisée (du… au…) */}
           {period === 'custom' && (
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={from}
-                max={to || undefined}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-label={t('rapports.from')}
-                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-              />
+              <span className="text-muted-foreground font-body text-sm">{t('rapports.from')}</span>
+              <DatePicker value={from} onChange={setFrom} max={to || undefined} />
               <span className="text-muted-foreground font-body text-sm">{t('rapports.to')}</span>
-              <input
-                type="date"
-                value={to}
-                min={from || undefined}
-                onChange={(e) => setTo(e.target.value)}
-                aria-label={t('rapports.to')}
-                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-              />
+              <DatePicker value={to} onChange={setTo} min={from || undefined} />
             </div>
           )}
         </div>

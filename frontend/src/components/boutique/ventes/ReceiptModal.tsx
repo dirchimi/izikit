@@ -33,7 +33,24 @@ export interface ReceiptData {
 
 interface OrgCurrent {
   organization: { name: string };
-  settings: { city: string | null; invoiceNote: string | null };
+  settings: {
+    city: string | null;
+    phone: string | null;
+    address: string | null;
+    invoiceNote: string | null;
+    logoUrl: string | null;
+  };
+}
+
+/** Charge une image (logo) en respectant CORS — null si échec (pas de canvas taint). */
+function loadImageSafe(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 const METHOD_KEY: Record<ReceiptMethod, string> = {
@@ -61,6 +78,9 @@ export default function ReceiptModal({
 
   const shopName = org?.organization.name ?? 'Boutique';
   const city = org?.settings.city ?? '';
+  const phone = org?.settings.phone ?? '';
+  const address = org?.settings.address ?? '';
+  const logoUrl = org?.settings.logoUrl ?? '';
   const note = org?.settings.invoiceNote ?? '';
 
   const dateStr = receipt
@@ -75,8 +95,10 @@ export default function ReceiptModal({
     if (!receipt) return null;
     const W = 380;
     const PAD = 24;
+    const logo = logoUrl ? await loadImageSafe(logoUrl) : null;
+    const logoH = logo ? 56 : 0;
     // Hauteur calculée à l'avance (le canvas est de taille fixe).
-    let H = PAD + 24 + (city ? 18 : 6) + 24 + 26;
+    let H = PAD + logoH + 24 + (city ? 18 : 6) + (phone ? 14 : 0) + (address ? 14 : 0) + 24 + 26;
     if (receipt.customerName) H += 18;
     H += 18 + receipt.items.length * 22 + 26 + 28 + 20 + 24 + 18 + PAD;
 
@@ -91,6 +113,11 @@ export default function ReceiptModal({
     ctx.fillRect(0, 0, W, H);
 
     let y = PAD + 14;
+    // Logo (optionnel, centré)
+    if (logo) {
+      ctx.drawImage(logo, (W - 48) / 2, PAD, 48, 48);
+      y = PAD + 48 + 8 + 14;
+    }
     // En-tête
     ctx.fillStyle = '#171717';
     ctx.textAlign = 'center';
@@ -101,6 +128,18 @@ export default function ReceiptModal({
       ctx.fillStyle = '#737373';
       ctx.font = '12px sans-serif';
       ctx.fillText(city, W / 2, y);
+      y += 14;
+    }
+    if (phone) {
+      ctx.fillStyle = '#737373';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(phone, W / 2, y);
+      y += 14;
+    }
+    if (address) {
+      ctx.fillStyle = '#737373';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(address, W / 2, y);
       y += 14;
     }
     y += 8;
@@ -231,9 +270,19 @@ export default function ReceiptModal({
         <div className="flex flex-col gap-4">
           {/* Ticket — couleurs papier fixes (indépendantes du thème) */}
           <div className="printable rounded-lg border border-neutral-300 bg-white px-5 py-5 text-neutral-800">
-            <div className="text-center">
+            <div className="flex flex-col items-center text-center">
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  className="mb-1.5 h-12 w-12 rounded-md object-cover"
+                  crossOrigin="anonymous"
+                />
+              )}
               <p className="font-headings text-base font-bold text-neutral-900">{shopName}</p>
               {city && <p className="font-body text-xs text-neutral-500">{city}</p>}
+              {phone && <p className="font-body text-xs text-neutral-500">{phone}</p>}
+              {address && <p className="font-body text-xs text-neutral-500">{address}</p>}
             </div>
 
             <div className="my-3 border-t border-dashed border-neutral-300" />

@@ -14,6 +14,7 @@ import { type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
 import ClientPicker, { type PickedClient } from './ClientPicker';
+import LiveDateTime from '@/components/boutique/LiveDateTime';
 import ReceiptModal, {
   type ReceiptData,
   type ReceiptMethod,
@@ -148,7 +149,11 @@ export default function VendrePos() {
 
   return (
     <>
-      <TopBar title={t('nav.vendre')} subtitle={t('pos.subtitle')} actions={<ScreenTopActions />} />
+      <TopBar
+        title={t('nav.vendre')}
+        subtitle={<LiveDateTime withTime />}
+        actions={<ScreenTopActions />}
+      />
 
       <div className="flex flex-col lg:flex-row">
         {/* Catalogue produits */}
@@ -235,19 +240,24 @@ export default function VendrePos() {
 
           {/* Lignes */}
           <div className="flex flex-1 flex-col gap-1 px-5 py-3">
-            {cart.map((line) => (
-              <CartLine
-                key={line.productId}
-                line={line}
-                onInc={() => inc(line.productId)}
-                onDec={() => dec(line.productId)}
-                onRemove={() => remove(line.productId)}
-              />
-            ))}
-            <div className="text-muted-foreground border-border mt-2 flex items-center gap-2 rounded-md border border-dashed px-3 py-3">
-              <Icon i="plus" size={14} />
-              <span className="font-body text-xs">{t('pos.addHint')}</span>
-            </div>
+            {cart.length === 0 ? (
+              <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
+                <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-full">
+                  <Icon i="shopping-cart" size={20} />
+                </div>
+                <span className="font-body text-xs">{t('pos.addHint')}</span>
+              </div>
+            ) : (
+              cart.map((line) => (
+                <CartLine
+                  key={line.productId}
+                  line={line}
+                  onInc={() => inc(line.productId)}
+                  onDec={() => dec(line.productId)}
+                  onRemove={() => remove(line.productId)}
+                />
+              ))
+            )}
           </div>
 
           {/* Paiement */}

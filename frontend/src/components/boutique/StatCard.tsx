@@ -5,11 +5,12 @@ export interface StatCardProps {
   value: string;
   unit: string;
   icon: string;
-  trend: string;
-  trendUp: boolean;
+  /** Tendance optionnelle (ex. « +12% »). Omise → pas de ligne de tendance. */
+  trend?: string;
+  trendUp?: boolean;
   accent?: boolean;
   /** Libellé « vs hier » déjà traduit (fourni par la page). */
-  vsLabel: string;
+  vsLabel?: string;
 }
 
 export default function StatCard({
@@ -18,7 +19,7 @@ export default function StatCard({
   unit,
   icon,
   trend,
-  trendUp,
+  trendUp = true,
   accent = false,
   vsLabel,
 }: StatCardProps) {
@@ -64,27 +65,33 @@ export default function StatCard({
           {unit}
         </span>
       </div>
-      <div className="flex items-center gap-1">
-        <Icon
-          i={trendUp ? 'arrow-up-right' : 'arrow-down-right'}
-          size={13}
-          className={accent ? 'text-primary-foreground' : trendUp ? 'text-success' : 'text-danger'}
-        />
-        <span
-          className={`font-body text-xs font-semibold ${
-            accent ? 'text-primary-foreground' : trendUp ? 'text-success' : 'text-danger'
-          }`}
-        >
-          {trend}
-        </span>
-        <span
-          className={`font-body text-xs ${
-            accent ? 'text-primary-foreground opacity-50' : 'text-muted-foreground'
-          }`}
-        >
-          {vsLabel}
-        </span>
-      </div>
+      {trend ? (
+        <div className="flex items-center gap-1">
+          <Icon
+            i={trendUp ? 'arrow-up-right' : 'arrow-down-right'}
+            size={13}
+            className={
+              accent ? 'text-primary-foreground' : trendUp ? 'text-success' : 'text-danger'
+            }
+          />
+          <span
+            className={`font-body text-xs font-semibold ${
+              accent ? 'text-primary-foreground' : trendUp ? 'text-success' : 'text-danger'
+            }`}
+          >
+            {trend}
+          </span>
+          {vsLabel && (
+            <span
+              className={`font-body text-xs ${
+                accent ? 'text-primary-foreground opacity-50' : 'text-muted-foreground'
+              }`}
+            >
+              {vsLabel}
+            </span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

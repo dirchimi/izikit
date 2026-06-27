@@ -10,6 +10,7 @@ import { useApi } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { settingsSections } from '@/lib/boutique/fixtures';
 import BoutiqueInfoForm, { type BoutiqueInfoValues } from './BoutiqueInfoForm';
+import FacturationSection from './FacturationSection';
 import NotificationSettings from './NotificationSettings';
 import SecuritySection from './SecuritySection';
 import UsersSection, { type OrgMember } from './UsersSection';
@@ -140,6 +141,8 @@ export default function ParametresManager() {
         <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-8">
           {active === 'boutique' && renderBoutiquePanel()}
 
+          {active === 'facturation' && <FacturationSection />}
+
           {active === 'utilisateurs' && (
             <UsersSection
               members={members}
@@ -165,6 +168,7 @@ export default function ParametresManager() {
             ))}
 
           {active !== 'boutique' &&
+            active !== 'facturation' &&
             active !== 'utilisateurs' &&
             active !== 'securite' &&
             active !== 'notifications' && (

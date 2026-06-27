@@ -1,4 +1,3 @@
-import Icon from '@/components/ui/Icon';
 import { formatFCFA } from '@/lib/boutique/format';
 
 export interface RecentSaleRowProps {
@@ -8,7 +7,6 @@ export interface RecentSaleRowProps {
   total: number;
   method: string;
   fcfa: string;
-  synced: boolean;
 }
 
 export default function RecentSaleRow({
@@ -18,10 +16,9 @@ export default function RecentSaleRow({
   total,
   method,
   fcfa,
-  synced,
 }: RecentSaleRowProps) {
   return (
-    <div className="border-border bg-surface flex items-center gap-4 border-b px-4 py-3">
+    <div className="border-border bg-surface flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
       <span className="font-body text-muted-foreground w-10 shrink-0 text-xs">{time}</span>
       <span className="font-body text-foreground flex-1 text-sm font-medium">{product}</span>
       <span className="font-body text-muted-foreground w-6 text-center text-xs">{qty}</span>
@@ -29,13 +26,6 @@ export default function RecentSaleRow({
         {formatFCFA(total)} {fcfa}
       </span>
       <span className="font-body text-muted-foreground w-20 text-center text-xs">{method}</span>
-      <div className="flex w-5 justify-center">
-        {synced ? (
-          <Icon i="cloud-check" size={14} className="text-success" />
-        ) : (
-          <Icon i="cloud-off" size={14} className="text-warning" />
-        )}
-      </div>
     </div>
   );
 }

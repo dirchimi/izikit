@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import Dropdown from '@/components/ui/Dropdown';
+import DatePicker from '@/components/ui/DatePicker';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
@@ -186,11 +187,22 @@ export default function VentesManager() {
               </span>
             }
             items={[
-              { label: t('ventes.period.all'), onClick: () => setPeriod('all') },
-              { label: t('common.today'), onClick: () => setPeriod('today') },
+              {
+                label: t('ventes.period.all'),
+                icon: 'layers',
+                active: period === 'all',
+                onClick: () => setPeriod('all'),
+              },
+              {
+                label: t('common.today'),
+                icon: 'sun',
+                active: period === 'today',
+                onClick: () => setPeriod('today'),
+              },
               {
                 label: t('common.pickDate'),
                 icon: 'calendar',
+                active: period === 'date',
                 onClick: () => {
                   setPeriod('date');
                   if (!pickDate) setPickDate(todayYmd);
@@ -199,12 +211,7 @@ export default function VentesManager() {
             ]}
           />
           {period === 'date' && (
-            <input
-              type="date"
-              value={pickDate}
-              onChange={(e) => setPickDate(e.target.value)}
-              className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-            />
+            <DatePicker value={pickDate} onChange={setPickDate} max={todayYmd} />
           )}
 
           <div className="border-border flex flex-wrap items-center overflow-hidden rounded-md border">

@@ -20,7 +20,7 @@ export default function TopBar({
   actions,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
 }) {
   const t = useT();

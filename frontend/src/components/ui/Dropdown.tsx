@@ -8,6 +8,8 @@ export interface DropdownItem {
   icon?: string;
   onClick: () => void;
   danger?: boolean;
+  /** Option actuellement sélectionnée → surbrillance + coche. */
+  active?: boolean;
 }
 
 /**
@@ -71,11 +73,16 @@ export default function Dropdown({
                 item.onClick();
               }}
               className={`font-body flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-start text-sm transition-colors ${
-                item.danger ? 'text-danger hover:bg-danger/10' : 'text-foreground hover:bg-muted'
+                item.danger
+                  ? 'text-danger hover:bg-danger/10'
+                  : item.active
+                    ? 'bg-secondary text-secondary-foreground font-semibold'
+                    : 'text-foreground hover:bg-muted'
               }`}
             >
-              {item.icon && <Icon i={item.icon} size={15} />}
-              {item.label}
+              {item.icon && <Icon i={item.icon} size={15} className="shrink-0" />}
+              <span className="flex-1 truncate">{item.label}</span>
+              {item.active && <Icon i="check" size={15} className="text-primary shrink-0" />}
             </button>
           ))}
         </div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import Dropdown from '@/components/ui/Dropdown';
 import ComboBox from '@/components/ui/ComboBox';
+import DatePicker from '@/components/ui/DatePicker';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
@@ -199,11 +200,22 @@ export default function DepensesManager() {
                 </span>
               }
               items={[
-                { label: t('common.thisMonth'), onClick: () => setPeriod('month') },
-                { label: t('common.today'), onClick: () => setPeriod('today') },
+                {
+                  label: t('common.thisMonth'),
+                  icon: 'calendar-range',
+                  active: period === 'month',
+                  onClick: () => setPeriod('month'),
+                },
+                {
+                  label: t('common.today'),
+                  icon: 'sun',
+                  active: period === 'today',
+                  onClick: () => setPeriod('today'),
+                },
                 {
                   label: t('common.pickDate'),
                   icon: 'calendar',
+                  active: period === 'date',
                   onClick: () => {
                     setPeriod('date');
                     if (!pickDate) setPickDate(todayYmd);
@@ -212,12 +224,7 @@ export default function DepensesManager() {
               ]}
             />
             {period === 'date' && (
-              <input
-                type="date"
-                value={pickDate}
-                onChange={(e) => setPickDate(e.target.value)}
-                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-              />
+              <DatePicker value={pickDate} onChange={setPickDate} max={todayYmd} />
             )}
             <ComboBox
               value={categoryFilter}
