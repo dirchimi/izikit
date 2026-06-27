@@ -9,6 +9,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useApi } from '@/lib/useApi';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 
 interface NavItem {
   icon: string;
@@ -99,6 +100,7 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   const router = useRouter();
   const { logout, loggingOut } = useAuth();
   const confirm = useConfirm();
+  const online = useOnlineStatus();
   // Charge (et provisionne au 1er accès) la boutique courante.
   const { data: boutique } = useApi<BoutiqueCurrent>('/api/org/current');
   // Sonde admin : 403 pour les non-admins → `data` reste null → lien masqué.
@@ -135,11 +137,13 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
         </Link>
       </div>
 
-      {/* Statut connexion — online-only en v1 (le hors-ligne viendra plus tard) */}
+      {/* Statut connexion — reflète l'état réseau réel (consultation hors-ligne) */}
       <div className="bg-muted mx-4 mt-3 mb-1 flex items-center gap-2 rounded-md px-3 py-1.5">
-        <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+        <div
+          className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`}
+        />
         <span className="text-muted-foreground font-body text-xs font-semibold">
-          {t('online.connected')}
+          {online ? t('online.connected') : t('offline.short')}
         </span>
       </div>
 

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
+import OfflineBanner from '@/components/pwa/OfflineBanner';
 
 /**
  * Responsive dashboard shell.
@@ -21,6 +22,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="bg-background font-body flex min-h-screen">
+      {/* Bandeau hors-ligne (barre fine en haut quand le réseau tombe) */}
+      <OfflineBanner />
+
       {/* Sidebar desktop */}
       <aside className="hidden shrink-0 lg:block lg:w-[220px]">
         <div className="sticky top-0 h-screen overflow-y-auto">

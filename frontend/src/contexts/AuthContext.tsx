@@ -85,6 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearCsrfToken();
     invalidateCachePrefix('/api/');
+    // Purge le cache de données du service worker (téléphone partagé : pas de
+    // fuite des données entre comptes). Best-effort, jamais bloquant.
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+    }
     setUser(null);
     setLoggingOut(false);
   }, []);

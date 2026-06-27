@@ -60,6 +60,18 @@ const messages: Record<string, Msg> = {
     ar: 'غير متصل — المزامنة معلّقة',
   },
   'offline.short': { fr: 'Hors ligne', en: 'Offline', ar: 'غير متصل' },
+  'offline.banner': {
+    fr: 'Hors ligne — affichage des dernières données chargées.',
+    en: 'Offline — showing last loaded data.',
+    ar: 'غير متصل — عرض آخر البيانات المحمّلة.',
+  },
+  'offline.title': { fr: 'Pas de connexion', en: 'No connection', ar: 'لا يوجد اتصال' },
+  'offline.body': {
+    fr: 'Vérifie ta connexion internet. L’application réessaiera dès que le réseau revient.',
+    en: 'Check your internet connection. The app will retry as soon as the network is back.',
+    ar: 'تحقّق من اتصالك بالإنترنت. سيُعيد التطبيق المحاولة بمجرد عودة الشبكة.',
+  },
+  'offline.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
   'online.connected': { fr: 'En ligne', en: 'Online', ar: 'متصل' },
   'lang.soon': {
     fr: 'العربية — bientôt disponible.',
