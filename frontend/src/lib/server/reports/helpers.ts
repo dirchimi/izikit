@@ -97,6 +97,55 @@ export function bucketIndexFor(buckets: Bucket[], date: Date): number {
   return buckets.findIndex((b) => date >= b.from && date < b.to);
 }
 
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 'YYYY-MM-DD' (local) → Date, ou null si invalide (ex. 2026-02-31). */
+function ymdToDate(ymd: string): Date | null {
+  if (!YMD.test(ymd)) return null;
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number];
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
+}
+
+/**
+ * Plage personnalisée à partir de deux dates 'YYYY-MM-DD' (incluses). Renvoie
+ * `{ from, to }` (`to` exclusif = lendemain du dernier jour), ou null si dates
+ * invalides, ordre inversé, ou plage > 366 jours (garde-fou).
+ */
+export function parseDateRange(fromYmd: string, toYmd: string): { from: Date; to: Date } | null {
+  const f = ymdToDate(fromYmd);
+  const t = ymdToDate(toYmd);
+  if (!f || !t || f.getTime() > t.getTime()) return null;
+  const from = startOfDay(f);
+  const to = addDays(startOfDay(t), 1);
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+  if (days > 366) return null;
+  return { from, to };
+}
+
+/**
+ * Compartiments du graphe pour une plage libre : journaliers si ≤ 62 jours,
+ * sinon mensuels (sinon le graphe aurait trop de barres).
+ */
+export function buildBucketsRange(from: Date, to: Date): Bucket[] {
+  const buckets: Bucket[] = [];
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+  if (days <= 62) {
+    for (let d = from; d < to; d = addDays(d, 1)) {
+      buckets.push({ label: String(d.getDate()), from: d, to: addDays(d, 1) });
+    }
+  } else {
+    let cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (cur < to) {
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      buckets.push({ label: MONTHS[cur.getMonth()] ?? '', from: cur, to: next });
+      cur = next;
+    }
+  }
+  return buckets;
+}
+
 /** Marge en % du chiffre d'affaires (0 si CA nul). */
 export function marginPct(grossMargin: number, revenue: number): number {
   return revenue > 0 ? Math.round((grossMargin / revenue) * 100) : 0;

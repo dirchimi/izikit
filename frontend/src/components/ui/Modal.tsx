@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon';
 
 /**
@@ -41,11 +42,13 @@ export default function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const width = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
 
-  return (
+  // Porté en fin de <body> : échappe à tout parent (overflow/transform) et
+  // permet une impression propre (cf. globals.css @media print).
+  return createPortal(
     <div
       className="animate-fade-in fixed inset-0 z-[120] flex items-center justify-center p-4"
       role="dialog"
@@ -65,7 +68,7 @@ export default function Modal({
         className={`animate-scale-in bg-surface border-border relative z-10 flex max-h-[90vh] w-full flex-col ${width} overflow-hidden rounded-2xl border shadow-2xl`}
       >
         {(title || !hideClose) && (
-          <div className="border-border flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
+          <div className="no-print border-border flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
             <h2 className="font-headings text-foreground text-base font-bold">{title}</h2>
             {!hideClose && (
               <button
@@ -81,6 +84,7 @@ export default function Modal({
         )}
         <div className="overflow-y-auto px-5 py-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

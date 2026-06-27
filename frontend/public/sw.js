@@ -12,7 +12,7 @@
  * gardant l'app shell + la page hors-ligne (rien de privé là-dedans).
  */
 /* global self, caches */
-const VERSION = 'sahilley-v2';
+const VERSION = 'sahilley-v3';
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const OFFLINE_URL = '/hors-ligne';

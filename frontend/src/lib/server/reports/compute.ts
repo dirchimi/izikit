@@ -6,10 +6,12 @@ import { prisma } from '@/lib/server/prisma';
 import {
   periodRange,
   buildBuckets,
+  buildBucketsRange,
   bucketIndexFor,
   marginPct,
   rankTopProducts,
   type AggItem,
+  type Bucket,
   type Period,
   type TopProduct,
 } from './helpers';
@@ -24,20 +26,38 @@ export interface ReportSummary {
 }
 
 export interface ReportResult {
-  period: Period;
+  period: Period | 'custom';
   range: { from: string; to: string };
   summary: ReportSummary;
   series: { label: string; value: number }[];
   topProducts: TopProduct[];
 }
 
+/** Rapport sur une période nommée (today/week/month/year), ancrée sur `now`. */
 export async function computeReport(
   orgId: string,
   period: Period,
   now: Date,
 ): Promise<ReportResult> {
-  const { from, to } = periodRange(period, now);
-  const buckets = buildBuckets(period, now);
+  return computeForWindow(orgId, period, periodRange(period, now), buildBuckets(period, now));
+}
+
+/** Rapport sur une plage de dates libre (du… au…). */
+export async function computeReportRange(
+  orgId: string,
+  from: Date,
+  to: Date,
+): Promise<ReportResult> {
+  return computeForWindow(orgId, 'custom', { from, to }, buildBucketsRange(from, to));
+}
+
+async function computeForWindow(
+  orgId: string,
+  period: Period | 'custom',
+  window: { from: Date; to: Date },
+  buckets: Bucket[],
+): Promise<ReportResult> {
+  const { from, to } = window;
 
   const [sales, expenseAgg] = await Promise.all([
     prisma.sale.findMany({

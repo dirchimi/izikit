@@ -8,8 +8,8 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { ensureBoutique, getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
-import { parsePeriod, type Period } from '@/lib/server/reports/helpers';
-import { computeReport } from '@/lib/server/reports/compute';
+import { parsePeriod, parseDateRange, type Period } from '@/lib/server/reports/helpers';
+import { computeReport, computeReportRange } from '@/lib/server/reports/compute';
 import { renderReportPdf } from '@/lib/server/reports/pdf';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
@@ -44,12 +44,34 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
     if (gate instanceof NextResponse) return gate;
 
-    const period = parsePeriod(new URL(req.url).searchParams.get('period'));
+    const sp = new URL(req.url).searchParams;
+    const fromQ = sp.get('from');
+    const toQ = sp.get('to');
     const boutique = await ensureBoutique(auth.user.sub, auth.user.email);
-    const report = await computeReport(primary.organizationId, period, new Date());
+
+    let report;
+    let periodLabel: string;
+    let fileTag: string;
+    if (fromQ && toQ) {
+      const range = parseDateRange(fromQ, toQ);
+      if (!range) {
+        return NextResponse.json(
+          { error: 'VALIDATION_FAILED', message: 'Plage de dates invalide' },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      report = await computeReportRange(primary.organizationId, range.from, range.to);
+      periodLabel = 'Période personnalisée';
+      fileTag = 'personnalise';
+    } else {
+      const period = parsePeriod(sp.get('period'));
+      report = await computeReport(primary.organizationId, period, new Date());
+      periodLabel = PERIOD_LABEL[period];
+      fileTag = period;
+    }
 
     const buffer = await renderReportPdf({
-      periodLabel: PERIOD_LABEL[period],
+      periodLabel,
       rangeLabel: rangeLabel(report.range.from, report.range.to),
       generatedAt: new Date().toISOString(),
       summary: report.summary,
@@ -66,7 +88,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       status: 200,
       headers: {
         'content-type': 'application/pdf',
-        'content-disposition': `inline; filename="rapport-${period}.pdf"`,
+        'content-disposition': `inline; filename="rapport-${fileTag}.pdf"`,
         'cache-control': 'private, no-store',
         'x-request-id': ctx.requestId,
       },

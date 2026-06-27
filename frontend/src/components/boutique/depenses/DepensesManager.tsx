@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import Dropdown from '@/components/ui/Dropdown';
+import ComboBox from '@/components/ui/ComboBox';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
@@ -24,7 +26,15 @@ interface ApiExpense {
   occurredAt: string; // ISO
 }
 
-type Period = 'month' | 'today';
+type Period = 'month' | 'today' | 'date';
+
+/** Date ISO → 'YYYY-MM-DD' local (pour comparer à un <input type="date">). */
+function isoToYmd(iso: string): string {
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 function sameDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -51,6 +61,7 @@ export default function DepensesManager() {
   const t = useT();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('month');
+  const [pickDate, setPickDate] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -73,10 +84,28 @@ export default function DepensesManager() {
     return expenses.filter(
       (e) =>
         (q === '' || e.label.toLowerCase().includes(q) || e.number.toLowerCase().includes(q)) &&
-        (period === 'month' ? sameMonth(e.occurredAt, now) : sameDay(e.occurredAt, now)) &&
+        (period === 'month'
+          ? sameMonth(e.occurredAt, now)
+          : period === 'today'
+            ? sameDay(e.occurredAt, now)
+            : pickDate !== '' && isoToYmd(e.occurredAt) === pickDate) &&
         (categoryFilter === '' || e.category === categoryFilter),
     );
-  }, [expenses, search, period, categoryFilter]);
+  }, [expenses, search, period, pickDate, categoryFilter]);
+
+  const todayYmd = isoToYmd(now.toISOString());
+  const periodLabel =
+    period === 'month'
+      ? t('common.thisMonth')
+      : period === 'today'
+        ? t('common.today')
+        : pickDate
+          ? new Date(`${pickDate}T00:00:00`).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })
+          : t('common.pickDate');
 
   async function addExpense(input: NewExpenseInput) {
     if (!input.label) {
@@ -159,29 +188,45 @@ export default function DepensesManager() {
                 className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               />
             </div>
-            <div className="border-border bg-surface flex items-center gap-2 rounded-md border px-3 py-2">
-              <Icon i="calendar" size={14} className="text-muted-foreground" />
-              <select
-                value={period}
-                onChange={(e) => setPeriod(e.target.value as Period)}
-                className="text-foreground font-body bg-surface text-sm outline-none"
-              >
-                <option value="month">{t('common.thisMonth')}</option>
-                <option value="today">{t('common.today')}</option>
-              </select>
-            </div>
-            <select
+            <Dropdown
+              align="start"
+              width="w-52"
+              trigger={
+                <span className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <Icon i="calendar" size={14} className="text-muted-foreground" />
+                  {periodLabel}
+                  <Icon i="chevron-down" size={14} className="text-muted-foreground" />
+                </span>
+              }
+              items={[
+                { label: t('common.thisMonth'), onClick: () => setPeriod('month') },
+                { label: t('common.today'), onClick: () => setPeriod('today') },
+                {
+                  label: t('common.pickDate'),
+                  icon: 'calendar',
+                  onClick: () => {
+                    setPeriod('date');
+                    if (!pickDate) setPickDate(todayYmd);
+                  },
+                },
+              ]}
+            />
+            {period === 'date' && (
+              <input
+                type="date"
+                value={pickDate}
+                onChange={(e) => setPickDate(e.target.value)}
+                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
+              />
+            )}
+            <ComboBox
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
-            >
-              <option value="">{t('common.allCategories')}</option>
-              {expenseCategories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryFilter}
+              options={expenseCategories}
+              allLabel={t('common.allCategories')}
+              searchable
+              className="w-44"
+            />
           </div>
 
           {/* Table */}

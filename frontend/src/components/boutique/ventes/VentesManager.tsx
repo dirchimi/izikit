@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import Dropdown from '@/components/ui/Dropdown';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
@@ -23,7 +24,7 @@ interface ApiSale {
   items: { name: string; qty: number; unitPrice: number }[];
 }
 
-type Period = 'all' | 'today';
+type Period = 'all' | 'today' | 'date';
 type MethodFilter = ApiMethod | 'all';
 
 const METHOD_LABEL: Record<ApiMethod, string> = {
@@ -46,11 +47,19 @@ function sameDay(iso: string, ref: Date): boolean {
     d.getDate() === ref.getDate()
   );
 }
+/** Date ISO → 'YYYY-MM-DD' local (pour comparer à un <input type="date">). */
+function isoToYmd(iso: string): string {
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 export default function VentesManager() {
   const t = useT();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('all');
+  const [pickDate, setPickDate] = useState('');
   const [method, setMethod] = useState<MethodFilter>('all');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
@@ -85,7 +94,9 @@ export default function VentesManager() {
     return sales
       .filter(
         (s) =>
-          (period === 'all' || sameDay(s.createdAt, now)) &&
+          (period === 'all' ||
+            (period === 'today' && sameDay(s.createdAt, now)) ||
+            (period === 'date' && pickDate !== '' && isoToYmd(s.createdAt) === pickDate)) &&
           (method === 'all' || s.method === method),
       )
       .map((s) => {
@@ -106,7 +117,21 @@ export default function VentesManager() {
       .filter(
         (r) => q === '' || r.label.toLowerCase().includes(q) || r.number.toLowerCase().includes(q),
       );
-  }, [sales, search, period, method]);
+  }, [sales, search, period, pickDate, method]);
+
+  const todayYmd = isoToYmd(now.toISOString());
+  const periodLabel =
+    period === 'all'
+      ? t('ventes.period.all')
+      : period === 'today'
+        ? t('common.today')
+        : pickDate
+          ? new Date(`${pickDate}T00:00:00`).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })
+          : t('common.pickDate');
 
   return (
     <>
@@ -150,17 +175,37 @@ export default function VentesManager() {
             />
           </div>
 
-          <div className="border-border bg-surface flex items-center gap-2 rounded-md border px-3 py-2">
-            <Icon i="calendar" size={14} className="text-muted-foreground" />
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as Period)}
-              className="text-foreground font-body bg-surface text-sm outline-none"
-            >
-              <option value="all">{t('ventes.period.all')}</option>
-              <option value="today">{t('common.today')}</option>
-            </select>
-          </div>
+          <Dropdown
+            align="start"
+            width="w-52"
+            trigger={
+              <span className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                <Icon i="calendar" size={14} className="text-muted-foreground" />
+                {periodLabel}
+                <Icon i="chevron-down" size={14} className="text-muted-foreground" />
+              </span>
+            }
+            items={[
+              { label: t('ventes.period.all'), onClick: () => setPeriod('all') },
+              { label: t('common.today'), onClick: () => setPeriod('today') },
+              {
+                label: t('common.pickDate'),
+                icon: 'calendar',
+                onClick: () => {
+                  setPeriod('date');
+                  if (!pickDate) setPickDate(todayYmd);
+                },
+              },
+            ]}
+          />
+          {period === 'date' && (
+            <input
+              type="date"
+              value={pickDate}
+              onChange={(e) => setPickDate(e.target.value)}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
+            />
+          )}
 
           <div className="border-border flex flex-wrap items-center overflow-hidden rounded-md border">
             {METHOD_TABS.map((m) => {

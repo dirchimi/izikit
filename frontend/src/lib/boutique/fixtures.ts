@@ -708,7 +708,6 @@ export const settingsSections: SettingsSection[] = [
   { key: 'boutique', icon: 'store', label: 'Boutique' },
   { key: 'facturation', icon: 'receipt', label: 'Facturation' },
   { key: 'devise', icon: 'coins', label: 'Devise' },
-  { key: 'langue', icon: 'languages', label: 'Langue' },
   { key: 'utilisateurs', icon: 'users', label: 'Utilisateurs' },
   { key: 'securite', icon: 'shield-check', label: 'Sécurité' },
   { key: 'notifications', icon: 'bell', label: 'Notifications' },

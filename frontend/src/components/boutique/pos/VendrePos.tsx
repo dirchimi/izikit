@@ -10,9 +10,10 @@ import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
-import { posClients, type PaymentMethod } from '@/lib/boutique/fixtures';
+import { type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
+import ClientPicker, { type PickedClient } from './ClientPicker';
 import ReceiptModal, {
   type ReceiptData,
   type ReceiptMethod,
@@ -45,8 +46,7 @@ export default function VendrePos() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Tous');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [client, setClient] = useState<string | null>(null);
-  const [clientQuery, setClientQuery] = useState('');
+  const [client, setClient] = useState<PickedClient | null>(null);
   const [cart, setCart] = useState<CartLineData[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
@@ -68,11 +68,6 @@ export default function VendrePos() {
         (q === '' || p.name.toLowerCase().includes(q)),
     );
   }, [products, query, category]);
-
-  const visibleClients = useMemo(() => {
-    const q = clientQuery.trim().toLowerCase();
-    return posClients.filter((c) => q === '' || c.toLowerCase().includes(q));
-  }, [clientQuery]);
 
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   const subtotal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
@@ -121,28 +116,28 @@ export default function VendrePos() {
     }
     setSubmitting(true);
     try {
-      const res = await api<{ saleId: string; number: string; total: number }>('/api/sales', {
+      const res = await api<{ sale: { id: string; number: string; total: number } }>('/api/sales', {
         method: 'POST',
         body: {
           method,
           items: cart.map((l) => ({ productId: l.productId, qty: l.qty })),
-          ...(method === 'credit' && client ? { customer: { name: client } } : {}),
+          // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé).
+          ...(client ? { customer: client.id ? { id: client.id } : { name: client.name } } : {}),
         },
       });
       toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');
       // Reçu proposé tout de suite (imprimer / envoyer par WhatsApp).
       setReceipt({
-        number: res.number,
+        number: res.sale.number,
         createdAt: new Date().toISOString(),
         method: method.toUpperCase() as ReceiptMethod,
         total: subtotal,
-        customerName: client,
-        customerPhone: null,
+        customerName: client?.name ?? null,
+        customerPhone: client?.phone ?? null,
         items: cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
       });
       setCart([]);
       setClient(null);
-      setClientQuery('');
       await refresh(); // le stock a changé
     } catch (err) {
       toast(checkoutError(err), 'error');
@@ -298,55 +293,21 @@ export default function VendrePos() {
               </div>
             </div>
 
-            {/* Sélecteur client (crédit) */}
-            {method === 'credit' && (
-              <div className="bg-secondary flex flex-col gap-2 rounded-md px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Icon i="alert-circle" size={13} className="text-secondary-foreground shrink-0" />
-                  <p className="font-body text-secondary-foreground text-xs font-semibold">
-                    {client ? t('pos.clientLabel', { name: client }) : t('pos.clientRequired')}
-                  </p>
-                </div>
-                <div className="border-border bg-surface flex items-center gap-2 rounded-md border px-3 py-2">
-                  <Icon i="search" size={13} className="text-muted-foreground" />
-                  <input
-                    type="search"
-                    value={clientQuery}
-                    onChange={(e) => {
-                      setClientQuery(e.target.value);
-                      setClient(e.target.value.trim() ? e.target.value : null);
-                    }}
-                    placeholder={t('common.search.client')}
-                    className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-xs outline-none"
-                  />
-                </div>
-                {visibleClients.length > 0 && (
-                  <div className="border-border bg-surface flex flex-col overflow-hidden rounded-md border">
-                    {visibleClients.map((c, i) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => {
-                          setClient(c);
-                          setClientQuery(c);
-                        }}
-                        className={`flex items-center gap-3 px-3 py-2.5 text-start transition-colors ${
-                          i > 0 ? 'border-border border-t' : ''
-                        } ${client === c ? 'bg-secondary' : 'hover:bg-muted'}`}
-                      >
-                        <div className="bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
-                          <Icon i="user" size={12} className="text-muted-foreground" />
-                        </div>
-                        <span className="font-body text-foreground text-sm font-medium">{c}</span>
-                        {client === c && (
-                          <Icon i="check" size={14} className="text-primary ms-auto" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Sélecteur de client — disponible pour TOUS les paiements
+                (optionnel ; requis seulement pour le crédit). */}
+            <div className="flex flex-col gap-1.5">
+              <p
+                className={`font-body flex items-center gap-1.5 text-xs font-semibold ${
+                  method === 'credit' && !client
+                    ? 'text-secondary-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {method === 'credit' && <Icon i="alert-circle" size={13} className="shrink-0" />}
+                {method === 'credit' ? t('pos.clientRequired') : t('pos.client.optional')}
+              </p>
+              <ClientPicker value={client} onChange={setClient} required={method === 'credit'} />
+            </div>
 
             {/* Valider */}
             <button

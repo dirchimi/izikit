@@ -15,7 +15,7 @@ import ReportBarChart from './ReportBarChart';
 type Period = 'today' | 'week' | 'month' | 'year';
 
 interface ReportData {
-  period: Period;
+  period: Period | 'custom';
   summary: {
     revenue: number;
     sales: number;
@@ -34,6 +34,21 @@ const periods: { id: Period; key: string }[] = [
   { id: 'month', key: 'rapports.period.month' },
   { id: 'year', key: 'rapports.period.year' },
 ];
+
+/** Date → 'YYYY-MM-DD' local (pour les champs <input type="date">). */
+function toYmd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+/** 'YYYY-MM-DD' → libellé court français (15 juin 2026). */
+function frDate(ymd: string): string {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const escape = (v: string | number) => {
@@ -54,10 +69,32 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 export default function RapportsManager() {
   const { toast } = useToast();
   const t = useT();
-  const [period, setPeriod] = useState<Period>('week');
+  const [period, setPeriod] = useState<Period | 'custom'>('week');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
-  const { data, loading, error, refresh } = useApi<ReportData>(`/api/reports?period=${period}`);
+  // En mode personnalisé avec les deux dates → on interroge par plage.
+  const reportQuery =
+    period === 'custom' && from && to ? `from=${from}&to=${to}` : `period=${period}`;
+  const { data, loading, error, refresh } = useApi<ReportData>(`/api/reports?${reportQuery}`);
   const summary = data?.summary;
+
+  // Libellé de la période (export CSV / WhatsApp).
+  const periodText =
+    period === 'custom'
+      ? from && to
+        ? `${frDate(from)} – ${frDate(to)}`
+        : t('rapports.period.custom')
+      : t(`rapports.period.${period}`);
+
+  function startCustom() {
+    if (!from || !to) {
+      const now = new Date();
+      setFrom(toYmd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)));
+      setTo(toYmd(now));
+    }
+    setPeriod('custom');
+  }
 
   function exportCsv() {
     if (!data || !summary) {
@@ -65,7 +102,7 @@ export default function RapportsManager() {
       return;
     }
     const rows: (string | number)[][] = [
-      [t('rapports.exportTitle'), t(`rapports.period.${period}`)],
+      [t('rapports.exportTitle'), periodText],
       [],
       [t('rapports.kpi.revenue'), summary.revenue],
       [t('rapports.kpi.sales'), summary.sales],
@@ -82,13 +119,16 @@ export default function RapportsManager() {
     toast(t('rapports.exported'), 'success');
   }
 
+  // (Mode personnalisé : on attend que les deux dates soient choisies.)
+  const customIncomplete = period === 'custom' && (!from || !to);
+
   function openPdf() {
     if (!data) {
       toast(t('async.error'), 'error');
       return;
     }
     // Le navigateur ouvre le PDF (application/pdf inline) — impression / partage.
-    window.open(`/api/reports/pdf?period=${period}`, '_blank', 'noopener,noreferrer');
+    window.open(`/api/reports/pdf?${reportQuery}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareWhatsapp() {
@@ -97,7 +137,7 @@ export default function RapportsManager() {
       return;
     }
     const text =
-      `${t('rapports.exportTitle')} — ${t(`rapports.period.${period}`)}\n` +
+      `${t('rapports.exportTitle')} — ${periodText}\n` +
       `${t('rapports.kpi.revenue')}: ${formatFCFA(summary.revenue)} ${t('common.fcfa')}\n` +
       `${t('rapports.kpi.netProfit')}: ${formatFCFA(summary.netProfit)} ${t('common.fcfa')}`;
     // Pas de numéro : WhatsApp laisse l'utilisateur choisir le destinataire.
@@ -109,7 +149,7 @@ export default function RapportsManager() {
       <button
         type="button"
         onClick={openPdf}
-        disabled={loading || !data}
+        disabled={loading || !data || customIncomplete}
         className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
         <Icon i="file-text" size={14} />
@@ -118,7 +158,7 @@ export default function RapportsManager() {
       <button
         type="button"
         onClick={shareWhatsapp}
-        disabled={loading || !data}
+        disabled={loading || !data || customIncomplete}
         className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
         <Icon i="message-circle" size={14} />
@@ -127,7 +167,7 @@ export default function RapportsManager() {
       <button
         type="button"
         onClick={exportCsv}
-        disabled={loading || !data}
+        disabled={loading || !data || customIncomplete}
         className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
       >
         <Icon i="download" size={14} />
@@ -168,7 +208,41 @@ export default function RapportsManager() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={startCustom}
+              className={`font-body border-border shrink-0 border-s px-4 py-2 text-sm whitespace-nowrap ${
+                period === 'custom'
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {t('rapports.period.custom')}
+            </button>
           </div>
+
+          {/* Plage de dates personnalisée (du… au…) */}
+          {period === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={(e) => setFrom(e.target.value)}
+                aria-label={t('rapports.from')}
+                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
+              />
+              <span className="text-muted-foreground font-body text-sm">{t('rapports.to')}</span>
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={(e) => setTo(e.target.value)}
+                aria-label={t('rapports.to')}
+                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none"
+              />
+            </div>
+          )}
         </div>
 
         <AsyncState loading={loading} error={error} onRetry={refresh}>

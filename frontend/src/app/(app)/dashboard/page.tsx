@@ -27,7 +27,6 @@ const KPI_KEYS: Record<string, { labelKey: string; unitKey: string }> = {
 
 export default async function DashboardPage() {
   const { t } = await getServerT();
-  const pendingSync = recentSales.filter((s) => !s.synced).length;
 
   return (
     <>
@@ -111,15 +110,9 @@ export default async function DashboardPage() {
             <h2 className="font-headings text-foreground text-base font-bold">
               {t('dash.recentSales')}
             </h2>
-            <div className="flex items-center gap-3">
-              <div className="text-muted-foreground font-body flex items-center gap-1 text-xs">
-                <Icon i="cloud-off" size={12} className="text-warning" />
-                <span>{t('dash.pendingSync', { n: pendingSync })}</span>
-              </div>
-              <Link href="/ventes" className="text-primary font-body text-xs font-semibold">
-                {t('dash.seeAll')}
-              </Link>
-            </div>
+            <Link href="/ventes" className="text-primary font-body text-xs font-semibold">
+              {t('dash.seeAll')}
+            </Link>
           </div>
 
           {/* Table scrollable horizontalement sous lg */}
