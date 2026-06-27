@@ -356,6 +356,25 @@ model OrganizationMember {
   @@index([userId])
 }
 
+// Invitation d'un employé à rejoindre une boutique par email (lien + jeton).
+// Colonnes simples (pas de FK) pour rester additif. Jeton à usage unique qui
+// expire ; `acceptedAt` non-null une fois consommé. L'email est normalisé en
+// minuscule. Émis depuis /api/org/invitations, consommé par /api/invitations/[token]/accept.
+model Invitation {
+  id              String    @id @default(cuid())
+  token           String    @unique
+  email           String
+  organizationId  String
+  role            String    @default("MEMBER") // MEMBER | ADMIN
+  invitedByUserId String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([email])
+}
+
 // ───────────────────────────────────────────────────────────────────────
 // OAuth identities — one User can have N linked providers (Google, GitHub, …).
 // (provider, providerAccountId) is unique so the same Google account can't

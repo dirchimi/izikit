@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
+import { useApi } from '@/lib/useApi';
 
 export interface OrgMember {
   id: string;
@@ -12,6 +13,12 @@ export interface OrgMember {
   email: string;
   name: string | null;
   role: string; // OWNER | ADMIN | MEMBER
+}
+
+interface PendingInvite {
+  id: string;
+  email: string;
+  role: string; // MEMBER | ADMIN
 }
 
 const ROLE_LABEL_KEY: Record<string, string> = {
@@ -43,6 +50,11 @@ export default function UsersSection({
   const [newRole, setNewRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
   const [busy, setBusy] = useState(false);
 
+  const { data: invData, refresh: refreshInvites } = useApi<{ invitations: PendingInvite[] }>(
+    '/api/org/invitations',
+  );
+  const invitations = invData?.invitations ?? [];
+
   function errMessage(e: unknown): string {
     const code = e instanceof ApiError ? e.code : '';
     if (code === 'USER_NOT_REGISTERED') return t('parametres.users.errNotRegistered');
@@ -55,14 +67,33 @@ export default function UsersSection({
     e.preventDefault();
     setBusy(true);
     try {
-      await api('/api/org/members', {
+      const res = await api<{ added?: boolean; invited?: boolean }>('/api/org/invitations', {
         method: 'POST',
         body: { email: email.trim(), role: newRole },
       });
-      toast(t('parametres.users.added'), 'success');
+      toast(
+        res.invited
+          ? t('parametres.users.invited', { email: email.trim() })
+          : t('parametres.users.added'),
+        'success',
+      );
       setEmail('');
       setAdding(false);
       await onChanged();
+      await refreshInvites();
+    } catch (err) {
+      toast(errMessage(err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    setBusy(true);
+    try {
+      await api(`/api/org/invitations/${id}`, { method: 'DELETE' });
+      toast(t('parametres.users.revoked'), 'success');
+      await refreshInvites();
     } catch (err) {
       toast(errMessage(err), 'error');
     } finally {
@@ -114,7 +145,7 @@ export default function UsersSection({
             className="border-border bg-surface text-foreground font-body flex w-fit items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
           >
             <Icon i="user-plus" size={13} />
-            {t('parametres.users.add')}
+            {t('parametres.users.invite')}
           </button>
         )}
       </div>
@@ -151,9 +182,48 @@ export default function UsersSection({
             disabled={busy}
             className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-bold disabled:opacity-60"
           >
-            {t('parametres.users.submit')}
+            {t('parametres.users.inviteSubmit')}
           </button>
         </form>
+      )}
+      {canManage && adding && (
+        <p className="text-muted-foreground font-body border-border border-b px-5 pb-3 text-xs md:px-6">
+          {t('parametres.users.inviteHint')}
+        </p>
+      )}
+
+      {/* Invitations en attente */}
+      {canManage && invitations.length > 0 && (
+        <div className="border-border border-b px-5 py-4 md:px-6">
+          <p className="text-muted-foreground font-body mb-2 text-[10px] font-bold tracking-wider uppercase">
+            {t('parametres.users.pending')}
+          </p>
+          <div className="flex flex-col gap-2">
+            {invitations.map((inv) => (
+              <div key={inv.id} className="flex items-center gap-3">
+                <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                  <Icon i="mail" size={14} className="text-muted-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="font-body text-foreground block truncate text-sm break-all">
+                    {inv.email}
+                  </span>
+                  <span className="font-body text-muted-foreground text-xs">
+                    {t(ROLE_LABEL_KEY[inv.role] ?? 'role.vendeur')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleRevoke(inv.id)}
+                  className="text-muted-foreground hover:text-danger font-body shrink-0 text-xs font-semibold disabled:opacity-60"
+                >
+                  {t('parametres.users.revoke')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col">

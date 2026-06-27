@@ -13,7 +13,8 @@ export type OutboxEvent =
   | NotificationPaymentReceivedEvent
   | EmailPaymentConfirmationEvent
   | EmailVerificationCodeEvent
-  | EmailPasswordResetEvent;
+  | EmailPasswordResetEvent
+  | EmailOrgInvitationEvent;
 
 export interface NotificationPaymentReceivedEvent {
   kind: 'notification.payment_received';
@@ -57,6 +58,21 @@ export interface EmailPasswordResetEvent {
   payload: {
     to: string;
     code: string;
+    expiresAt: string;
+  };
+}
+
+/**
+ * Invitation d'un employé à rejoindre une boutique — émis par
+ * /api/org/invitations, rendu via orgInvitationEmail().
+ */
+export interface EmailOrgInvitationEvent {
+  kind: 'email.org_invitation';
+  payload: {
+    to: string;
+    orgName: string;
+    inviterEmail: string;
+    link: string;
     expiresAt: string;
   };
 }

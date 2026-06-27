@@ -130,6 +130,58 @@ export function verificationEmail(args: VerificationEmailArgs): EmailTemplate {
   };
 }
 
+export interface OrgInvitationEmailArgs {
+  to: string;
+  orgName: string;
+  inviterEmail: string;
+  /** URL absolue d'acceptation (contient le jeton). */
+  link: string;
+  /** ISO-8601 d'expiration ; « bientôt » si absent. */
+  expiresAt?: string;
+}
+
+/**
+ * Email d'invitation à rejoindre une boutique. Comme `brandedHtml` mais avec un
+ * bouton d'action (le lien) au lieu d'un code. Toutes les valeurs interpolées
+ * sont échappées (WR-03). Le lien va dans un href — échappé aussi.
+ */
+export function orgInvitationEmail(args: OrgInvitationEmailArgs): EmailTemplate {
+  const orgName = htmlEscape(args.orgName);
+  const inviter = htmlEscape(args.inviterEmail);
+  const link = htmlEscape(args.link);
+  const ttl = ttlWording(args.expiresAt);
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#faf8f3;font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f3;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e0d6;border-radius:16px;overflow:hidden;">
+<tr><td style="background:#0a3d2e;padding:18px 24px;">
+<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Sahilley</span>
+</td></tr>
+<tr><td style="padding:28px 24px 8px 24px;">
+<h1 style="margin:0 0 8px 0;font-size:19px;font-weight:700;color:#1a1a1a;">Rejoins ${orgName}</h1>
+<p style="margin:0;font-size:14px;line-height:1.6;color:#5b5648;">${inviter} t'invite à rejoindre sa boutique <strong>${orgName}</strong> sur Sahilley. Clique pour créer ton accès.</p>
+</td></tr>
+<tr><td style="padding:20px 24px;" align="center">
+<a href="${link}" style="display:inline-block;background:#0e9f6e;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:10px;">Rejoindre la boutique</a>
+<p style="margin:12px 0 0 0;font-size:13px;color:#7a7468;">Ce lien expire ${ttl}.</p>
+</td></tr>
+<tr><td style="padding:8px 24px 24px 24px;">
+<p style="margin:0;font-size:12px;line-height:1.6;color:#9a9486;">Si tu ne t'attendais pas à cette invitation, ignore simplement cet email.</p>
+</td></tr>
+<tr><td style="background:#faf8f3;border-top:1px solid #e4e0d6;padding:14px 24px;">
+<p style="margin:0;font-size:11px;color:#9a9486;">Sahilley — Gestion de boutique.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+  return {
+    subject: `Rejoignez ${args.orgName} sur Sahilley`,
+    html,
+    text: `${args.inviterEmail} t'invite à rejoindre la boutique ${args.orgName} sur Sahilley.\n\nCrée ton accès via ce lien (il expire ${ttl}) :\n${args.link}\n\nSi tu ne t'attendais pas à cette invitation, ignore cet email.`,
+  };
+}
+
 export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate {
   const code = htmlEscape(args.code);
   const ttl = ttlWording(args.expiresAt);

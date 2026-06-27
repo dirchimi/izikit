@@ -1320,6 +1320,56 @@ const messages: Record<string, Msg> = {
     ar: 'تعذر تحميل الفريق.',
   },
   'parametres.users.added': { fr: 'Membre ajouté.', en: 'Member added.', ar: 'تمت إضافة العضو.' },
+  'parametres.users.invite': {
+    fr: 'Inviter un employé',
+    en: 'Invite an employee',
+    ar: 'دعوة موظف',
+  },
+  'parametres.users.inviteSubmit': {
+    fr: 'Envoyer l’invitation',
+    en: 'Send invitation',
+    ar: 'إرسال الدعوة',
+  },
+  'parametres.users.inviteHint': {
+    fr: 'S’il a déjà un compte, il est ajouté tout de suite ; sinon il reçoit un email d’invitation.',
+    en: 'If they already have an account they are added right away; otherwise they receive an invitation email.',
+    ar: 'إذا كان لديه حساب يُضاف فورًا؛ وإلا يتلقى بريد دعوة.',
+  },
+  'parametres.users.invited': {
+    fr: 'Invitation envoyée à {email}.',
+    en: 'Invitation sent to {email}.',
+    ar: 'أُرسلت الدعوة إلى {email}.',
+  },
+  'parametres.users.pending': {
+    fr: 'Invitations en attente',
+    en: 'Pending invitations',
+    ar: 'دعوات معلّقة',
+  },
+  'parametres.users.revoke': { fr: 'Annuler', en: 'Cancel', ar: 'إلغاء' },
+  'parametres.users.revoked': {
+    fr: 'Invitation annulée.',
+    en: 'Invitation cancelled.',
+    ar: 'أُلغيت الدعوة.',
+  },
+  'invite.tagline': {
+    fr: 'Rejoindre une boutique',
+    en: 'Join a shop',
+    ar: 'انضمّ إلى متجر',
+  },
+  'invite.intro': {
+    fr: 'Tu rejoins {org}. Crée ton accès pour commencer.',
+    en: 'You are joining {org}. Create your access to get started.',
+    ar: 'أنت تنضم إلى {org}. أنشئ حسابك للبدء.',
+  },
+  'invite.name': { fr: 'Ton nom', en: 'Your name', ar: 'اسمك' },
+  'invite.namePlaceholder': { fr: 'Ex : Amir', en: 'e.g. Amir', ar: 'مثال: أمير' },
+  'invite.join': { fr: 'Rejoindre', en: 'Join', ar: 'انضمام' },
+  'invite.joining': { fr: 'Création…', en: 'Creating…', ar: 'جارٍ الإنشاء…' },
+  'invite.err.invalid': {
+    fr: 'Cette invitation est invalide ou expirée.',
+    en: 'This invitation is invalid or expired.',
+    ar: 'هذه الدعوة غير صالحة أو منتهية.',
+  },
   'parametres.users.removed': {
     fr: 'Membre retiré.',
     en: 'Member removed.',

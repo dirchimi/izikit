@@ -166,6 +166,15 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
       await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
       return;
     }
+    case 'email.org_invitation': {
+      // Émis par /api/org/invitations ; rendu via orgInvitationEmail().
+      if (!deps.emailQueue) throw new Error('email queue not configured');
+      const { orgInvitationEmail } = await import('../auth/email-templates');
+      const { to, orgName, inviterEmail, link, expiresAt } = event.payload;
+      const tpl = orgInvitationEmail({ to, orgName, inviterEmail, link, expiresAt });
+      await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
+      return;
+    }
     default: {
       // Exhaustive check — TS will yell if we add a new variant and forget it.
       const _exhaustive: never = event;
