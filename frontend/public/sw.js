@@ -12,7 +12,7 @@
  * gardant l'app shell + la page hors-ligne (rien de privé là-dedans).
  */
 /* global self, caches */
-const VERSION = 'sahilley-v3';
+const VERSION = 'sahilley-v4';
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const OFFLINE_URL = '/hors-ligne';
@@ -68,7 +68,12 @@ async function cacheFirst(request) {
 async function networkFirst(request, fallbackOffline) {
   try {
     const res = await fetch(request);
-    if (res && res.ok && res.type === 'basic') {
+    // On ne met JAMAIS en cache une réponse de redirection : les pages sont
+    // gardées côté serveur (le layout (app) redirige vers /connexion sans
+    // session), et resservir une redirection hors-ligne fait rebondir le
+    // navigateur en boucle (/dashboard ↔ /connexion). On ne garde que les
+    // documents terminaux (ok + basic + non redirigés).
+    if (res && res.ok && res.type === 'basic' && !res.redirected) {
       const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, res.clone());
     }
