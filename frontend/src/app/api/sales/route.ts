@@ -66,7 +66,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         method: true,
         total: true,
         createdAt: true,
-        customer: { select: { name: true } },
+        customer: { select: { name: true, phone: true } },
         items: { select: { name: true, qty: true, unitPrice: true } },
       },
     });
@@ -78,6 +78,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       total: s.total,
       createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
       customerName: s.customer?.name ?? null,
+      customerPhone: s.customer?.phone ?? null,
       items: s.items,
     }));
 

@@ -9,6 +9,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
+import ReceiptModal, { type ReceiptData } from './ReceiptModal';
 
 type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT';
 interface ApiSale {
@@ -18,6 +19,7 @@ interface ApiSale {
   total: number;
   createdAt: string;
   customerName: string | null;
+  customerPhone: string | null;
   items: { name: string; qty: number; unitPrice: number }[];
 }
 
@@ -50,9 +52,24 @@ export default function VentesManager() {
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('all');
   const [method, setMethod] = useState<MethodFilter>('all');
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
   const sales = data?.sales ?? [];
+
+  function openReceipt(id: string) {
+    const s = sales.find((x) => x.id === id);
+    if (!s) return;
+    setReceipt({
+      number: s.number,
+      createdAt: s.createdAt,
+      method: s.method,
+      total: s.total,
+      customerName: s.customerName,
+      customerPhone: s.customerPhone,
+      items: s.items,
+    });
+  }
   const now = new Date();
 
   // KPIs « du jour » dérivés des ventes chargées.
@@ -177,7 +194,7 @@ export default function VentesManager() {
         >
           <div className="bg-surface border-border rounded-lg border">
             <div className="overflow-x-auto">
-              <div className="min-w-[760px]">
+              <div className="min-w-[840px]">
                 <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
                   <span className="font-body text-muted-foreground w-20 text-xs font-semibold">
                     {t('depenses.col.num')}
@@ -199,6 +216,9 @@ export default function VentesManager() {
                   </span>
                   <span className="font-body text-muted-foreground w-28 text-center text-xs font-semibold">
                     {t('ventes.col.payment')}
+                  </span>
+                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
+                    {t('receipt.title')}
                   </span>
                 </div>
 
@@ -228,6 +248,17 @@ export default function VentesManager() {
                         {t(METHOD_LABEL[r.method])}
                       </span>
                     </div>
+                    <div className="flex w-16 justify-center">
+                      <button
+                        type="button"
+                        onClick={() => openReceipt(r.id)}
+                        aria-label={t('receipt.title')}
+                        title={t('receipt.title')}
+                        className="text-primary hover:bg-muted flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                      >
+                        <Icon i="receipt-text" size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -241,6 +272,8 @@ export default function VentesManager() {
           </div>
         </AsyncState>
       </div>
+
+      <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
     </>
   );
 }

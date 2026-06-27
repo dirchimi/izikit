@@ -13,6 +13,10 @@ import { formatFCFA } from '@/lib/boutique/format';
 import { posClients, type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
+import ReceiptModal, {
+  type ReceiptData,
+  type ReceiptMethod,
+} from '@/components/boutique/ventes/ReceiptModal';
 
 interface ApiProduct {
   id: string;
@@ -45,6 +49,7 @@ export default function VendrePos() {
   const [clientQuery, setClientQuery] = useState('');
   const [cart, setCart] = useState<CartLineData[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
@@ -116,7 +121,7 @@ export default function VendrePos() {
     }
     setSubmitting(true);
     try {
-      await api('/api/sales', {
+      const res = await api<{ saleId: string; number: string; total: number }>('/api/sales', {
         method: 'POST',
         body: {
           method,
@@ -125,6 +130,16 @@ export default function VendrePos() {
         },
       });
       toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');
+      // Reçu proposé tout de suite (imprimer / envoyer par WhatsApp).
+      setReceipt({
+        number: res.number,
+        createdAt: new Date().toISOString(),
+        method: method.toUpperCase() as ReceiptMethod,
+        total: subtotal,
+        customerName: client,
+        customerPhone: null,
+        items: cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
+      });
       setCart([]);
       setClient(null);
       setClientQuery('');
@@ -346,6 +361,8 @@ export default function VendrePos() {
           </div>
         </div>
       </div>
+
+      <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
     </>
   );
 }
