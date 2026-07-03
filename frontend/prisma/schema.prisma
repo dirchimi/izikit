@@ -132,19 +132,23 @@ model Product {
   name           String
   category       String
   buyPrice       Int             @default(0) // prix d'achat (FCFA entier)
-  sellPrice      Int             @default(0) // prix de vente (FCFA entier)
+  sellPrice      Int             @default(0) // prix de vente au détail (FCFA entier)
+  prixGros       Int             @default(0) // prix de vente en gros (FCFA entier ; 0 = non défini)
+  unite          String          @default("piece") // unité de vente (pièce, carton, kg, sac, litre, sachet…), libre
   qty            Int             @default(0) // stock courant (dérivé des mouvements)
   threshold      Int             @default(0) // seuil d'alerte stock faible
   imageUrl       String? // URL Cloudinary publique de la photo du produit
-  barcode        String? // code-barres (EAN/UPC…) saisi ou scanné ; null = aucun
+  barcode        String? // code-barres (EAN/UPC…) saisi ou scanné ; null = aucun. Unique par boutique
   movements      StockMovement[]
   saleItems      SaleItem[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
   @@unique([organizationId, ref])
+  // Un même code-barres ne peut pas désigner deux produits d'une même boutique.
+  // (NULL autorisé plusieurs fois : Postgres traite chaque NULL comme distinct.)
+  @@unique([organizationId, barcode])
   @@index([organizationId])
-  @@index([organizationId, barcode])
   @@index([organizationId, category])
 }
 

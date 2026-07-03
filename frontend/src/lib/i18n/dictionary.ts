@@ -1135,6 +1135,127 @@ const messages: Record<string, Msg> = {
   'stock.form.qtyField': { fr: 'Quantité', en: 'Quantity', ar: 'الكمية' },
   'stock.form.thresholdField': { fr: 'Seuil alerte', en: 'Alert threshold', ar: 'حد التنبيه' },
   'stock.form.submit': { fr: 'Enregistrer le produit', en: 'Save product', ar: 'حفظ المنتج' },
+  'stock.form.wholesalePrice': { fr: 'Prix de gros', en: 'Wholesale price', ar: 'سعر الجملة' },
+  'stock.form.unit': { fr: 'Unité', en: 'Unit', ar: 'الوحدة' },
+  'stock.form.unitPlaceholder': {
+    fr: 'pièce, carton, kg…',
+    en: 'piece, box, kg…',
+    ar: 'قطعة، كرتون، كغ…',
+  },
+  'stock.barcodeTaken': {
+    fr: 'Ce code-barres est déjà utilisé par un autre produit.',
+    en: 'This barcode is already used by another product.',
+    ar: 'هذا الرمز الشريطي مستخدم بالفعل لمنتج آخر.',
+  },
+  'stock.actions.more': { fr: 'Plus d’actions', en: 'More actions', ar: 'إجراءات أخرى' },
+  // Réapprovisionnement
+  'stock.reappro.action': { fr: 'Réapprovisionner', en: 'Restock', ar: 'إعادة التوريد' },
+  'stock.reappro.title': { fr: 'Réapprovisionner', en: 'Restock', ar: 'إعادة التوريد' },
+  'stock.reappro.qtyField': {
+    fr: 'Quantité reçue',
+    en: 'Quantity received',
+    ar: 'الكمية المستلمة',
+  },
+  'stock.reappro.buyPriceField': {
+    fr: 'Prix d’achat (optionnel)',
+    en: 'Purchase price (optional)',
+    ar: 'سعر الشراء (اختياري)',
+  },
+  'stock.reappro.buyPriceHint': {
+    fr: 'Laisser vide pour conserver le prix d’achat actuel.',
+    en: 'Leave empty to keep the current purchase price.',
+    ar: 'اتركه فارغًا للإبقاء على سعر الشراء الحالي.',
+  },
+  'stock.reappro.noteField': {
+    fr: 'Note (optionnelle)',
+    en: 'Note (optional)',
+    ar: 'ملاحظة (اختيارية)',
+  },
+  'stock.reappro.notePlaceholder': {
+    fr: 'ex. Livraison fournisseur',
+    en: 'e.g. Supplier delivery',
+    ar: 'مثال: توصيل المورّد',
+  },
+  'stock.reappro.submit': { fr: 'Ajouter au stock', en: 'Add to stock', ar: 'إضافة إلى المخزون' },
+  'stock.reappro.qtyRequired': {
+    fr: 'Indiquez une quantité reçue valide.',
+    en: 'Enter a valid received quantity.',
+    ar: 'أدخل كمية مستلمة صحيحة.',
+  },
+  'stock.reappro.defaultReason': { fr: 'Réapprovisionnement', en: 'Restock', ar: 'إعادة التوريد' },
+  'stock.reappro.success': {
+    fr: '+{qty} ajoutés au stock de {name}',
+    en: '+{qty} added to {name} stock',
+    ar: 'تمت إضافة +{qty} إلى مخزون {name}',
+  },
+  // Ajustement
+  'stock.adjust.action': { fr: 'Ajuster le stock', en: 'Adjust stock', ar: 'تعديل المخزون' },
+  'stock.adjust.title': { fr: 'Ajuster le stock', en: 'Adjust stock', ar: 'تعديل المخزون' },
+  'stock.adjust.senseField': { fr: 'Type de correction', en: 'Correction type', ar: 'نوع التصحيح' },
+  'stock.adjust.add': { fr: 'Ajouter', en: 'Add', ar: 'إضافة' },
+  'stock.adjust.remove': { fr: 'Retirer', en: 'Remove', ar: 'إزالة' },
+  'stock.adjust.qtyField': { fr: 'Quantité', en: 'Quantity', ar: 'الكمية' },
+  'stock.adjust.reasonField': {
+    fr: 'Motif (obligatoire)',
+    en: 'Reason (required)',
+    ar: 'السبب (إلزامي)',
+  },
+  'stock.adjust.reasonPlaceholder': {
+    fr: 'ex. Casse, vol, inventaire',
+    en: 'e.g. Breakage, theft, stocktake',
+    ar: 'مثال: كسر، سرقة، جرد',
+  },
+  'stock.adjust.preview': {
+    fr: 'Nouveau stock : {qty}',
+    en: 'New stock: {qty}',
+    ar: 'المخزون الجديد: {qty}',
+  },
+  'stock.adjust.submit': {
+    fr: 'Enregistrer l’ajustement',
+    en: 'Save adjustment',
+    ar: 'حفظ التعديل',
+  },
+  'stock.adjust.qtyRequired': {
+    fr: 'Indiquez une quantité valide.',
+    en: 'Enter a valid quantity.',
+    ar: 'أدخل كمية صحيحة.',
+  },
+  'stock.adjust.reasonRequired': {
+    fr: 'Le motif est obligatoire.',
+    en: 'A reason is required.',
+    ar: 'السبب إلزامي.',
+  },
+  'stock.adjust.insufficient': {
+    fr: 'Stock insuffisant pour cette sortie.',
+    en: 'Not enough stock for this removal.',
+    ar: 'المخزون غير كافٍ لهذه العملية.',
+  },
+  'stock.adjust.success': {
+    fr: 'Stock de {name} ajusté',
+    en: '{name} stock adjusted',
+    ar: 'تم تعديل مخزون {name}',
+  },
+  // Historique des mouvements
+  'stock.history.action': {
+    fr: 'Historique des mouvements',
+    en: 'Movement history',
+    ar: 'سجل الحركات',
+  },
+  'stock.history.title': {
+    fr: 'Historique des mouvements',
+    en: 'Movement history',
+    ar: 'سجل الحركات',
+  },
+  'stock.history.empty': {
+    fr: 'Aucun mouvement de stock.',
+    en: 'No stock movement yet.',
+    ar: 'لا توجد حركة مخزون.',
+  },
+  'stock.mv.sale': { fr: 'Vente', en: 'Sale', ar: 'بيع' },
+  'stock.mv.out': { fr: 'Sortie', en: 'Removal', ar: 'إخراج' },
+  'stock.mv.in': { fr: 'Entrée (réappro)', en: 'Restock', ar: 'إدخال (توريد)' },
+  'stock.mv.initial': { fr: 'Stock initial', en: 'Initial stock', ar: 'المخزون الأولي' },
+  'stock.mv.adjust': { fr: 'Ajustement', en: 'Adjustment', ar: 'تعديل' },
 
   // ── Dépenses ──────────────────────────────────────────────────────────────
   'depenses.subtitle': {
@@ -1845,6 +1966,49 @@ const messages: Record<string, Msg> = {
     ar: 'إنشاء زبون قريباً.',
   },
   'pos.validate': { fr: 'Valider la vente', en: 'Confirm sale', ar: 'تأكيد البيع' },
+  'pos.retail': { fr: 'Détail', en: 'Retail', ar: 'تجزئة' },
+  'pos.wholesale': { fr: 'Gros', en: 'Wholesale', ar: 'جملة' },
+  'pos.scan.field': {
+    fr: 'Scanner ou saisir un code-barres…',
+    en: 'Scan or type a barcode…',
+    ar: 'امسح أو اكتب رمزًا شريطيًا…',
+  },
+  'pos.scan.camera': {
+    fr: 'Scanner avec la caméra',
+    en: 'Scan with camera',
+    ar: 'المسح بالكاميرا',
+  },
+  'pos.scan.title': { fr: 'Scanner un code-barres', en: 'Scan a barcode', ar: 'مسح رمز شريطي' },
+  'pos.scan.hint': {
+    fr: 'Visez le code-barres avec la caméra.',
+    en: 'Point the camera at the barcode.',
+    ar: 'وجّه الكاميرا نحو الرمز الشريطي.',
+  },
+  'pos.scan.unsupported': {
+    fr: 'Le scan par caméra n’est pas disponible sur cet appareil. Utilisez un lecteur ou saisissez le code.',
+    en: 'Camera scanning isn’t available on this device. Use a scanner or type the code.',
+    ar: 'المسح بالكاميرا غير متاح على هذا الجهاز. استخدم قارئًا أو اكتب الرمز.',
+  },
+  'pos.scan.cameraError': {
+    fr: 'Impossible d’accéder à la caméra.',
+    en: 'Unable to access the camera.',
+    ar: 'تعذّر الوصول إلى الكاميرا.',
+  },
+  'pos.scan.notFound': {
+    fr: 'Aucun produit avec le code {code}.',
+    en: 'No product with code {code}.',
+    ar: 'لا يوجد منتج بالرمز {code}.',
+  },
+  'pos.scan.outOfStock': {
+    fr: '{name} est en rupture — ajouté quand même.',
+    en: '{name} is out of stock — added anyway.',
+    ar: '{name} نفد من المخزون — تمت إضافته على أي حال.',
+  },
+  'pos.scan.added': {
+    fr: '{name} ajouté au panier',
+    en: '{name} added to cart',
+    ar: 'تمت إضافة {name} إلى السلة',
+  },
   'pos.cartEmpty': { fr: 'Le panier est vide.', en: 'Cart is empty.', ar: 'السلة فارغة.' },
   'pos.creditNeedsClient': {
     fr: 'Sélectionnez un client débiteur pour une vente à crédit.',

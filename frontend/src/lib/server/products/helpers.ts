@@ -22,6 +22,8 @@ export const PRODUCT_SELECT = {
   category: true,
   buyPrice: true,
   sellPrice: true,
+  prixGros: true,
+  unite: true,
   qty: true,
   threshold: true,
   imageUrl: true,
@@ -35,6 +37,8 @@ export interface ProductRow {
   category: string;
   buyPrice: number;
   sellPrice: number;
+  prixGros: number;
+  unite: string;
   qty: number;
   threshold: number;
   imageUrl: string | null;
@@ -49,4 +53,20 @@ export function productView(p: ProductRow): ProductRow & { status: StockStatus }
 /** True si l'erreur Prisma est une violation de contrainte unique (P2002). */
 export function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
+}
+
+/**
+ * Sur une violation P2002, indique quel champ produit est en cause — pour
+ * renvoyer un code d'erreur précis (REF_TAKEN vs BARCODE_TAKEN). Lit
+ * `meta.target` (nom de contrainte ou liste de colonnes selon le connecteur).
+ */
+export function uniqueViolationField(e: unknown): 'ref' | 'barcode' | null {
+  if (!isUniqueViolation(e)) return null;
+  const target = (e as { meta?: { target?: unknown } }).meta?.target;
+  const s = Array.isArray(target) ? target.join(',') : String(target ?? '');
+  if (s.includes('barcode')) return 'barcode';
+  // Défaut : toute autre violation unique du produit est traitée comme la
+  // référence (seules `ref` et `barcode` sont uniques ; `barcode` est détecté
+  // ci-dessus via meta.target, présent en prod même s'il est absent des mocks).
+  return 'ref';
 }

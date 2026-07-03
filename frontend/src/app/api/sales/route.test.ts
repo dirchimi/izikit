@@ -157,6 +157,40 @@ describe('POST /api/sales (checkout)', () => {
     );
   });
 
+  it('applique le prix de gros quand wholesale=true', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 1000, prixGros: 800, buyPrice: 500, qty: 100 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ method: 'cash', items: [{ productId: 'p1', qty: 2, wholesale: true }] }),
+    );
+    expect(res.status).toBe(201);
+    expect((await res.json()).sale.total).toBe(1600); // 2 × 800 (gros)
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ total: 1600 }) }),
+    );
+  });
+
+  it('retombe au prix détail si wholesale=true mais prixGros non défini (0)', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 1000, prixGros: 0, buyPrice: 500, qty: 100 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ method: 'cash', items: [{ productId: 'p1', qty: 2, wholesale: true }] }),
+    );
+    expect((await res.json()).sale.total).toBe(2000); // 2 × 1000 (détail, fallback)
+  });
+
   it('403 sans CSRF', async () => {
     const res = await POST(
       makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }] }, { csrf: 'missing' }),

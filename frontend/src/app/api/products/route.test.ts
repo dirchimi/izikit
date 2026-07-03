@@ -155,6 +155,16 @@ describe('POST /api/products', () => {
     expect(body.error).toBe('REF_TAKEN');
   });
 
+  it('409 BARCODE_TAKEN si code-barres en double (P2002 sur barcode)', async () => {
+    prismaMock.product.create.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: ['organizationId', 'barcode'] },
+    } as never);
+    const res = await POST(makePost({ name: 'Dup', category: 'Alim', barcode: '3011234' }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('BARCODE_TAKEN');
+  });
+
   it('exige le rôle ADMIN (Manager) — le Vendeur ne crée pas de produit', async () => {
     prismaMock.product.create.mockResolvedValueOnce({
       id: 'p9',

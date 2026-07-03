@@ -14,9 +14,13 @@ import { uploadImage } from '@/lib/upload';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import ComboBox from '@/components/ui/ComboBox';
+import Dropdown from '@/components/ui/Dropdown';
 import Modal from '@/components/ui/Modal';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
 import EditProductForm, { type EditProductInput } from './EditProductForm';
+import ReapproForm from './ReapproForm';
+import AdjustStockForm from './AdjustStockForm';
+import MovementsHistoryModal from './MovementsHistoryModal';
 import { useConfirm } from '@/contexts/ConfirmContext';
 
 interface ApiProduct {
@@ -26,6 +30,8 @@ interface ApiProduct {
   category: string;
   buyPrice: number;
   sellPrice: number;
+  prixGros: number;
+  unite: string;
   qty: number;
   threshold: number;
   status: 'ok' | 'low' | 'out';
@@ -70,6 +76,9 @@ export default function StockManager() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ApiProduct | null>(null);
+  const [reapproTarget, setReapproTarget] = useState<ApiProduct | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<ApiProduct | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<ApiProduct | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
@@ -142,6 +151,8 @@ export default function StockManager() {
           category: input.category,
           buyPrice: input.buyPrice,
           sellPrice: input.sellPrice,
+          prixGros: input.prixGros,
+          unite: input.unite,
           qty: input.qty,
           threshold: input.threshold,
           ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
@@ -152,10 +163,16 @@ export default function StockManager() {
       await refresh();
       return true;
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
-      toast(code === 'REF_TAKEN' ? t('stock.refTaken') : t('async.error'), 'error');
+      toast(productWriteError(err), 'error');
       return false;
     }
+  }
+
+  function productWriteError(err: unknown): string {
+    const code = err instanceof ApiError ? err.code : '';
+    if (code === 'BARCODE_TAKEN') return t('stock.barcodeTaken');
+    if (code === 'REF_TAKEN') return t('stock.refTaken');
+    return t('async.error');
   }
 
   async function updateProduct(id: string, patch: EditProductInput): Promise<boolean> {
@@ -169,10 +186,15 @@ export default function StockManager() {
       await refresh();
       return true;
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
-      toast(code === 'REF_TAKEN' ? t('stock.refTaken') : t('async.error'), 'error');
+      toast(productWriteError(err), 'error');
       return false;
     }
+  }
+
+  function afterMovement() {
+    setReapproTarget(null);
+    setAdjustTarget(null);
+    void refresh();
   }
 
   async function deleteProduct(p: ApiProduct) {
@@ -333,7 +355,7 @@ export default function StockManager() {
                     <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
                       {t('common.status')}
                     </span>
-                    <span className="w-16" />
+                    <span className="w-24" />
                   </div>
 
                   {visible.map((p) => {
@@ -406,7 +428,37 @@ export default function StockManager() {
                             {t(`stock.status.${p.status}`)}
                           </span>
                         </div>
-                        <div className="flex w-16 items-center justify-center gap-1">
+                        <div className="flex w-24 items-center justify-center gap-1">
+                          <Dropdown
+                            align="end"
+                            width="w-56"
+                            trigger={
+                              <span
+                                aria-label={t('stock.actions.more')}
+                                title={t('stock.actions.more')}
+                                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                              >
+                                <Icon i="ellipsis-vertical" size={15} />
+                              </span>
+                            }
+                            items={[
+                              {
+                                label: t('stock.reappro.action'),
+                                icon: 'package-plus',
+                                onClick: () => setReapproTarget(p),
+                              },
+                              {
+                                label: t('stock.adjust.action'),
+                                icon: 'sliders-horizontal',
+                                onClick: () => setAdjustTarget(p),
+                              },
+                              {
+                                label: t('stock.history.action'),
+                                icon: 'history',
+                                onClick: () => setHistoryTarget(p),
+                              },
+                            ]}
+                          />
                           <button
                             type="button"
                             aria-label={`${t('common.edit')} ${p.name}`}
@@ -472,6 +524,29 @@ export default function StockManager() {
           />
         )}
       </Modal>
+
+      {/* Réapprovisionnement (entrée de stock) */}
+      <Modal
+        open={reapproTarget !== null}
+        onClose={() => setReapproTarget(null)}
+        title={t('stock.reappro.title')}
+        size="sm"
+      >
+        {reapproTarget && <ReapproForm product={reapproTarget} onSuccess={afterMovement} />}
+      </Modal>
+
+      {/* Ajustement de stock (correction) */}
+      <Modal
+        open={adjustTarget !== null}
+        onClose={() => setAdjustTarget(null)}
+        title={t('stock.adjust.title')}
+        size="sm"
+      >
+        {adjustTarget && <AdjustStockForm product={adjustTarget} onSuccess={afterMovement} />}
+      </Modal>
+
+      {/* Historique des mouvements */}
+      <MovementsHistoryModal product={historyTarget} onClose={() => setHistoryTarget(null)} />
     </>
   );
 }

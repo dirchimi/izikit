@@ -22,7 +22,14 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 
 const Body = z.object({
   items: z
-    .array(z.object({ productId: z.string().min(1), qty: z.number().int().positive() }))
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        qty: z.number().int().positive(),
+        // Ligne facturée au prix de gros (prixGros) plutôt qu'au détail.
+        wholesale: z.boolean().optional(),
+      }),
+    )
     .min(1),
   method: z.enum(['cash', 'mobile', 'credit']),
   customer: z
@@ -129,9 +136,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const ids = items.map((i) => i.productId);
         const products = await tx.product.findMany({
           where: { id: { in: ids }, organizationId: orgId },
-          select: { id: true, name: true, sellPrice: true, buyPrice: true, qty: true },
+          select: {
+            id: true,
+            name: true,
+            sellPrice: true,
+            prixGros: true,
+            buyPrice: true,
+            qty: true,
+          },
         });
         const byId = new Map(products.map((p) => [p.id, p]));
+
+        // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
+        const unitPriceFor = (p: { sellPrice: number; prixGros: number }, wholesale?: boolean) =>
+          wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice;
 
         for (const item of items) {
           const p = byId.get(item.productId);
@@ -162,7 +180,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         const total = items.reduce((sum, item) => {
           const p = byId.get(item.productId);
-          return sum + item.qty * (p ? p.sellPrice : 0);
+          return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
         }, 0);
 
         const count = await tx.sale.count({ where: { organizationId: orgId } });
@@ -183,7 +201,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   productId: item.productId,
                   name: p ? p.name : 'Article',
                   qty: item.qty,
-                  unitPrice: p ? p.sellPrice : 0,
+                  unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
                   buyPrice: p ? p.buyPrice : 0,
                 };
               }),

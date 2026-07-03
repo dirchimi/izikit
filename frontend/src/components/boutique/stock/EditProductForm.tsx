@@ -4,12 +4,15 @@ import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
 import { useT } from '@/contexts/LocaleContext';
+import { UNIT_OPTIONS } from './AddProductForm';
 
 export interface EditProductInput {
   name: string;
   category: string;
   buyPrice: number;
   sellPrice: number;
+  prixGros: number;
+  unite: string;
   threshold: number;
   barcode: string | null;
 }
@@ -20,6 +23,8 @@ export interface EditableProduct {
   category: string;
   buyPrice: number;
   sellPrice: number;
+  prixGros: number;
+  unite: string;
   threshold: number;
   qty: number;
   barcode: string | null;
@@ -50,6 +55,8 @@ export default function EditProductForm({
   const [category, setCategory] = useState(product.category);
   const [buyPrice, setBuyPrice] = useState(String(product.buyPrice));
   const [sellPrice, setSellPrice] = useState(String(product.sellPrice));
+  const [prixGros, setPrixGros] = useState(String(product.prixGros));
+  const [unite, setUnite] = useState(product.unite || 'pièce');
   const [threshold, setThreshold] = useState(String(product.threshold));
   const [barcode, setBarcode] = useState(product.barcode ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +70,8 @@ export default function EditProductForm({
         category: category.trim() || 'Divers',
         buyPrice: Number(buyPrice) || 0,
         sellPrice: Number(sellPrice) || 0,
+        prixGros: Number(prixGros) || 0,
+        unite: unite.trim() || 'pièce',
         threshold: Number(threshold) || 0,
         barcode: barcode.trim() || null,
       });
@@ -139,6 +148,32 @@ export default function EditProductForm({
             value={sellPrice}
             onChange={(e) => setSellPrice(e.target.value)}
             className={fieldClass}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex flex-1 flex-col gap-1">
+          <label className={labelClass} htmlFor="ep-gros">
+            {t('stock.form.wholesalePrice')}
+          </label>
+          <input
+            id="ep-gros"
+            type="number"
+            min="0"
+            value={prixGros}
+            onChange={(e) => setPrixGros(e.target.value)}
+            className={fieldClass}
+          />
+        </div>
+        <div className="flex flex-1 flex-col gap-1">
+          <label className={labelClass}>{t('stock.form.unit')}</label>
+          <ComboBox
+            value={unite}
+            onChange={setUnite}
+            options={UNIT_OPTIONS}
+            creatable
+            placeholder={t('stock.form.unitPlaceholder')}
           />
         </div>
       </div>

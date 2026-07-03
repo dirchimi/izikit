@@ -18,7 +18,7 @@ import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import {
   generateRef,
   productView,
-  isUniqueViolation,
+  uniqueViolationField,
   PRODUCT_SELECT,
 } from '@/lib/server/products/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -29,6 +29,8 @@ const PostBody = z.object({
   category: z.string().trim().min(1).max(60),
   buyPrice: z.number().int().min(0).default(0),
   sellPrice: z.number().int().min(0).default(0),
+  prixGros: z.number().int().min(0).default(0),
+  unite: z.string().trim().min(1).max(30).default('piece'),
   qty: z.number().int().min(0).default(0),
   threshold: z.number().int().min(0).default(0),
   imageUrl: z.string().url().max(500).nullable().optional(),
@@ -109,6 +111,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             category: d.category,
             buyPrice: d.buyPrice,
             sellPrice: d.sellPrice,
+            prixGros: d.prixGros,
+            unite: d.unite,
             qty: d.qty,
             threshold: d.threshold,
             imageUrl: d.imageUrl ?? null,
@@ -136,7 +140,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 201, headers: { 'x-request-id': ctx.requestId } },
       );
     } catch (e) {
-      if (isUniqueViolation(e)) {
+      const field = uniqueViolationField(e);
+      if (field === 'barcode') {
+        return NextResponse.json(
+          {
+            error: 'BARCODE_TAKEN',
+            message: 'Ce code-barres est déjà utilisé par un autre produit',
+          },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      if (field === 'ref') {
         return NextResponse.json(
           { error: 'REF_TAKEN', message: 'Cette référence existe déjà' },
           { status: 409, headers: { 'x-request-id': ctx.requestId } },

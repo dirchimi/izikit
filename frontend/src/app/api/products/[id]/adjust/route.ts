@@ -21,6 +21,12 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 const Body = z.object({
   delta: z.number().int(),
   reason: z.string().trim().max(120).optional(),
+  // Type de mouvement explicite : 'IN' = réapprovisionnement (entrée),
+  // 'ADJUST' = correction (casse/vol/inventaire). Absent → dérivé du signe
+  // du delta (compat : IN si > 0, OUT si < 0).
+  type: z.enum(['IN', 'OUT', 'ADJUST']).optional(),
+  // Réapprovisionnement : met à jour le prix d'achat du produit si fourni.
+  buyPrice: z.number().int().min(0).optional(),
 });
 
 type AdjustResult =
@@ -79,7 +85,7 @@ export async function POST(
         data: {
           organizationId: orgId,
           productId: id,
-          type: delta > 0 ? 'IN' : 'OUT',
+          type: parsed.data.type ?? (delta > 0 ? 'IN' : 'OUT'),
           delta,
           ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
           createdById: auth.user.sub,
@@ -87,7 +93,11 @@ export async function POST(
       });
       const updated = await tx.product.update({
         where: { id },
-        data: { qty: newQty },
+        data: {
+          qty: newQty,
+          // Réapprovisionnement avec prix d'achat : on met à jour le coût courant.
+          ...(parsed.data.buyPrice !== undefined ? { buyPrice: parsed.data.buyPrice } : {}),
+        },
         select: PRODUCT_SELECT,
       });
       return { kind: 'OK', product: updated };

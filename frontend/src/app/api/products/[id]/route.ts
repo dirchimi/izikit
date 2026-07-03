@@ -12,7 +12,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
-import { productView, isUniqueViolation, PRODUCT_SELECT } from '@/lib/server/products/helpers';
+import { productView, uniqueViolationField, PRODUCT_SELECT } from '@/lib/server/products/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const PatchBody = z.object({
@@ -21,6 +21,8 @@ const PatchBody = z.object({
   category: z.string().trim().min(1).max(60).optional(),
   buyPrice: z.number().int().min(0).optional(),
   sellPrice: z.number().int().min(0).optional(),
+  prixGros: z.number().int().min(0).optional(),
+  unite: z.string().trim().min(1).max(30).optional(),
   threshold: z.number().int().min(0).optional(),
   imageUrl: z.string().url().max(500).nullable().optional(),
   barcode: z.string().trim().max(64).nullable().optional(),
@@ -85,6 +87,8 @@ export async function PATCH(
       ...(d.category !== undefined ? { category: d.category } : {}),
       ...(d.buyPrice !== undefined ? { buyPrice: d.buyPrice } : {}),
       ...(d.sellPrice !== undefined ? { sellPrice: d.sellPrice } : {}),
+      ...(d.prixGros !== undefined ? { prixGros: d.prixGros } : {}),
+      ...(d.unite !== undefined ? { unite: d.unite } : {}),
       ...(d.threshold !== undefined ? { threshold: d.threshold } : {}),
       ...(d.imageUrl !== undefined ? { imageUrl: d.imageUrl } : {}),
       ...(d.barcode !== undefined
@@ -99,7 +103,17 @@ export async function PATCH(
         { status: 200, headers: { 'x-request-id': reqCtx.requestId } },
       );
     } catch (e) {
-      if (isUniqueViolation(e)) {
+      const field = uniqueViolationField(e);
+      if (field === 'barcode') {
+        return NextResponse.json(
+          {
+            error: 'BARCODE_TAKEN',
+            message: 'Ce code-barres est déjà utilisé par un autre produit',
+          },
+          { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
+        );
+      }
+      if (field === 'ref') {
         return NextResponse.json(
           { error: 'REF_TAKEN', message: 'Cette référence existe déjà' },
           { status: 409, headers: { 'x-request-id': reqCtx.requestId } },

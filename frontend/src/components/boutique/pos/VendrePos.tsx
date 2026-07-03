@@ -14,6 +14,7 @@ import { type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
 import CartLine, { type CartLineData } from './CartLine';
 import ClientPicker, { type PickedClient } from './ClientPicker';
+import BarcodeScannerModal from './BarcodeScannerModal';
 import LiveDateTime from '@/components/boutique/LiveDateTime';
 import ReceiptModal, {
   type ReceiptData,
@@ -27,10 +28,13 @@ interface ApiProduct {
   category: string;
   buyPrice: number;
   sellPrice: number;
+  prixGros: number;
+  unite: string;
   qty: number;
   threshold: number;
   status: 'ok' | 'low' | 'out';
   imageUrl: string | null;
+  barcode: string | null;
 }
 
 const METHODS: PaymentMethod[] = ['cash', 'mobile', 'credit'];
@@ -51,6 +55,8 @@ export default function VendrePos() {
   const [cart, setCart] = useState<CartLineData[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [barcode, setBarcode] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
@@ -81,7 +87,15 @@ export default function VendrePos() {
       }
       return [
         ...prev,
-        { productId: product.id, name: product.name, unitPrice: product.sellPrice, qty: 1 },
+        {
+          productId: product.id,
+          name: product.name,
+          unitPrice: product.sellPrice,
+          qty: 1,
+          sellPrice: product.sellPrice,
+          prixGros: product.prixGros,
+          wholesale: false,
+        },
       ];
     });
   }
@@ -97,6 +111,31 @@ export default function VendrePos() {
   }
   function remove(id: string) {
     setCart((prev) => prev.filter((l) => l.productId !== id));
+  }
+  /** Bascule une ligne détail ⇄ gros et recalcule son prix unitaire effectif. */
+  function toggleWholesale(id: string, wholesale: boolean) {
+    setCart((prev) =>
+      prev.map((l) =>
+        l.productId === id
+          ? { ...l, wholesale, unitPrice: wholesale && l.prixGros > 0 ? l.prixGros : l.sellPrice }
+          : l,
+      ),
+    );
+  }
+
+  /** Ajout au panier par code-barres (lecteur physique OU caméra). */
+  function addByBarcode(raw: string) {
+    const code = raw.trim();
+    if (code === '') return;
+    const p = products.find((x) => x.barcode === code);
+    if (!p) {
+      toast(t('pos.scan.notFound', { code }), 'error');
+      return;
+    }
+    addToCart(p);
+    // Rupture : on avertit mais on laisse le choix (la ligne est ajoutée).
+    if (p.qty <= 0) toast(t('pos.scan.outOfStock', { name: p.name }), 'info');
+    else toast(t('pos.scan.added', { name: p.name }), 'success');
   }
 
   function checkoutError(err: unknown): string {
@@ -121,7 +160,7 @@ export default function VendrePos() {
         method: 'POST',
         body: {
           method,
-          items: cart.map((l) => ({ productId: l.productId, qty: l.qty })),
+          items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
           // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé).
           ...(client ? { customer: client.id ? { id: client.id } : { name: client.name } } : {}),
         },
@@ -158,8 +197,8 @@ export default function VendrePos() {
       <div className="flex flex-col lg:flex-row">
         {/* Catalogue produits */}
         <div className="border-border flex flex-1 flex-col lg:border-e">
-          {/* Recherche */}
-          <div className="px-4 pt-5 pb-3 md:px-6">
+          {/* Recherche + scan code-barres */}
+          <div className="flex flex-col gap-2 px-4 pt-5 pb-3 md:px-6">
             <div className="border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2.5">
               <Icon i="search" size={15} className="text-muted-foreground" />
               <input
@@ -169,6 +208,37 @@ export default function VendrePos() {
                 placeholder={t('common.search.article')}
                 className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               />
+            </div>
+            {/* Champ de scan actif en permanence : un lecteur USB/Bluetooth tape le
+                code puis envoie Entrée → on ajoute au panier. Bouton caméra sur mobile. */}
+            <div className="flex items-center gap-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addByBarcode(barcode);
+                  setBarcode('');
+                }}
+                className="border-border bg-input focus-within:border-primary flex flex-1 items-center gap-2 rounded-md border px-3 py-2.5"
+              >
+                <Icon i="scan-barcode" size={15} className="text-muted-foreground shrink-0" />
+                <input
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  placeholder={t('pos.scan.field')}
+                  autoFocus
+                  autoComplete="off"
+                  className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
+                />
+              </form>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                aria-label={t('pos.scan.camera')}
+                title={t('pos.scan.camera')}
+                className="border-border bg-surface text-foreground hover:border-primary flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md border transition-colors"
+              >
+                <Icon i="camera" size={17} />
+              </button>
             </div>
           </div>
 
@@ -255,6 +325,7 @@ export default function VendrePos() {
                   onInc={() => inc(line.productId)}
                   onDec={() => dec(line.productId)}
                   onRemove={() => remove(line.productId)}
+                  onToggleWholesale={(w) => toggleWholesale(line.productId, w)}
                 />
               ))
             )}
@@ -334,6 +405,15 @@ export default function VendrePos() {
       </div>
 
       <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
+
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={(code) => {
+          setScannerOpen(false);
+          addByBarcode(code);
+        }}
+      />
     </>
   );
 }

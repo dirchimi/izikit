@@ -118,4 +118,56 @@ describe('POST /api/products/[id]/adjust', () => {
     await POST(makePost({ delta: 6 }), params('p1'));
     expect(mockRequireOrgRole).toHaveBeenCalledWith('org1', 'ADMIN');
   });
+
+  it('réappro : type IN + buyPrice met à jour le prix d’achat', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 2,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 900,
+      sellPrice: 1400,
+      qty: 12,
+      threshold: 5,
+    } as never);
+
+    const res = await POST(makePost({ delta: 10, type: 'IN', buyPrice: 900 }), params('p1'));
+    expect(res.status).toBe(200);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'IN', delta: 10 }) }),
+    );
+    expect(prismaMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ qty: 12, buyPrice: 900 }) }),
+    );
+  });
+
+  it('ajustement : type ADJUST avec delta négatif', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 8,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 0,
+      sellPrice: 0,
+      qty: 5,
+      threshold: 5,
+    } as never);
+
+    await POST(makePost({ delta: -3, type: 'ADJUST', reason: 'Casse' }), params('p1'));
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: 'ADJUST', delta: -3, reason: 'Casse' }),
+      }),
+    );
+  });
 });
