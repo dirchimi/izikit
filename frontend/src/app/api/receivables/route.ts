@@ -45,6 +45,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         phone: true,
         createdAt: true,
         receivables: {
+          // Les créances annulées (vente annulée) ne comptent plus dans la dette.
+          where: { status: { not: 'CANCELLED' } },
           orderBy: { createdAt: 'asc' },
           select: {
             id: true,

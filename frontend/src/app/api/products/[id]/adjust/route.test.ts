@@ -98,4 +98,24 @@ describe('POST /api/products/[id]/adjust', () => {
     const res = await POST(makePost({ delta: 0 }), params('p1'));
     expect(res.status).toBe(400);
   });
+
+  it('exige le rôle ADMIN (Manager) — le Vendeur ne réapprovisionne pas', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 4200,
+      sellPrice: 6000,
+      qty: 10,
+      threshold: 5,
+    } as never);
+    await POST(makePost({ delta: 6 }), params('p1'));
+    expect(mockRequireOrgRole).toHaveBeenCalledWith('org1', 'ADMIN');
+  });
 });

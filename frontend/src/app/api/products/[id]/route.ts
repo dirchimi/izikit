@@ -2,7 +2,7 @@
 //
 // PATCH ne touche PAS à `qty` (la quantité change uniquement via /adjust, qui
 // écrit un mouvement). DELETE supprime le produit (mouvements en cascade).
-// Rôle min MEMBER. Produit hors boutique → 404.
+// Rôle min ADMIN (Manager) — modification du catalogue. Produit hors boutique → 404.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -39,7 +39,9 @@ async function resolveOrg(
       { status: 404, headers: { 'x-request-id': ctx.requestId } },
     );
   }
-  const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
+  // PATCH (édition) et DELETE (suppression) modifient le catalogue/stock →
+  // réservés au Patron (OWNER) et au Manager (ADMIN).
+  const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
   if (gate instanceof NextResponse) return gate;
   return { orgId: primary.organizationId, userSub: auth.user.sub };
 }

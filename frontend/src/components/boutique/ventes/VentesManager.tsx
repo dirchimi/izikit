@@ -4,12 +4,15 @@ import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import Dropdown from '@/components/ui/Dropdown';
 import DatePicker from '@/components/ui/DatePicker';
+import Modal from '@/components/ui/Modal';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
+import { api } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
 
@@ -19,6 +22,7 @@ interface ApiSale {
   number: string;
   method: ApiMethod;
   total: number;
+  status: string; // ACTIVE | CANCELLED
   createdAt: string;
   customerName: string | null;
   customerPhone: string | null;
@@ -58,14 +62,37 @@ function isoToYmd(iso: string): string {
 
 export default function VentesManager() {
   const t = useT();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('all');
   const [pickDate, setPickDate] = useState('');
   const [method, setMethod] = useState<MethodFilter>('all');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; number: string } | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
   const sales = data?.sales ?? [];
+
+  // Le bouton « Annuler » n'est visible que pour le Patron (OWNER) et le
+  // Manager (ADMIN) — le serveur applique la même règle (défense en profondeur).
+  const { data: org } = useApi<{ role: string }>('/api/org/current');
+  const canCancel = org?.role === 'OWNER' || org?.role === 'ADMIN';
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      await api(`/api/sales/${cancelTarget.id}/cancel`, { method: 'POST' });
+      toast(t('ventes.cancel.success', { number: cancelTarget.number }), 'success');
+      setCancelTarget(null);
+      await refresh();
+    } catch {
+      toast(t('async.error'), 'error');
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   function openReceipt(id: string) {
     const s = sales.find((x) => x.id === id);
@@ -82,8 +109,8 @@ export default function VentesManager() {
   }
   const now = new Date();
 
-  // KPIs « du jour » dérivés des ventes chargées.
-  const todays = sales.filter((s) => sameDay(s.createdAt, now));
+  // KPIs « du jour » dérivés des ventes chargées (hors ventes annulées).
+  const todays = sales.filter((s) => s.status !== 'CANCELLED' && sameDay(s.createdAt, now));
   const caToday = todays.reduce((sum, s) => sum + s.total, 0);
   const countToday = todays.length;
   const creditToday = todays
@@ -113,6 +140,7 @@ export default function VentesManager() {
           qty: s.items.reduce((sum, it) => sum + it.qty, 0),
           total: s.total,
           method: s.method,
+          cancelled: s.status === 'CANCELLED',
         };
       })
       .filter(
@@ -277,30 +305,46 @@ export default function VentesManager() {
                 {rows.map((r) => (
                   <div
                     key={r.id}
-                    className="border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
+                    className={`border-border flex items-center gap-4 border-b px-5 py-3 last:border-b-0 ${
+                      r.cancelled ? 'opacity-60' : ''
+                    }`}
                   >
                     <span className="font-body text-muted-foreground w-20 font-mono text-xs">
                       {r.number}
                     </span>
                     <span className="font-body text-muted-foreground w-24 text-xs">{r.date}</span>
                     <span className="font-body text-muted-foreground w-14 text-xs">{r.time}</span>
-                    <span className="font-body text-foreground flex-1 text-sm font-medium">
+                    <span
+                      className={`font-body flex-1 text-sm font-medium ${
+                        r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
+                      }`}
+                    >
                       {r.label}
                     </span>
                     <span className="font-body text-muted-foreground w-8 text-center text-sm">
                       {r.qty}
                     </span>
-                    <span className="font-body text-foreground w-28 text-end text-sm font-bold">
+                    <span
+                      className={`font-body w-28 text-end text-sm font-bold ${
+                        r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
+                      }`}
+                    >
                       {formatFCFA(r.total)} {t('common.fcfa')}
                     </span>
                     <div className="flex w-28 justify-center">
-                      <span
-                        className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
-                      >
-                        {t(METHOD_LABEL[r.method])}
-                      </span>
+                      {r.cancelled ? (
+                        <span className="font-body bg-muted text-muted-foreground rounded-sm px-2 py-0.5 text-xs font-semibold">
+                          {t('ventes.cancelled')}
+                        </span>
+                      ) : (
+                        <span
+                          className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
+                        >
+                          {t(METHOD_LABEL[r.method])}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex w-16 justify-center">
+                    <div className="flex w-16 items-center justify-center gap-1">
                       <button
                         type="button"
                         onClick={() => openReceipt(r.id)}
@@ -310,6 +354,17 @@ export default function VentesManager() {
                       >
                         <Icon i="receipt-text" size={16} />
                       </button>
+                      {canCancel && !r.cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => setCancelTarget({ id: r.id, number: r.number })}
+                          aria-label={t('ventes.cancel')}
+                          title={t('ventes.cancel')}
+                          className="text-danger hover:bg-danger/10 flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                        >
+                          <Icon i="x-circle" size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -326,6 +381,35 @@ export default function VentesManager() {
       </div>
 
       <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
+
+      <Modal
+        open={cancelTarget !== null}
+        onClose={() => !cancelling && setCancelTarget(null)}
+        title={t('ventes.cancel.title')}
+        size="sm"
+      >
+        <p className="font-body text-foreground text-sm">
+          {t('ventes.cancel.body', { number: cancelTarget?.number ?? '' })}
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setCancelTarget(null)}
+            disabled={cancelling}
+            className="font-body border-border text-foreground hover:bg-muted rounded-md border px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={confirmCancel}
+            disabled={cancelling}
+            className="font-body bg-danger text-danger-foreground rounded-md px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+          >
+            {t('ventes.cancel.confirm')}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

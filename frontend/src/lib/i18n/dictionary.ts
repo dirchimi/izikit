@@ -1261,6 +1261,24 @@ const messages: Record<string, Msg> = {
   'ventes.col.payment': { fr: 'Paiement', en: 'Payment', ar: 'الدفع' },
   'ventes.col.sync': { fr: 'Sync', en: 'Sync', ar: 'المزامنة' },
   'ventes.unsynced': { fr: '{n} non synchronisées', en: '{n} not synced', ar: '{n} غير مزامَنة' },
+  'ventes.cancel': { fr: 'Annuler la vente', en: 'Cancel sale', ar: 'إلغاء البيع' },
+  'ventes.cancelled': { fr: 'Annulée', en: 'Cancelled', ar: 'ملغاة' },
+  'ventes.cancel.title': { fr: 'Annuler la vente', en: 'Cancel sale', ar: 'إلغاء البيع' },
+  'ventes.cancel.body': {
+    fr: 'Annuler la vente {number} ? Le stock sera réintégré et la créance éventuelle annulée. Cette action est définitive.',
+    en: 'Cancel sale {number}? Stock will be restored and any credit voided. This action is final.',
+    ar: 'إلغاء البيع {number}؟ ستتم إعادة المخزون وإلغاء أي دين. هذا الإجراء نهائي.',
+  },
+  'ventes.cancel.confirm': {
+    fr: 'Confirmer l’annulation',
+    en: 'Confirm cancellation',
+    ar: 'تأكيد الإلغاء',
+  },
+  'ventes.cancel.success': {
+    fr: 'Vente {number} annulée',
+    en: 'Sale {number} cancelled',
+    ar: 'تم إلغاء البيع {number}',
+  },
   'ventes.empty': {
     fr: 'Aucune vente ne correspond à ces filtres.',
     en: 'No sale matches these filters.',

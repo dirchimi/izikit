@@ -4,7 +4,8 @@
 // POST : crée un produit + un StockMovement IN initial (qty de départ).
 //        La quantité ne change jamais sans mouvement (ledger d'inventaire).
 //
-// Rôle min MEMBER : la gestion du stock est un travail quotidien partagé.
+// GET (consultation) : rôle min MEMBER (Vendeur). POST (modification du stock) :
+// rôle min ADMIN (Manager) — le Vendeur ne crée/modifie pas le stock.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -81,7 +82,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
+    // Création = modification du stock → réservée au Patron (OWNER) et au
+    // Manager (ADMIN). Le Vendeur (MEMBER) ne peut pas créer de produit.
+    const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
 
     const parsed = PostBody.safeParse(await req.json().catch(() => null));

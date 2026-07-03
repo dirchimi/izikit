@@ -145,4 +145,15 @@ describe('DELETE /api/org/members/[id]', () => {
     expect(body.error).toBe('LAST_OWNER');
     expect(prismaMock.organizationMember.delete).not.toHaveBeenCalled();
   });
+
+  it('exige le rôle OWNER (Patron) — le Manager ne supprime pas d’utilisateur', async () => {
+    prismaMock.organizationMember.findUnique.mockResolvedValueOnce({
+      id: 'm2',
+      organizationId: 'org1',
+      role: 'MEMBER',
+    } as never);
+    prismaMock.organizationMember.delete.mockResolvedValueOnce({ id: 'm2' } as never);
+    await DELETE(makeReq('DELETE'), params('m2'));
+    expect(mockRequireOrgRole).toHaveBeenCalledWith('org1', 'OWNER');
+  });
 });

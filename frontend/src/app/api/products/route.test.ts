@@ -154,4 +154,20 @@ describe('POST /api/products', () => {
     const body = await res.json();
     expect(body.error).toBe('REF_TAKEN');
   });
+
+  it('exige le rôle ADMIN (Manager) — le Vendeur ne crée pas de produit', async () => {
+    prismaMock.product.create.mockResolvedValueOnce({
+      id: 'p9',
+      ref: 'P-9',
+      name: 'Sucre',
+      category: 'Alim',
+      buyPrice: 900,
+      sellPrice: 1400,
+      qty: 8,
+      threshold: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    await POST(makePost({ name: 'Sucre', category: 'Alim', qty: 8 }));
+    expect(mockRequireOrgRole).toHaveBeenCalledWith('org1', 'ADMIN');
+  });
 });

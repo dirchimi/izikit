@@ -40,7 +40,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       computeReport(orgId, 'today', yesterday),
       computeReport(orgId, 'week', now),
       prisma.receivable.aggregate({
-        where: { organizationId: orgId },
+        // Une créance annulée (vente annulée) ne compte plus dans l'encours.
+        where: { organizationId: orgId, status: { not: 'CANCELLED' } },
         _sum: { amount: true, amountPaid: true },
       }),
       prisma.product.findMany({
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           id: true,
           total: true,
           method: true,
+          status: true,
           createdAt: true,
           items: { select: { name: true, qty: true } },
         },
@@ -86,6 +88,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         qty: s.items.reduce((sum, it) => sum + it.qty, 0),
         total: s.total,
         method: s.method.toLowerCase(),
+        status: s.status,
       };
     });
 

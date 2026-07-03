@@ -22,6 +22,38 @@ describe('ensureBoutique', () => {
     expect(ctx.settings.currency).toBe('XAF');
   });
 
+  it("employé invité : retourne la boutique de l'inviteur, sans en créer une (fix invitation)", async () => {
+    // Ne POSSÈDE aucune org…
+    prismaMock.organization.findFirst.mockResolvedValueOnce(null);
+    // …mais est MEMBRE de celle de l'inviteur.
+    prismaMock.organizationMember.findFirst.mockResolvedValueOnce({
+      role: 'MEMBER',
+      organization: {
+        id: 'org-boss',
+        slug: 'boss',
+        name: 'Boutique du Patron',
+        settings: {
+          currency: 'XAF',
+          phone: null,
+          city: null,
+          address: null,
+          invoiceNote: null,
+          logoUrl: null,
+          businessType: null,
+          overdueDays: 30,
+          bigExpenseThreshold: 50000,
+        },
+      },
+    } as never);
+
+    const ctx = await ensureBoutique('emp1', 'emp@x.td');
+
+    // Le bug : sans ce garde, une nouvelle boutique était créée pour l'employé.
+    expect(prismaMock.organization.create).not.toHaveBeenCalled();
+    expect(ctx.organization.id).toBe('org-boss');
+    expect(ctx.role).toBe('MEMBER');
+  });
+
   it('crée une boutique avec settings XAF au 1er appel', async () => {
     prismaMock.organization.findFirst.mockResolvedValueOnce(null);
     prismaMock.$transaction.mockImplementation((cb: unknown) =>

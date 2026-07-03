@@ -3,7 +3,7 @@
 // Ajuste le stock d'un produit en écrivant un StockMovement et en mettant à
 // jour `qty` dans la MÊME transaction (ledger d'inventaire). `delta` signé :
 // > 0 = entrée (IN), < 0 = sortie (OUT). Refuse si le stock passe sous 0
-// (409 INSUFFICIENT_STOCK). Rôle min MEMBER.
+// (409 INSUFFICIENT_STOCK). Rôle min ADMIN (Manager).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -48,7 +48,9 @@ export async function POST(
       );
     }
 
-    const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
+    // Ajustement de stock (réapprovisionnement, casse, inventaire) → réservé au
+    // Patron (OWNER) et au Manager (ADMIN). Le Vendeur ne modifie pas le stock.
+    const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
 
     const parsed = Body.safeParse(await req.json().catch(() => null));

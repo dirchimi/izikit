@@ -1,7 +1,7 @@
 // Phase 1 — PATCH (rôle) + DELETE (retrait) /api/org/members/[id].
 //
 // PATCH : change le rôle d'un membre. Rôle min OWNER.
-// DELETE: retire un membre. Rôle min ADMIN.
+// DELETE: retire un membre. Rôle min OWNER (« suppression d'utilisateur »).
 //
 // Invariant : on refuse de rétrograder/retirer le DERNIER OWNER (sinon la
 // boutique devient ingouvernable). Le garde COUNT + mutation est atomique
@@ -124,7 +124,9 @@ export async function DELETE(
       );
     }
 
-    const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
+    // Retrait d'un membre = « suppression d'utilisateur » → réservé au Patron
+    // (OWNER). Le Manager (ADMIN) n'a pas ce droit.
+    const gate = await requireOrgRole(primary.organizationId, 'OWNER');
     if (gate instanceof NextResponse) return gate;
 
     const { id } = await ctx.params;

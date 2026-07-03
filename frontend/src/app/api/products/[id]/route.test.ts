@@ -100,4 +100,11 @@ describe('DELETE /api/products/[id]', () => {
     expect(res.status).toBe(404);
     expect(prismaMock.product.delete).not.toHaveBeenCalled();
   });
+
+  it('exige le rôle ADMIN (Manager) pour supprimer', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({ organizationId: 'org1' } as never);
+    prismaMock.product.delete.mockResolvedValueOnce({ id: 'p1' } as never);
+    await DELETE(makeReq('DELETE'), params('p1'));
+    expect(mockRequireOrgRole).toHaveBeenCalledWith('org1', 'ADMIN');
+  });
 });

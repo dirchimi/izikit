@@ -61,7 +61,8 @@ async function computeForWindow(
 
   const [sales, expenseAgg] = await Promise.all([
     prisma.sale.findMany({
-      where: { organizationId: orgId, createdAt: { gte: from, lt: to } },
+      // Les ventes annulées ne comptent ni dans le CA ni dans la marge.
+      where: { organizationId: orgId, status: 'ACTIVE', createdAt: { gte: from, lt: to } },
       select: {
         total: true,
         createdAt: true,

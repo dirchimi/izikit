@@ -115,6 +115,35 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
     };
   }
 
+  // L'utilisateur ne POSSÈDE pas de boutique, mais peut être MEMBRE de celle
+  // d'un autre (employé invité). Dans ce cas on retourne SA boutique — surtout
+  // pas une nouvelle. Sans ce garde, un employé invité se voyait créer une
+  // boutique vide au premier chargement (bug d'invitation).
+  const membership = await prisma.organizationMember.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      role: true,
+      organization: {
+        select: { id: true, slug: true, name: true, settings: { select: SETTINGS_SELECT } },
+      },
+    },
+  });
+  if (membership) {
+    const org = membership.organization;
+    const settings =
+      org.settings ??
+      (await prisma.boutiqueSettings.create({
+        data: { organizationId: org.id, currency: 'XAF' },
+        select: SETTINGS_SELECT,
+      }));
+    return {
+      organization: { id: org.id, slug: org.slug, name: org.name },
+      settings: viewSettings(settings),
+      role: membership.role as OrgRole,
+    };
+  }
+
   const base = slugify(email.split('@')[0] ?? 'boutique') || 'boutique';
   const name = deriveName(email);
   let created: { id: string; slug: string; name: string } | null = null;

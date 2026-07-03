@@ -196,6 +196,9 @@ model Sale {
   customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   method         String // CASH | MOBILE | CREDIT
   total          Int
+  status         String       @default("ACTIVE") // ACTIVE | CANCELLED
+  cancelledAt    DateTime? // horodatage de l'annulation (null tant qu'active)
+  cancelledById  String? // utilisateur (Patron/Manager) ayant annulé la vente
   createdById    String?
   items          SaleItem[]
   receivable     Receivable?
@@ -205,6 +208,7 @@ model Sale {
   @@unique([organizationId, number])
   @@index([organizationId])
   @@index([organizationId, createdAt])
+  @@index([organizationId, status])
 }
 
 // Ligne de vente. `name` et `unitPrice` sont un instantané au moment de la
@@ -236,7 +240,7 @@ model Receivable {
   sale           Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
   amount         Int
   amountPaid     Int      @default(0)
-  status         String   @default("OPEN") // OPEN | PARTIAL | PAID
+  status         String   @default("OPEN") // OPEN | PARTIAL | PAID | CANCELLED
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
