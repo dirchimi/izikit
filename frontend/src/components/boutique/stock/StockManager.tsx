@@ -68,6 +68,51 @@ function photoUploadError(
   return t('stock.photo.failed');
 }
 
+/**
+ * Vignette produit. Pour le Manager/Patron (`canManage`) c'est un bouton qui
+ * ouvre le sélecteur de photo ; pour le Vendeur, une vignette statique (le
+ * changement de photo passe par une route ADMIN, inutile de proposer le clic).
+ */
+function ProductThumb({
+  product,
+  uploading,
+  canManage,
+  sizeClass,
+  iconSize,
+  onPick,
+  label,
+}: {
+  product: { imageUrl: string | null; name: string };
+  uploading: boolean;
+  canManage: boolean;
+  sizeClass: string;
+  iconSize: number;
+  onPick: () => void;
+  label: string;
+}) {
+  const inner = uploading ? (
+    <Icon i="loader" size={iconSize} className="text-muted-foreground animate-spin" />
+  ) : product.imageUrl ? (
+    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+  ) : (
+    <Icon i="camera" size={iconSize} className="text-muted-foreground" />
+  );
+  const base = `bg-muted border-border flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-md border`;
+  if (!canManage) return <div className={base}>{inner}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={uploading}
+      aria-label={label}
+      title={label}
+      className={`${base} hover:border-primary transition-colors disabled:opacity-60`}
+    >
+      {inner}
+    </button>
+  );
+}
+
 export default function StockManager() {
   const { toast } = useToast();
   const t = useT();
@@ -84,6 +129,12 @@ export default function StockManager() {
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
+
+  // Gestion du catalogue/stock (créer/éditer/supprimer, réappro, ajuster, photo)
+  // réservée au Manager (ADMIN) et au Patron (OWNER) — le serveur applique la
+  // même règle. Le Vendeur ne voit que la consultation + l'historique.
+  const { data: org } = useApi<{ role: string }>('/api/org/current');
+  const canManage = org?.role === 'OWNER' || org?.role === 'ADMIN';
 
   // Catégories propres à la boutique : dérivées des produits déjà saisis
   // (chaque boutique a donc SES catégories, créées au fil de l'ajout).
@@ -311,15 +362,17 @@ export default function StockManager() {
               })}
             </div>
 
-            {/* Ajouter un produit — ouvre la modale (plus de formulaire collé) */}
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold sm:ms-auto"
-            >
-              <Icon i="plus" size={15} />
-              {t('stock.form.title')}
-            </button>
+            {/* Ajouter un produit — Manager/Patron uniquement */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold sm:ms-auto"
+              >
+                <Icon i="plus" size={15} />
+                {t('stock.form.title')}
+              </button>
+            )}
           </div>
 
           {/* Champ fichier partagé pour changer la photo d'un produit */}
@@ -383,31 +436,15 @@ export default function StockManager() {
                           {p.ref}
                         </span>
                         <div className="flex flex-1 items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openPhotoPicker(p.id)}
-                            disabled={uploadingPhotoId === p.id}
-                            aria-label={t('stock.photo.change')}
-                            title={t('stock.photo.change')}
-                            className="bg-muted border-border hover:border-primary flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border transition-colors disabled:opacity-60"
-                          >
-                            {uploadingPhotoId === p.id ? (
-                              <Icon
-                                i="loader"
-                                size={13}
-                                className="text-muted-foreground animate-spin"
-                              />
-                            ) : p.imageUrl ? (
-                              // next/image non utilisable (URLs Cloudinary distantes non déclarées).
-                              <img
-                                src={p.imageUrl}
-                                alt={p.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <Icon i="camera" size={13} className="text-muted-foreground" />
-                            )}
-                          </button>
+                          <ProductThumb
+                            product={p}
+                            uploading={uploadingPhotoId === p.id}
+                            canManage={canManage}
+                            sizeClass="h-9 w-9"
+                            iconSize={13}
+                            onPick={() => openPhotoPicker(p.id)}
+                            label={t('stock.photo.change')}
+                          />
                           <span className="font-body text-foreground text-sm font-medium">
                             {p.name}
                           </span>
@@ -456,16 +493,20 @@ export default function StockManager() {
                               </span>
                             }
                             items={[
-                              {
-                                label: t('stock.reappro.action'),
-                                icon: 'package-plus',
-                                onClick: () => setReapproTarget(p),
-                              },
-                              {
-                                label: t('stock.adjust.action'),
-                                icon: 'sliders-horizontal',
-                                onClick: () => setAdjustTarget(p),
-                              },
+                              ...(canManage
+                                ? [
+                                    {
+                                      label: t('stock.reappro.action'),
+                                      icon: 'package-plus',
+                                      onClick: () => setReapproTarget(p),
+                                    },
+                                    {
+                                      label: t('stock.adjust.action'),
+                                      icon: 'sliders-horizontal',
+                                      onClick: () => setAdjustTarget(p),
+                                    },
+                                  ]
+                                : []),
                               {
                                 label: t('stock.history.action'),
                                 icon: 'history',
@@ -473,29 +514,33 @@ export default function StockManager() {
                               },
                             ]}
                           />
-                          <button
-                            type="button"
-                            aria-label={`${t('common.edit')} ${p.name}`}
-                            title={t('common.edit')}
-                            onClick={() => setEditing(p)}
-                            className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 w-7 items-center justify-center rounded-md transition-colors"
-                          >
-                            <Icon i="pencil" size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`${t('common.delete')} ${p.name}`}
-                            title={t('common.delete')}
-                            onClick={() => deleteProduct(p)}
-                            disabled={deletingId === p.id}
-                            className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-50"
-                          >
-                            <Icon
-                              i={deletingId === p.id ? 'loader-2' : 'trash-2'}
-                              size={13}
-                              className={deletingId === p.id ? 'animate-spin' : ''}
-                            />
-                          </button>
+                          {canManage && (
+                            <button
+                              type="button"
+                              aria-label={`${t('common.edit')} ${p.name}`}
+                              title={t('common.edit')}
+                              onClick={() => setEditing(p)}
+                              className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                            >
+                              <Icon i="pencil" size={13} />
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              type="button"
+                              aria-label={`${t('common.delete')} ${p.name}`}
+                              title={t('common.delete')}
+                              onClick={() => deleteProduct(p)}
+                              disabled={deletingId === p.id}
+                              className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-50"
+                            >
+                              <Icon
+                                i={deletingId === p.id ? 'loader-2' : 'trash-2'}
+                                size={13}
+                                className={deletingId === p.id ? 'animate-spin' : ''}
+                              />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -520,29 +565,15 @@ export default function StockManager() {
                     className="bg-surface border-border flex flex-col gap-3 rounded-lg border p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => openPhotoPicker(p.id)}
-                        disabled={uploadingPhotoId === p.id}
-                        aria-label={t('stock.photo.change')}
-                        className="bg-muted border-border flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border disabled:opacity-60"
-                      >
-                        {uploadingPhotoId === p.id ? (
-                          <Icon
-                            i="loader"
-                            size={14}
-                            className="text-muted-foreground animate-spin"
-                          />
-                        ) : p.imageUrl ? (
-                          <img
-                            src={p.imageUrl}
-                            alt={p.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Icon i="camera" size={14} className="text-muted-foreground" />
-                        )}
-                      </button>
+                      <ProductThumb
+                        product={p}
+                        uploading={uploadingPhotoId === p.id}
+                        canManage={canManage}
+                        sizeClass="h-11 w-11"
+                        iconSize={14}
+                        onPick={() => openPhotoPicker(p.id)}
+                        label={t('stock.photo.change')}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-body text-foreground truncate text-sm font-semibold">
@@ -604,16 +635,20 @@ export default function StockManager() {
                           </span>
                         }
                         items={[
-                          {
-                            label: t('stock.reappro.action'),
-                            icon: 'package-plus',
-                            onClick: () => setReapproTarget(p),
-                          },
-                          {
-                            label: t('stock.adjust.action'),
-                            icon: 'sliders-horizontal',
-                            onClick: () => setAdjustTarget(p),
-                          },
+                          ...(canManage
+                            ? [
+                                {
+                                  label: t('stock.reappro.action'),
+                                  icon: 'package-plus',
+                                  onClick: () => setReapproTarget(p),
+                                },
+                                {
+                                  label: t('stock.adjust.action'),
+                                  icon: 'sliders-horizontal',
+                                  onClick: () => setAdjustTarget(p),
+                                },
+                              ]
+                            : []),
                           {
                             label: t('stock.history.action'),
                             icon: 'history',
@@ -621,27 +656,31 @@ export default function StockManager() {
                           },
                         ]}
                       />
-                      <button
-                        type="button"
-                        aria-label={`${t('common.edit')} ${p.name}`}
-                        onClick={() => setEditing(p)}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors"
-                      >
-                        <Icon i="pencil" size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`${t('common.delete')} ${p.name}`}
-                        onClick={() => deleteProduct(p)}
-                        disabled={deletingId === p.id}
-                        className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50"
-                      >
-                        <Icon
-                          i={deletingId === p.id ? 'loader-2' : 'trash-2'}
-                          size={14}
-                          className={deletingId === p.id ? 'animate-spin' : ''}
-                        />
-                      </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          aria-label={`${t('common.edit')} ${p.name}`}
+                          onClick={() => setEditing(p)}
+                          className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                        >
+                          <Icon i="pencil" size={14} />
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          type="button"
+                          aria-label={`${t('common.delete')} ${p.name}`}
+                          onClick={() => deleteProduct(p)}
+                          disabled={deletingId === p.id}
+                          className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50"
+                        >
+                          <Icon
+                            i={deletingId === p.id ? 'loader-2' : 'trash-2'}
+                            size={14}
+                            className={deletingId === p.id ? 'animate-spin' : ''}
+                          />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

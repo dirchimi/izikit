@@ -15,6 +15,8 @@ interface NavItem {
   icon: string;
   key: string;
   href: string;
+  /** Si défini, l'item n'est visible que pour Manager/Patron (ADMIN+). */
+  managerOnly?: boolean;
 }
 interface NavSection {
   label?: string;
@@ -36,7 +38,11 @@ const ROLE_LABEL_KEY: Record<string, string> = {
 
 // Navigation groupée en sections. Compacte pour tenir sans défilement.
 const navSections: NavSection[] = [
-  { items: [{ icon: 'layout-dashboard', key: 'nav.dashboard', href: '/dashboard' }] },
+  {
+    items: [
+      { icon: 'layout-dashboard', key: 'nav.dashboard', href: '/dashboard', managerOnly: true },
+    ],
+  },
   {
     label: 'nav.section.vente',
     items: [
@@ -56,7 +62,12 @@ const navSections: NavSection[] = [
     label: 'nav.section.analyse',
     items: [
       { icon: 'file-text', key: 'nav.documents', href: '/documents' },
-      { icon: 'chart-no-axes-combined', key: 'nav.rapports', href: '/rapports' },
+      {
+        icon: 'chart-no-axes-combined',
+        key: 'nav.rapports',
+        href: '/rapports',
+        managerOnly: true,
+      },
     ],
   },
 ];
@@ -109,6 +120,11 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   const boutiqueName = boutique?.organization.name ?? 'Sahilley';
   const logoUrl = boutique?.settings?.logoUrl ?? null;
   const roleLabel = boutique ? t(ROLE_LABEL_KEY[boutique.role] ?? 'role.vendeur') : '';
+  // Manager (ADMIN) / Patron (OWNER) voient les écrans de pilotage ; le Vendeur non.
+  const canManage = boutique?.role === 'OWNER' || boutique?.role === 'ADMIN';
+  const visibleSections = navSections
+    .map((s) => ({ ...s, items: s.items.filter((it) => !it.managerOnly || canManage) }))
+    .filter((s) => s.items.length > 0);
 
   async function handleLogout() {
     const ok = await confirm({
@@ -155,7 +171,7 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
 
       {/* Nav (sections) — compacte, sans défilement en usage normal */}
       <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pt-2 pb-2">
-        {navSections.map((section, si) => (
+        {visibleSections.map((section, si) => (
           <div key={section.label ?? `s-${si}`} className="flex flex-col gap-0.5">
             {section.label && (
               <span className="text-sidebar-foreground/40 font-body px-3 pt-1 pb-0.5 text-[10px] font-bold tracking-wider uppercase">

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
 
 /**
  * LOT 3 — barre de navigation basse, affichée uniquement sous `lg` (mobile /
@@ -12,7 +13,7 @@ import { useT } from '@/contexts/LocaleContext';
  * le tiroir est ouvert (le tiroir a son propre overlay).
  */
 const items = [
-  { icon: 'layout-dashboard', key: 'nav.dashboard', href: '/dashboard' },
+  { icon: 'layout-dashboard', key: 'nav.dashboard', href: '/dashboard', managerOnly: true },
   { icon: 'shopping-cart', key: 'nav.vendre', href: '/vendre' },
   { icon: 'receipt-text', key: 'nav.ventes', href: '/ventes' },
   { icon: 'package', key: 'nav.stock', href: '/stock' },
@@ -25,13 +26,17 @@ function isActive(pathname: string, href: string): boolean {
 export default function BottomNav({ onMore }: { onMore: () => void }) {
   const pathname = usePathname();
   const t = useT();
+  // Le Tableau de bord est réservé Manager/Patron → masqué pour le Vendeur.
+  const { data: boutique } = useApi<{ role: string }>('/api/org/current');
+  const canManage = boutique?.role === 'OWNER' || boutique?.role === 'ADMIN';
+  const visibleItems = items.filter((it) => !it.managerOnly || canManage);
 
   return (
     <nav
       className="bg-sidebar border-sidebar-muted fixed inset-x-0 bottom-0 z-[90] flex border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
       aria-label={t('nav.dashboard')}
     >
-      {items.map((it) => {
+      {visibleItems.map((it) => {
         const active = isActive(pathname, it.href);
         return (
           <Link

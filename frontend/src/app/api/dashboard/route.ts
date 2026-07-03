@@ -28,7 +28,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
+    // Tableau de bord = données de pilotage (CA, marge…) → Manager/Patron.
+    const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
     const orgId = primary.organizationId;
 

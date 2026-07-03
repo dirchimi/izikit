@@ -33,7 +33,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
+    // Rapports (CA, marges, bénéfice) → réservés Manager/Patron.
+    const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
 
     const sp = new URL(req.url).searchParams;
