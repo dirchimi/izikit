@@ -245,7 +245,7 @@ export default function DepensesManager() {
             emptyLabel={t('depenses.emptyAll')}
             emptyIcon="receipt"
           >
-            <div className="bg-surface border-border rounded-lg border">
+            <div className="bg-surface border-border hidden rounded-lg border md:block">
               <div className="overflow-x-auto">
                 <div className="min-w-[820px]">
                   <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
@@ -306,6 +306,43 @@ export default function DepensesManager() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Cartes (mobile / tablette < md) */}
+            <div className="flex flex-col gap-3 md:hidden">
+              {visible.map((e) => (
+                <div
+                  key={e.id}
+                  className="bg-surface border-border flex flex-col gap-2 rounded-lg border p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-body text-muted-foreground font-mono text-xs">
+                      {e.number} · {fmtDate(e.occurredAt)}
+                    </span>
+                    <span
+                      className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
+                    >
+                      {e.category}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-body text-foreground text-sm font-medium">{e.label}</span>
+                    <span className="font-body text-foreground shrink-0 text-base font-bold">
+                      {formatFCFA(e.amount)} {t('common.fcfa')}
+                    </span>
+                  </div>
+                  {e.note && (
+                    <p className="font-body text-muted-foreground border-border border-t pt-2 text-xs">
+                      {e.note}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {visible.length === 0 && (
+                <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-5 py-6 text-sm">
+                  {t('depenses.empty')}
+                </div>
+              )}
             </div>
           </AsyncState>
         </div>

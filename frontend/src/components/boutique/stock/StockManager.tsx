@@ -340,7 +340,7 @@ export default function StockManager() {
             emptyLabel={t('stock.emptyAll')}
             emptyIcon="package"
           >
-            <div className="bg-surface border-border rounded-lg border">
+            <div className="bg-surface border-border hidden rounded-lg border md:block">
               <div className="overflow-x-auto">
                 <div className="min-w-[860px]">
                   {/* En-tête */}
@@ -508,6 +508,149 @@ export default function StockManager() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Cartes (mobile / tablette < md) */}
+            <div className="flex flex-col gap-3 md:hidden">
+              {visible.map((p) => {
+                const s = stockStatusConfig[p.status];
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-surface border-border flex flex-col gap-3 rounded-lg border p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => openPhotoPicker(p.id)}
+                        disabled={uploadingPhotoId === p.id}
+                        aria-label={t('stock.photo.change')}
+                        className="bg-muted border-border flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border disabled:opacity-60"
+                      >
+                        {uploadingPhotoId === p.id ? (
+                          <Icon
+                            i="loader"
+                            size={14}
+                            className="text-muted-foreground animate-spin"
+                          />
+                        ) : p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Icon i="camera" size={14} className="text-muted-foreground" />
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-body text-foreground truncate text-sm font-semibold">
+                            {p.name}
+                          </span>
+                          <span
+                            className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
+                          >
+                            {t(`stock.status.${p.status}`)}
+                          </span>
+                        </div>
+                        <span className="font-body text-muted-foreground font-mono text-xs">
+                          {p.ref} · {p.category}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="font-body grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{t('stock.col.buyPrice')}</span>
+                        <span className="text-foreground">{formatFCFA(p.buyPrice)}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{t('stock.col.sellPrice')}</span>
+                        <span className="text-foreground font-semibold">
+                          {formatFCFA(p.sellPrice)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{t('stock.col.stock')}</span>
+                        <span
+                          className={`font-bold ${
+                            p.status === 'out'
+                              ? 'text-danger'
+                              : p.status === 'low'
+                                ? 'text-warning'
+                                : 'text-foreground'
+                          }`}
+                        >
+                          {p.qty} {p.unite}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{t('stock.col.threshold')}</span>
+                        <span className="text-foreground">{p.threshold}</span>
+                      </div>
+                    </div>
+
+                    <div className="border-border flex items-center justify-end gap-1 border-t pt-2">
+                      <Dropdown
+                        align="end"
+                        width="w-56"
+                        trigger={
+                          <span
+                            aria-label={t('stock.actions.more')}
+                            className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                          >
+                            <Icon i="ellipsis-vertical" size={16} />
+                          </span>
+                        }
+                        items={[
+                          {
+                            label: t('stock.reappro.action'),
+                            icon: 'package-plus',
+                            onClick: () => setReapproTarget(p),
+                          },
+                          {
+                            label: t('stock.adjust.action'),
+                            icon: 'sliders-horizontal',
+                            onClick: () => setAdjustTarget(p),
+                          },
+                          {
+                            label: t('stock.history.action'),
+                            icon: 'history',
+                            onClick: () => setHistoryTarget(p),
+                          },
+                        ]}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`${t('common.edit')} ${p.name}`}
+                        onClick={() => setEditing(p)}
+                        className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                      >
+                        <Icon i="pencil" size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${t('common.delete')} ${p.name}`}
+                        onClick={() => deleteProduct(p)}
+                        disabled={deletingId === p.id}
+                        className="text-muted-foreground hover:bg-danger/10 hover:text-danger flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50"
+                      >
+                        <Icon
+                          i={deletingId === p.id ? 'loader-2' : 'trash-2'}
+                          size={14}
+                          className={deletingId === p.id ? 'animate-spin' : ''}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {visible.length === 0 && (
+                <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-5 py-6 text-sm">
+                  {t('stock.empty')}
+                </div>
+              )}
             </div>
           </AsyncState>
         </div>

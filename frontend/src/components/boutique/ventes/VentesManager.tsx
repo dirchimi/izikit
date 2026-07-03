@@ -272,7 +272,7 @@ export default function VentesManager() {
           emptyLabel={t('ventes.emptyAll')}
           emptyIcon="receipt"
         >
-          <div className="bg-surface border-border rounded-lg border">
+          <div className="bg-surface border-border hidden rounded-lg border md:block">
             <div className="overflow-x-auto">
               <div className="min-w-[840px]">
                 <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
@@ -376,6 +376,79 @@ export default function VentesManager() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Cartes (mobile / tablette < md) */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                className={`bg-surface border-border flex flex-col gap-2 rounded-lg border p-4 ${
+                  r.cancelled ? 'opacity-60' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-body text-muted-foreground font-mono text-xs">
+                    {r.number} · {r.date} {r.time}
+                  </span>
+                  {r.cancelled ? (
+                    <span className="font-body bg-muted text-muted-foreground shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold">
+                      {t('ventes.cancelled')}
+                    </span>
+                  ) : (
+                    <span
+                      className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
+                    >
+                      {t(METHOD_LABEL[r.method])}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`font-body text-sm font-medium ${
+                      r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
+                    }`}
+                  >
+                    {r.label}
+                  </span>
+                  <span className="font-body text-muted-foreground shrink-0 text-xs">×{r.qty}</span>
+                </div>
+                <div className="border-border flex items-center justify-between gap-2 border-t pt-2">
+                  <span
+                    className={`font-body text-base font-bold ${
+                      r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
+                    }`}
+                  >
+                    {formatFCFA(r.total)} {t('common.fcfa')}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openReceipt(r.id)}
+                      aria-label={t('receipt.title')}
+                      className="text-primary hover:bg-muted flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                    >
+                      <Icon i="receipt-text" size={16} />
+                    </button>
+                    {canCancel && !r.cancelled && (
+                      <button
+                        type="button"
+                        onClick={() => setCancelTarget({ id: r.id, number: r.number })}
+                        aria-label={t('ventes.cancel')}
+                        className="text-danger hover:bg-danger/10 flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                      >
+                        <Icon i="x-circle" size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rows.length === 0 && (
+              <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-5 py-6 text-sm">
+                {t('ventes.empty')}
+              </div>
+            )}
           </div>
         </AsyncState>
       </div>
