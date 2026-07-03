@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
+import ImageCropModal from '@/components/boutique/ImageCropModal';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
@@ -79,8 +80,9 @@ export default function AddProductForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
-  async function handleImageFile(e: ChangeEvent<HTMLInputElement>) {
+  function handleImageFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -88,9 +90,14 @@ export default function AddProductForm({
       toast(t('stock.photo.invalidType'), 'error');
       return;
     }
+    setCropFile(file); // ouvre le recadrage ; l'upload se fait après validation
+  }
+
+  async function uploadCropped(cropped: File) {
+    setCropFile(null);
     setUploadingImage(true);
     try {
-      const { url } = await uploadImage(file);
+      const { url } = await uploadImage(cropped);
       setImageUrl(url);
     } catch (err) {
       toast(imageUploadError(err, t), 'error');
@@ -315,6 +322,13 @@ export default function AddProductForm({
         <Icon i="plus" size={15} />
         {t('stock.form.submit')}
       </button>
+
+      <ImageCropModal
+        file={cropFile}
+        aspect={1}
+        onCancel={() => setCropFile(null)}
+        onConfirm={uploadCropped}
+      />
     </form>
   );
 }

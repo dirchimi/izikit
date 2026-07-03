@@ -14,11 +14,13 @@ import { docStatusConfig } from '@/lib/boutique/fixtures';
 import DocumentPreview from './DocumentPreview';
 import GenerateInvoicePanel from './GenerateInvoicePanel';
 import NewProformaForm, { type ProformaPayload } from './NewProformaForm';
+import PdfPreviewModal from './PdfPreviewModal';
+import { fetchPdfBlob, sharePdfViaWhatsapp } from '@/lib/boutique/pdfShare';
 import type { ApiDocument, UiDocStatus } from './types';
 
 interface OrgCurrent {
   organization: { name: string };
-  settings: { city: string | null };
+  settings: { city: string | null; logoUrl: string | null };
 }
 
 type Tab = 'factures' | 'proformas';
@@ -40,6 +42,8 @@ export default function DocumentsManager() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState<ApiDocument | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ documents: ApiDocument[] }>('/api/documents');
   const { data: orgData } = useApi<OrgCurrent>('/api/org/current');
@@ -48,6 +52,7 @@ export default function DocumentsManager() {
   const org = {
     name: orgData?.organization.name ?? 'Boutique',
     city: orgData?.settings.city ?? 'N’Djamena, Tchad',
+    logoUrl: orgData?.settings.logoUrl ?? null,
   };
 
   const factures = documents.filter((d) => d.type === 'FACTURE');
@@ -121,18 +126,39 @@ export default function DocumentsManager() {
     }
   }
 
-  function downloadPdf(doc: ApiDocument) {
-    window.open(`/api/documents/${doc.id}/pdf`, '_blank', 'noopener,noreferrer');
-  }
-
-  function shareWhatsapp(doc: ApiDocument) {
-    const digits = doc.clientPhone.replace(/\D/g, '');
+  function docShareText(doc: ApiDocument): string {
     const kindLabel = t(
       doc.type === 'FACTURE' ? 'documents.kind.facture' : 'documents.kind.proforma',
     );
-    const text = `${org.name} — ${kindLabel} ${doc.number}\n${t('common.total')}: ${formatFCFA(doc.total)} ${t('common.fcfa')}`;
-    const url = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    return `${org.name} — ${kindLabel} ${doc.number}\n${t('common.total')}: ${formatFCFA(doc.total)} ${t('common.fcfa')}`;
+  }
+
+  function docTitle(doc: ApiDocument): string {
+    const kindLabel = t(
+      doc.type === 'FACTURE' ? 'documents.kind.facture' : 'documents.kind.proforma',
+    );
+    return `${kindLabel} ${doc.number}`;
+  }
+
+  // Partage direct : récupère le PDF puis le partage (natif sur mobile avec le
+  // fichier joint, wa.me/<numéro> pré-rempli sinon). Plus de window.open du PDF.
+  async function shareWhatsapp(doc: ApiDocument) {
+    if (sharingId) return;
+    setSharingId(doc.id);
+    try {
+      const blob = await fetchPdfBlob(`/api/documents/${doc.id}/pdf`);
+      await sharePdfViaWhatsapp({
+        blob,
+        fileName: `${doc.number}.pdf`,
+        title: docTitle(doc),
+        text: docShareText(doc),
+        phone: doc.clientPhone,
+      });
+    } catch {
+      toast(t('documents.pdfError'), 'error');
+    } finally {
+      setSharingId(null);
+    }
   }
 
   return (
@@ -304,18 +330,23 @@ export default function DocumentsManager() {
                 <button
                   type="button"
                   onClick={() => shareWhatsapp(selected)}
-                  className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+                  disabled={sharingId === selected.id}
+                  className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
                 >
-                  <Icon i="share-2" size={14} />
+                  <Icon
+                    i={sharingId === selected.id ? 'loader-2' : 'share-2'}
+                    size={14}
+                    className={sharingId === selected.id ? 'animate-spin' : ''}
+                  />
                   {t('documents.shareWhatsapp')}
                 </button>
                 <button
                   type="button"
-                  onClick={() => downloadPdf(selected)}
+                  onClick={() => setPdfDoc(selected)}
                   className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
                 >
-                  <Icon i="printer" size={14} />
-                  {t('documents.downloadPdf')}
+                  <Icon i="file-text" size={14} />
+                  {t('documents.viewPdf')}
                 </button>
               </div>
             </div>
@@ -335,6 +366,16 @@ export default function DocumentsManager() {
       {creating && tab === 'proformas' && (
         <NewProformaForm onClose={() => setCreating(false)} onCreate={createProforma} />
       )}
+
+      <PdfPreviewModal
+        open={pdfDoc !== null}
+        path={pdfDoc ? `/api/documents/${pdfDoc.id}/pdf` : null}
+        fileName={pdfDoc ? `${pdfDoc.number}.pdf` : ''}
+        title={pdfDoc ? docTitle(pdfDoc) : ''}
+        shareText={pdfDoc ? docShareText(pdfDoc) : ''}
+        phone={pdfDoc?.clientPhone ?? null}
+        onClose={() => setPdfDoc(null)}
+      />
     </>
   );
 }

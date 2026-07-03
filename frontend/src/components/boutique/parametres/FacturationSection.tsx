@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Icon from '@/components/ui/Icon';
+import ImageCropModal from '@/components/boutique/ImageCropModal';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
@@ -39,6 +40,7 @@ export default function FacturationSection() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Initialise une seule fois (les revalidations n'écrasent pas la saisie).
@@ -78,7 +80,7 @@ export default function FacturationSection() {
     }
   }
 
-  async function handleLogoFile(e: ChangeEvent<HTMLInputElement>) {
+  function handleLogoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -86,9 +88,14 @@ export default function FacturationSection() {
       toast(t('parametres.logo.invalidType'), 'error');
       return;
     }
+    setCropFile(file); // recadrage avant upload
+  }
+
+  async function uploadCroppedLogo(cropped: File) {
+    setCropFile(null);
     setUploadingLogo(true);
     try {
-      const { url } = await uploadImage(file);
+      const { url } = await uploadImage(cropped);
       await api('/api/org/current', { method: 'PATCH', body: { logoUrl: url } });
       setLogoUrl(url);
       toast(t('parametres.logo.updated'), 'success');
@@ -258,6 +265,14 @@ export default function FacturationSection() {
           </p>
         </div>
       </div>
+
+      <ImageCropModal
+        file={cropFile}
+        aspect={1}
+        round
+        onCancel={() => setCropFile(null)}
+        onConfirm={uploadCroppedLogo}
+      />
     </div>
   );
 }

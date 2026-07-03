@@ -11,6 +11,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { coerceLines } from '@/lib/server/documents/helpers';
 import { renderDocumentPdf } from '@/lib/server/documents/pdf';
+import { fetchLogoDataUri } from '@/lib/server/documents/logo';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 export async function GET(
@@ -56,6 +57,7 @@ export async function GET(
                 address: true,
                 phone: true,
                 invoiceNote: true,
+                logoUrl: true,
               },
             },
           },
@@ -71,6 +73,7 @@ export async function GET(
     }
 
     const settings = doc.organization.settings;
+    const logo = await fetchLogoDataUri(settings?.logoUrl ?? null);
     const buffer = await renderDocumentPdf({
       type: doc.type === 'PROFORMA' ? 'PROFORMA' : 'FACTURE',
       number: doc.number,
@@ -88,6 +91,7 @@ export async function GET(
         phone: settings?.phone ?? null,
         currency: settings?.currency ?? 'XAF',
         invoiceNote: settings?.invoiceNote ?? null,
+        logo,
       },
     });
 

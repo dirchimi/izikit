@@ -4,8 +4,15 @@ import { useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
+import BottomNav from './BottomNav';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import OfflineBanner from '@/components/pwa/OfflineBanner';
+import { useApi } from '@/lib/useApi';
+
+interface BoutiqueHeaderData {
+  organization: { name: string };
+  settings: { logoUrl: string | null } | null;
+}
 
 /**
  * Responsive dashboard shell.
@@ -19,6 +26,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const close = () => setDrawerOpen(false);
   const pathname = usePathname();
+  // Partage le cache de /api/org/current avec la sidebar (même clé useApi).
+  const { data: boutique } = useApi<BoutiqueHeaderData>('/api/org/current');
+  const shopName = boutique?.organization.name ?? 'Sahilley';
+  const shopLogo = boutique?.settings?.logoUrl ?? null;
 
   return (
     <div className="bg-background font-body flex min-h-screen">
@@ -59,20 +70,31 @@ export default function AppShell({ children }: { children: ReactNode }) {
           >
             <Icon i="menu" size={22} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="bg-primary flex h-7 w-7 items-center justify-center rounded-md">
-              <Icon i="store" size={15} className="text-primary-foreground" />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="bg-primary flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md">
+              {shopLogo ? (
+                <img src={shopLogo} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <Icon i="store" size={15} className="text-primary-foreground" />
+              )}
             </div>
-            <span className="font-headings text-sidebar-foreground text-base font-bold tracking-tight">
-              Sahilley
+            <span className="font-headings text-sidebar-foreground truncate text-base font-bold tracking-tight">
+              {shopName}
             </span>
           </div>
         </header>
 
-        <main key={pathname} className="animate-fade-in min-w-0 flex-1">
+        {/* pb sous lg : laisse la place à la barre de navigation basse */}
+        <main
+          key={pathname}
+          className="animate-fade-in min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+        >
           {children}
         </main>
       </div>
+
+      {/* Navigation basse (mobile) — masquée quand le tiroir est ouvert */}
+      {!drawerOpen && <BottomNav onMore={() => setDrawerOpen(true)} />}
 
       {/* Bannière d'installation PWA (in-app, comme les apps de référence) */}
       <InstallPrompt />

@@ -57,7 +57,7 @@ export default function InstallPrompt() {
   if (!evt) return null;
 
   return (
-    <div className="animate-fade-in-up fixed inset-x-0 bottom-0 z-[110] p-3">
+    <div className="animate-fade-in-up fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[110] p-3 lg:bottom-0">
       <div className="bg-primary text-primary-foreground mx-auto flex max-w-2xl items-center gap-3 rounded-xl px-4 py-3 shadow-2xl">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15">
           <Icon i="download" size={20} />

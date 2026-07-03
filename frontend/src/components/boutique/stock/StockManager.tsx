@@ -16,6 +16,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import ComboBox from '@/components/ui/ComboBox';
 import Dropdown from '@/components/ui/Dropdown';
 import Modal from '@/components/ui/Modal';
+import ImageCropModal from '@/components/boutique/ImageCropModal';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
 import EditProductForm, { type EditProductInput } from './EditProductForm';
 import ReapproForm from './ReapproForm';
@@ -94,24 +95,32 @@ export default function StockManager() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
   const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   function openPhotoPicker(productId: string) {
     setPhotoTargetId(productId);
     photoInputRef.current?.click();
   }
 
-  async function handlePhotoFile(e: ChangeEvent<HTMLInputElement>) {
+  // Sélection du fichier → ouverture du recadrage (l'upload attend la validation).
+  function handlePhotoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    const productId = photoTargetId;
-    if (!file || !productId) return;
+    if (!file || !photoTargetId) return;
     if (!file.type.startsWith('image/')) {
       toast(t('stock.photo.invalidType'), 'error');
       return;
     }
+    setCropFile(file);
+  }
+
+  async function uploadCroppedPhoto(cropped: File) {
+    const productId = photoTargetId;
+    setCropFile(null);
+    if (!productId) return;
     setUploadingPhotoId(productId);
     try {
-      const { url } = await uploadImage(file);
+      const { url } = await uploadImage(cropped);
       await api(`/api/products/${productId}`, { method: 'PATCH', body: { imageUrl: url } });
       toast(t('stock.photo.updated'), 'success');
       await refresh();
@@ -121,6 +130,11 @@ export default function StockManager() {
       setUploadingPhotoId(null);
       setPhotoTargetId(null);
     }
+  }
+
+  function cancelPhotoCrop() {
+    setCropFile(null);
+    setPhotoTargetId(null);
   }
 
   const totalProduits = products.length;
@@ -547,6 +561,14 @@ export default function StockManager() {
 
       {/* Historique des mouvements */}
       <MovementsHistoryModal product={historyTarget} onClose={() => setHistoryTarget(null)} />
+
+      {/* Recadrage de la photo produit avant upload */}
+      <ImageCropModal
+        file={cropFile}
+        aspect={1}
+        onCancel={cancelPhotoCrop}
+        onConfirm={uploadCroppedPhoto}
+      />
     </>
   );
 }

@@ -19,6 +19,7 @@ const messages: Record<string, Msg> = {
   'nav.rapports': { fr: 'Rapports', en: 'Reports', ar: 'التقارير' },
   'nav.parametres': { fr: 'Paramètres', en: 'Settings', ar: 'الإعدادات' },
   'nav.appearance': { fr: 'Apparence & langue', en: 'Appearance & language', ar: 'المظهر واللغة' },
+  'nav.more': { fr: 'Plus', en: 'More', ar: 'المزيد' },
   'pwa.install.title': {
     fr: 'Installer l’application',
     en: 'Install the app',
@@ -1558,6 +1559,12 @@ const messages: Record<string, Msg> = {
     ar: 'هذا المستند عرض سعر وليس فاتورة نهائية.',
   },
   'documents.downloadPdf': { fr: 'Télécharger le PDF', en: 'Download PDF', ar: 'تنزيل PDF' },
+  'documents.viewPdf': { fr: 'Aperçu PDF', en: 'PDF preview', ar: 'معاينة PDF' },
+  'documents.pdfError': {
+    fr: 'Impossible de charger le PDF.',
+    en: 'Could not load the PDF.',
+    ar: 'تعذّر تحميل ملف PDF.',
+  },
   'documents.invoiceFromSale': {
     fr: 'Générer une facture',
     en: 'Generate an invoice',
@@ -1723,6 +1730,16 @@ const messages: Record<string, Msg> = {
     en: 'This information appears on your invoices',
     ar: 'تظهر هذه المعلومات على فواتيرك',
   },
+  // Recadrage d'image (logo boutique + photo produit)
+  'crop.title': { fr: "Recadrer l'image", en: 'Crop image', ar: 'اقتصاص الصورة' },
+  'crop.hint': {
+    fr: 'Glissez pour cadrer, utilisez le curseur pour zoomer.',
+    en: 'Drag to reposition, use the slider to zoom.',
+    ar: 'اسحب لتغيير الموضع، واستخدم شريط التمرير للتكبير.',
+  },
+  'crop.zoom': { fr: 'Zoom', en: 'Zoom', ar: 'تكبير' },
+  'crop.apply': { fr: 'Valider', en: 'Apply', ar: 'تطبيق' },
+  'crop.processing': { fr: 'Traitement…', en: 'Processing…', ar: 'جارٍ المعالجة…' },
   'parametres.logo.title': { fr: 'Logo de la boutique', en: 'Shop logo', ar: 'شعار المتجر' },
   'parametres.logo.hint': {
     fr: 'PNG ou JPG, max 1 Mo',

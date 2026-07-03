@@ -28,11 +28,20 @@ export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: B
       {/* En-tête du document */}
       <div className="border-border flex flex-col gap-4 border-b px-5 py-6 sm:flex-row sm:items-start sm:justify-between md:px-8">
         <div>
-          <div className="bg-primary mb-3 flex h-10 w-10 items-center justify-center rounded-md">
-            <span className="font-headings text-primary-foreground text-base font-bold">
-              {org.name.charAt(0).toUpperCase() || 'B'}
-            </span>
-          </div>
+          {org.logoUrl ? (
+            <img
+              src={org.logoUrl}
+              alt=""
+              className="border-border mb-3 h-12 w-12 rounded-md border object-cover"
+              crossOrigin="anonymous"
+            />
+          ) : (
+            <div className="bg-primary mb-3 flex h-10 w-10 items-center justify-center rounded-md">
+              <span className="font-headings text-primary-foreground text-base font-bold">
+                {org.name.charAt(0).toUpperCase() || 'B'}
+              </span>
+            </div>
+          )}
           <p className="font-headings text-foreground text-base font-bold">{org.name}</p>
           <p className="text-muted-foreground font-body mt-1 text-xs">{org.city}</p>
         </div>

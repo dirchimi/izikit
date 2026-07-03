@@ -38,6 +38,7 @@
     "next": "^16.2.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-easy-crop": "^6.1.0",
     "resend": "^6.12.2",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",

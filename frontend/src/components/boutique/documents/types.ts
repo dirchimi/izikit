@@ -27,4 +27,5 @@ export interface ApiDocument {
 export interface BoutiqueHeader {
   name: string;
   city: string;
+  logoUrl: string | null;
 }

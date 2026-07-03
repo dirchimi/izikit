@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
+import ImageCropModal from '@/components/boutique/ImageCropModal';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
@@ -82,6 +83,13 @@ export default function BoutiqueInfoForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  // Re-synchronise l'aperçu quand le parent recharge la boutique (le state était
+  // figé à la valeur initiale — le logo n'apparaissait pas après un refresh).
+  useEffect(() => {
+    setLogoUrl(initialLogoUrl);
+  }, [initialLogoUrl]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -93,7 +101,7 @@ export default function BoutiqueInfoForm({
     }
   }
 
-  async function handleLogoFile(e: ChangeEvent<HTMLInputElement>) {
+  function handleLogoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ''; // autorise la re-sélection du même fichier
     if (!file) return;
@@ -101,9 +109,14 @@ export default function BoutiqueInfoForm({
       toast(t('parametres.logo.invalidType'), 'error');
       return;
     }
+    setCropFile(file); // recadrage avant upload
+  }
+
+  async function uploadCroppedLogo(cropped: File) {
+    setCropFile(null);
     setUploadingLogo(true);
     try {
-      const { url } = await uploadImage(file);
+      const { url } = await uploadImage(cropped);
       await onSaveLogo(url);
       setLogoUrl(url);
       toast(t('parametres.logo.updated'), 'success');
@@ -130,8 +143,6 @@ export default function BoutiqueInfoForm({
         <div className="flex items-center gap-5">
           <div className="bg-primary flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
             {logoUrl ? (
-              // next/image non utilisable : URLs Cloudinary distantes non
-              // déclarées dans next.config (images.remotePatterns absent).
               <img
                 src={logoUrl}
                 alt={t('parametres.logo.title')}
@@ -250,6 +261,14 @@ export default function BoutiqueInfoForm({
           </button>
         </div>
       </div>
+
+      <ImageCropModal
+        file={cropFile}
+        aspect={1}
+        round
+        onCancel={() => setCropFile(null)}
+        onConfirm={uploadCroppedLogo}
+      />
     </form>
   );
 }

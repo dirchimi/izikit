@@ -23,6 +23,7 @@ interface NavSection {
 
 interface BoutiqueCurrent {
   organization: { id: string; slug: string; name: string };
+  settings: { logoUrl: string | null } | null;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
 
@@ -106,6 +107,7 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   // Sonde admin : 403 pour les non-admins → `data` reste null → lien masqué.
   const { data: adminMe } = useApi<{ admin: { role: string } }>('/api/admin/me');
   const boutiqueName = boutique?.organization.name ?? 'Sahilley';
+  const logoUrl = boutique?.settings?.logoUrl ?? null;
   const roleLabel = boutique ? t(ROLE_LABEL_KEY[boutique.role] ?? 'role.vendeur') : '';
 
   async function handleLogout() {
@@ -125,14 +127,18 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
 
   return (
     <div className="bg-sidebar flex h-full w-full flex-col">
-      {/* Logo */}
+      {/* Logo boutique (uploadé dans Paramètres) — repli icône générique sinon */}
       <div className="border-sidebar-muted border-b px-6 py-4">
         <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2">
-          <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
-            <Icon i="store" size={18} className="text-primary-foreground" />
+          <div className="bg-primary flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md">
+            {logoUrl ? (
+              <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon i="store" size={18} className="text-primary-foreground" />
+            )}
           </div>
-          <span className="font-headings text-sidebar-foreground text-lg font-bold tracking-tight">
-            Sahilley
+          <span className="font-headings text-sidebar-foreground truncate text-lg font-bold tracking-tight">
+            {boutiqueName}
           </span>
         </Link>
       </div>

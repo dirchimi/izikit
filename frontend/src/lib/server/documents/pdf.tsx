@@ -3,7 +3,7 @@
 // son propre moteur de styles. Montants en FCFA entier (séparateur d'espace).
 import 'server-only';
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import { type DocLine } from './helpers';
 
 export interface PdfInput {
@@ -23,6 +23,8 @@ export interface PdfInput {
     phone?: string | null;
     currency: string;
     invoiceNote?: string | null;
+    /** data-URI JPEG/PNG du logo (voir server/documents/logo.ts), ou null. */
+    logo?: string | null;
   };
 }
 
@@ -42,6 +44,7 @@ const s = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: C.ink, fontFamily: 'Helvetica' },
   row: { flexDirection: 'row' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  logo: { width: 48, height: 48, marginBottom: 8, objectFit: 'contain' },
   brandName: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: C.ink },
   muted: { color: C.muted },
   title: { fontSize: 22, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
@@ -106,6 +109,7 @@ function buildElement(input: PdfInput) {
         {/* En-tête */}
         <View style={s.between}>
           <View>
+            {input.org.logo ? <Image src={input.org.logo} style={s.logo} /> : null}
             <Text style={s.brandName}>{input.org.name}</Text>
             {input.org.address ? <Text style={s.small}>{input.org.address}</Text> : null}
             <Text style={s.small}>{input.org.city ?? 'N’Djamena, Tchad'}</Text>
