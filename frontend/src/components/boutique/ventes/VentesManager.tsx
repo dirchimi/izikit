@@ -12,35 +12,42 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
 
-type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT';
+type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
 interface ApiSale {
   id: string;
   number: string;
   method: ApiMethod;
   total: number;
+  cashAmount: number;
+  mobileAmount: number;
+  creditAmount: number;
   status: string; // ACTIVE | CANCELLED
   createdAt: string;
+  sellerId: string | null;
+  sellerName: string | null;
   customerName: string | null;
   customerPhone: string | null;
   items: { name: string; qty: number; unitPrice: number }[];
 }
 
 type Period = 'all' | 'today' | 'date';
-type MethodFilter = ApiMethod | 'all';
+type MethodFilter = 'CASH' | 'MOBILE' | 'CREDIT' | 'all';
 
 const METHOD_LABEL: Record<ApiMethod, string> = {
   CASH: 'method.cash',
   MOBILE: 'method.mobile',
   CREDIT: 'method.credit',
+  MIXED: 'method.mixed',
 };
 const METHOD_BADGE: Record<ApiMethod, string> = {
   CASH: 'bg-badge-cash text-badge-cash-foreground',
   MOBILE: 'bg-badge-mobile text-badge-mobile-foreground',
   CREDIT: 'bg-badge-credit text-badge-credit-foreground',
+  MIXED: 'bg-secondary text-secondary-foreground',
 };
 const METHOD_TABS: MethodFilter[] = ['all', 'CASH', 'MOBILE', 'CREDIT'];
 
@@ -67,8 +74,10 @@ export default function VentesManager() {
   const [period, setPeriod] = useState<Period>('all');
   const [pickDate, setPickDate] = useState('');
   const [method, setMethod] = useState<MethodFilter>('all');
+  const [seller, setSeller] = useState<string>('all');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; number: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
   const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
@@ -79,16 +88,32 @@ export default function VentesManager() {
   const { data: org } = useApi<{ role: string }>('/api/org/current');
   const canCancel = org?.role === 'OWNER' || org?.role === 'ADMIN';
 
+  function closeCancel() {
+    setCancelTarget(null);
+    setCancelReason('');
+  }
+
   async function confirmCancel() {
     if (!cancelTarget) return;
+    if (cancelReason.trim() === '') {
+      toast(t('ventes.cancel.reasonRequired'), 'error');
+      return;
+    }
     setCancelling(true);
     try {
-      await api(`/api/sales/${cancelTarget.id}/cancel`, { method: 'POST' });
+      await api(`/api/sales/${cancelTarget.id}/cancel`, {
+        method: 'POST',
+        body: { reason: cancelReason.trim() },
+      });
       toast(t('ventes.cancel.success', { number: cancelTarget.number }), 'success');
-      setCancelTarget(null);
+      closeCancel();
       await refresh();
-    } catch {
-      toast(t('async.error'), 'error');
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      toast(
+        code === 'CANCEL_WINDOW_EXPIRED' ? t('ventes.cancel.tooLate') : t('async.error'),
+        'error',
+      );
     } finally {
       setCancelling(false);
     }
@@ -102,6 +127,7 @@ export default function VentesManager() {
       createdAt: s.createdAt,
       method: s.method,
       total: s.total,
+      payments: { cash: s.cashAmount, mobile: s.mobileAmount, credit: s.creditAmount },
       customerName: s.customerName,
       customerPhone: s.customerPhone,
       items: s.items,
@@ -109,13 +135,21 @@ export default function VentesManager() {
   }
   const now = new Date();
 
+  // Vendeurs distincts (traçabilité) : construit le filtre à partir des ventes.
+  const sellers = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sales) {
+      if (s.sellerId) map.set(s.sellerId, s.sellerName ?? s.sellerId);
+    }
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [sales]);
+
   // KPIs « du jour » dérivés des ventes chargées (hors ventes annulées).
   const todays = sales.filter((s) => s.status !== 'CANCELLED' && sameDay(s.createdAt, now));
   const caToday = todays.reduce((sum, s) => sum + s.total, 0);
   const countToday = todays.length;
-  const creditToday = todays
-    .filter((s) => s.method === 'CREDIT')
-    .reduce((sum, s) => sum + s.total, 0);
+  // Part vendue à crédit du jour = somme des parts crédit (couvre les mixtes).
+  const creditToday = todays.reduce((sum, s) => sum + s.creditAmount, 0);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -125,7 +159,8 @@ export default function VentesManager() {
           (period === 'all' ||
             (period === 'today' && sameDay(s.createdAt, now)) ||
             (period === 'date' && pickDate !== '' && isoToYmd(s.createdAt) === pickDate)) &&
-          (method === 'all' || s.method === method),
+          (method === 'all' || s.method === method) &&
+          (seller === 'all' || s.sellerId === seller),
       )
       .map((s) => {
         const d = new Date(s.createdAt);
@@ -140,13 +175,14 @@ export default function VentesManager() {
           qty: s.items.reduce((sum, it) => sum + it.qty, 0),
           total: s.total,
           method: s.method,
+          sellerName: s.sellerName,
           cancelled: s.status === 'CANCELLED',
         };
       })
       .filter(
         (r) => q === '' || r.label.toLowerCase().includes(q) || r.number.toLowerCase().includes(q),
       );
-  }, [sales, search, period, pickDate, method]);
+  }, [sales, search, period, pickDate, method, seller]);
 
   const todayYmd = isoToYmd(now.toISOString());
   const periodLabel =
@@ -261,6 +297,37 @@ export default function VentesManager() {
               );
             })}
           </div>
+
+          {/* Filtre vendeur (traçabilité) — visible dès qu'il y a plusieurs vendeurs */}
+          {sellers.length > 1 && (
+            <Dropdown
+              align="start"
+              width="w-52"
+              trigger={
+                <span className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <Icon i="user" size={14} className="text-muted-foreground" />
+                  {seller === 'all'
+                    ? t('ventes.allSellers')
+                    : (sellers.find((x) => x.id === seller)?.name ?? t('ventes.seller'))}
+                  <Icon i="chevron-down" size={14} className="text-muted-foreground" />
+                </span>
+              }
+              items={[
+                {
+                  label: t('ventes.allSellers'),
+                  icon: 'users',
+                  active: seller === 'all',
+                  onClick: () => setSeller('all'),
+                },
+                ...sellers.map((s) => ({
+                  label: s.name,
+                  icon: 'user',
+                  active: seller === s.id,
+                  onClick: () => setSeller(s.id),
+                })),
+              ]}
+            />
+          )}
         </div>
 
         {/* Table */}
@@ -403,6 +470,11 @@ export default function VentesManager() {
                     </span>
                   )}
                 </div>
+                {r.sellerName && sellers.length > 1 && (
+                  <span className="font-body text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <Icon i="user" size={11} /> {r.sellerName}
+                  </span>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={`font-body text-sm font-medium ${
@@ -457,17 +529,33 @@ export default function VentesManager() {
 
       <Modal
         open={cancelTarget !== null}
-        onClose={() => !cancelling && setCancelTarget(null)}
+        onClose={() => !cancelling && closeCancel()}
         title={t('ventes.cancel.title')}
         size="sm"
       >
         <p className="font-body text-foreground text-sm">
           {t('ventes.cancel.body', { number: cancelTarget?.number ?? '' })}
         </p>
+        <div className="mt-4 flex flex-col gap-1">
+          <label
+            className="font-body text-foreground text-xs font-semibold"
+            htmlFor="cancel-reason"
+          >
+            {t('ventes.cancel.reasonLabel')}
+          </label>
+          <textarea
+            id="cancel-reason"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder={t('ventes.cancel.reasonPlaceholder')}
+            rows={2}
+            className="border-border bg-input text-foreground font-body placeholder:text-muted-foreground focus:border-primary resize-none rounded-md border px-3 py-2 text-sm outline-none"
+          />
+        </div>
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            onClick={() => setCancelTarget(null)}
+            onClick={closeCancel}
             disabled={cancelling}
             className="font-body border-border text-foreground hover:bg-muted rounded-md border px-4 py-2 text-sm disabled:opacity-50"
           >

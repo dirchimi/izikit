@@ -189,8 +189,10 @@ model Customer {
 }
 
 // Vente (Phase 3). `number` séquentiel par boutique (ex V-0001). `method`:
-// CASH | MOBILE | CREDIT. `total` = Σ(items) en FCFA entier. La création d'une
-// vente décrémente le stock via des StockMovement OUT dans la même transaction.
+// CASH | MOBILE | CREDIT | MIXED. `total` = Σ(items) en FCFA entier. Paiement
+// mixte : cashAmount + mobileAmount + creditAmount = total ; la part crédit
+// (creditAmount) engendre la créance. La création d'une vente décrémente le
+// stock via des StockMovement OUT dans la même transaction.
 model Sale {
   id             String       @id @default(cuid())
   organizationId String
@@ -198,11 +200,15 @@ model Sale {
   number         String
   customerId     String?
   customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  method         String // CASH | MOBILE | CREDIT
+  method         String // CASH | MOBILE | CREDIT | MIXED
   total          Int
+  cashAmount     Int          @default(0) // part réglée en espèces
+  mobileAmount   Int          @default(0) // part réglée en mobile money
+  creditAmount   Int          @default(0) // part à crédit (= montant de la créance)
   status         String       @default("ACTIVE") // ACTIVE | CANCELLED
   cancelledAt    DateTime? // horodatage de l'annulation (null tant qu'active)
   cancelledById  String? // utilisateur (Patron/Manager) ayant annulé la vente
+  cancelReason   String? // motif d'annulation (obligatoire à l'annulation)
   createdById    String?
   items          SaleItem[]
   receivable     Receivable?

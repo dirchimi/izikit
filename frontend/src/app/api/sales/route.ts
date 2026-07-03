@@ -20,31 +20,48 @@ import { onSaleCommitted } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
-const Body = z.object({
-  items: z
-    .array(
-      z.object({
-        productId: z.string().min(1),
-        qty: z.number().int().positive(),
-        // Ligne facturée au prix de gros (prixGros) plutôt qu'au détail.
-        wholesale: z.boolean().optional(),
-      }),
-    )
-    .min(1),
-  method: z.enum(['cash', 'mobile', 'credit']),
-  customer: z
-    .object({
-      id: z.string().min(1).optional(),
-      name: z.string().trim().max(120).optional(),
-      phone: z.string().trim().max(40).optional(),
-    })
-    .optional(),
-});
+const Body = z
+  .object({
+    items: z
+      .array(
+        z.object({
+          productId: z.string().min(1),
+          qty: z.number().int().positive(),
+          // Ligne facturée au prix de gros (prixGros) plutôt qu'au détail.
+          wholesale: z.boolean().optional(),
+        }),
+      )
+      .min(1),
+    // Paiement unique (compat). Absent si une ventilation `payments` est fournie.
+    method: z.enum(['cash', 'mobile', 'credit']).optional(),
+    // Paiement mixte : une ou plusieurs tranches par méthode. Leur somme doit
+    // égaler le total (recalculé serveur-side). La part `credit` devient la créance.
+    payments: z
+      .array(
+        z.object({
+          method: z.enum(['cash', 'mobile', 'credit']),
+          amount: z.number().int().nonnegative(),
+        }),
+      )
+      .max(3)
+      .optional(),
+    customer: z
+      .object({
+        id: z.string().min(1).optional(),
+        name: z.string().trim().max(120).optional(),
+        phone: z.string().trim().max(40).optional(),
+      })
+      .optional(),
+  })
+  .refine((d) => d.method !== undefined || (d.payments?.length ?? 0) > 0, {
+    message: 'method_or_payments_required',
+  });
 
 type CheckoutResult =
   | { kind: 'PRODUCT_NOT_FOUND'; productId: string }
   | { kind: 'INSUFFICIENT'; productId: string }
   | { kind: 'CREDIT_NO_CUSTOMER' }
+  | { kind: 'PAYMENT_MISMATCH' }
   | { kind: 'OK'; saleId: string; number: string; total: number };
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -72,20 +89,43 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         number: true,
         method: true,
         total: true,
+        cashAmount: true,
+        mobileAmount: true,
+        creditAmount: true,
         status: true,
         createdAt: true,
+        createdById: true,
         customer: { select: { name: true, phone: true } },
         items: { select: { name: true, qty: true, unitPrice: true } },
       },
     });
+
+    // Nom du vendeur (traçabilité) : pas de relation Sale→User, on résout les
+    // ids en un seul findMany. `name` peut être null (compte email) → email.
+    const sellerIds = Array.from(
+      new Set(rows.map((s) => s.createdById).filter((v): v is string => v !== null)),
+    );
+    const sellers =
+      sellerIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: sellerIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [];
+    const sellerName = new Map(sellers.map((u) => [u.id, u.name ?? u.email]));
 
     const sales = rows.map((s) => ({
       id: s.id,
       number: s.number,
       method: s.method,
       total: s.total,
+      cashAmount: s.cashAmount,
+      mobileAmount: s.mobileAmount,
+      creditAmount: s.creditAmount,
       status: s.status,
       createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+      sellerId: s.createdById,
+      sellerName: s.createdById ? (sellerName.get(s.createdById) ?? null) : null,
       customerName: s.customer?.name ?? null,
       customerPhone: s.customer?.phone ?? null,
       items: s.items,
@@ -127,9 +167,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const orgId = primary.organizationId;
     const userSub = auth.user.sub;
-    const method = parsed.data.method.toUpperCase();
     const items = parsed.data.items;
     const customerInput = parsed.data.customer;
+    const paymentsInput = parsed.data.payments;
+    const legacyMethod = parsed.data.method;
 
     const result: CheckoutResult = await prisma.$transaction(
       async (tx) => {
@@ -176,12 +217,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
           customerId = c.id;
         }
-        if (method === 'CREDIT' && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
-
         const total = items.reduce((sum, item) => {
           const p = byId.get(item.productId);
           return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
         }, 0);
+
+        // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
+        // égaler le total. Sinon : paiement unique via `method` (compat).
+        const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
+        if (paymentsInput && paymentsInput.length > 0) {
+          for (const p of paymentsInput) {
+            bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+          }
+          if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
+        } else {
+          bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
+        }
+        const creditAmount = bd.CREDIT;
+        const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
+        const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
+
+        // La part crédit exige un client (sélectionné ou créé à la volée).
+        if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
 
         const count = await tx.sale.count({ where: { organizationId: orgId } });
         const number = `V-${String(count + 1).padStart(4, '0')}`;
@@ -192,6 +249,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             number,
             method,
             total,
+            cashAmount: bd.CASH,
+            mobileAmount: bd.MOBILE,
+            creditAmount,
             createdById: userSub,
             ...(customerId ? { customerId } : {}),
             items: {
@@ -227,15 +287,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         }
 
-        // Vente à crédit → ouvre une créance (Phase 4). customerId est garanti
-        // ici car CREDIT sans client a déjà renvoyé CREDIT_NO_CUSTOMER plus haut.
-        if (method === 'CREDIT' && customerId) {
+        // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
+        // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
+        if (creditAmount > 0 && customerId) {
           await tx.receivable.create({
             data: {
               organizationId: orgId,
               customerId,
               saleId: sale.id,
-              amount: total,
+              amount: creditAmount,
               status: 'OPEN',
             },
           });
@@ -261,6 +321,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (result.kind === 'CREDIT_NO_CUSTOMER') {
       return NextResponse.json(
         { error: 'CREDIT_NEEDS_CUSTOMER', message: 'Une vente à crédit exige un client' },
+        { status: 422, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (result.kind === 'PAYMENT_MISMATCH') {
+      return NextResponse.json(
+        {
+          error: 'PAYMENT_MISMATCH',
+          message: 'La ventilation du paiement ne correspond pas au total',
+        },
         { status: 422, headers: { 'x-request-id': ctx.requestId } },
       );
     }

@@ -31,13 +31,20 @@ const adminGate = {
 function params(id: string): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
 }
-function makeReq(csrf: 'match' | 'missing' = 'match'): NextRequest {
+function makeReq(
+  csrf: 'match' | 'missing' = 'match',
+  reason: string | null = 'erreur de saisie',
+): NextRequest {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (csrf === 'match') {
     headers['x-csrf-token'] = 'tok';
     headers['cookie'] = 'app-csrf=tok';
   }
-  return new NextRequest('http://test/api/sales/s1/cancel', { method: 'POST', headers });
+  return new NextRequest('http://test/api/sales/s1/cancel', {
+    method: 'POST',
+    headers,
+    ...(reason !== null ? { body: JSON.stringify({ reason }) } : {}),
+  });
 }
 
 beforeEach(() => {
@@ -71,6 +78,7 @@ describe('POST /api/sales/[id]/cancel', () => {
       organizationId: 'org1',
       number: 'V-0007',
       status: 'ACTIVE',
+      createdAt: new Date(),
       items: [
         { productId: 'p1', qty: 2 },
         { productId: 'p2', qty: 3 },
@@ -120,6 +128,7 @@ describe('POST /api/sales/[id]/cancel', () => {
       organizationId: 'org1',
       number: 'V-0008',
       status: 'ACTIVE',
+      createdAt: new Date(),
       items: [{ productId: 'p1', qty: 1 }],
       receivable: null,
     } as never);
@@ -138,6 +147,7 @@ describe('POST /api/sales/[id]/cancel', () => {
       organizationId: 'org1',
       number: 'V-0009',
       status: 'ACTIVE',
+      createdAt: new Date(),
       items: [{ productId: null, qty: 4 }],
       receivable: null,
     } as never);

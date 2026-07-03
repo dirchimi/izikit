@@ -13,6 +13,7 @@ interface LineDraft {
 export interface ProformaPayload {
   clientName: string;
   clientPhone?: string;
+  validityDays?: number;
   lines: { article: string; qty: number; unitPrice: number }[];
 }
 
@@ -33,6 +34,7 @@ export default function NewProformaForm({
   const t = useT();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
+  const [validityDays, setValidityDays] = useState('30');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,9 +62,11 @@ export default function NewProformaForm({
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
+    const days = Number(validityDays);
     const ok = await onCreate({
       clientName: clientName.trim(),
       ...(clientPhone.trim() ? { clientPhone: clientPhone.trim() } : {}),
+      ...(Number.isInteger(days) && days > 0 ? { validityDays: days } : {}),
       lines: parsed,
     });
     setSubmitting(false);
@@ -113,6 +117,19 @@ export default function NewProformaForm({
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}
                 placeholder="+235 …"
+                className={fieldClass}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass} htmlFor="pf-validity">
+                {t('documents.validityField')}
+              </label>
+              <input
+                id="pf-validity"
+                type="number"
+                min="1"
+                value={validityDays}
+                onChange={(e) => setValidityDays(e.target.value)}
                 className={fieldClass}
               />
             </div>

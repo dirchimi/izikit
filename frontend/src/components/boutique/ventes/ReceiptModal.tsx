@@ -7,7 +7,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
 
-export type ReceiptMethod = 'CASH' | 'MOBILE' | 'CREDIT';
+export type ReceiptMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
 
 /** Trait pointillé horizontal sur le canvas du reçu. */
 function dashed(ctx: CanvasRenderingContext2D, x1: number, x2: number, y: number): void {
@@ -26,9 +26,23 @@ export interface ReceiptData {
   createdAt: string; // ISO
   method: ReceiptMethod;
   total: number;
+  // Ventilation du paiement (mixte). Absent → affichage mono-méthode (`method`).
+  payments?: { cash: number; mobile: number; credit: number };
   customerName: string | null;
   customerPhone: string | null;
   items: { name: string; qty: number; unitPrice: number }[];
+}
+
+/** Lignes de paiement non nulles à afficher sur le reçu (ventilation ou méthode unique). */
+function paymentLines(r: ReceiptData): { key: ReceiptMethod; amount: number }[] {
+  if (r.payments) {
+    const rows: { key: ReceiptMethod; amount: number }[] = [];
+    if (r.payments.cash > 0) rows.push({ key: 'CASH', amount: r.payments.cash });
+    if (r.payments.mobile > 0) rows.push({ key: 'MOBILE', amount: r.payments.mobile });
+    if (r.payments.credit > 0) rows.push({ key: 'CREDIT', amount: r.payments.credit });
+    if (rows.length > 0) return rows;
+  }
+  return [{ key: r.method, amount: r.total }];
 }
 
 interface OrgCurrent {
@@ -57,6 +71,7 @@ const METHOD_KEY: Record<ReceiptMethod, string> = {
   CASH: 'method.cash',
   MOBILE: 'method.mobile',
   CREDIT: 'method.credit',
+  MIXED: 'method.mixed',
 };
 
 /**
@@ -95,12 +110,15 @@ export default function ReceiptModal({
     if (!receipt) return null;
     const W = 380;
     const PAD = 24;
+    const payLines = paymentLines(receipt);
     const logo = logoUrl ? await loadImageSafe(logoUrl) : null;
     const logoH = logo ? 56 : 0;
     // Hauteur calculée à l'avance (le canvas est de taille fixe).
     let H = PAD + logoH + 24 + (city ? 18 : 6) + (phone ? 14 : 0) + (address ? 14 : 0) + 24 + 26;
     if (receipt.customerName) H += 18;
     H += 18 + receipt.items.length * 22 + 26 + 28 + 20 + 24 + 18 + PAD;
+    // Lignes de paiement supplémentaires (ventilation mixte) : +16px chacune.
+    H += 16 * Math.max(0, payLines.length - 1);
 
     const dpr = 2;
     const canvas = document.createElement('canvas');
@@ -190,12 +208,17 @@ export default function ReceiptModal({
     ctx.textAlign = 'right';
     ctx.fillText(`${formatFCFA(receipt.total)} ${t('common.fcfa')}`, W - PAD, y);
     y += 18;
-    // Paiement
+    // Paiement — une ligne par méthode réglée (ventilation mixte).
     ctx.fillStyle = '#737373';
     ctx.font = '11px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${t('receipt.paidWith')}: ${t(METHOD_KEY[receipt.method])}`, PAD, y);
-    y += 20;
+    for (const line of payLines) {
+      ctx.textAlign = 'left';
+      ctx.fillText(`${t(METHOD_KEY[line.key])}`, PAD, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${formatFCFA(line.amount)} ${t('common.fcfa')}`, W - PAD, y);
+      y += 16;
+    }
+    y += 4;
     dashed(ctx, PAD, W - PAD, y);
     y += 18;
     ctx.fillStyle = '#737373';
@@ -325,9 +348,16 @@ export default function ReceiptModal({
                 {formatFCFA(receipt.total)} {t('common.fcfa')}
               </span>
             </div>
-            <p className="font-body mt-1 text-xs text-neutral-500">
-              {t('receipt.paidWith')}: {t(METHOD_KEY[receipt.method])}
-            </p>
+            <div className="font-body mt-1 flex flex-col gap-0.5 text-xs text-neutral-500">
+              {paymentLines(receipt).map((line) => (
+                <div key={line.key} className="flex justify-between">
+                  <span>{t(METHOD_KEY[line.key])}</span>
+                  <span>
+                    {formatFCFA(line.amount)} {t('common.fcfa')}
+                  </span>
+                </div>
+              ))}
+            </div>
 
             <div className="my-3 border-t border-dashed border-neutral-300" />
             <p className="font-body text-center text-xs text-neutral-500">

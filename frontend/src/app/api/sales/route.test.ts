@@ -207,10 +207,17 @@ describe('GET /api/sales', () => {
         number: 'V-0006',
         method: 'CREDIT',
         total: 13500,
+        cashAmount: 0,
+        mobileAmount: 0,
+        creditAmount: 13500,
+        createdById: 'user-1',
         createdAt: new Date('2026-06-20T10:00:00Z'),
         customer: { name: 'Moussa' },
         items: [{ name: 'Riz', qty: 2, unitPrice: 6000 }],
       },
+    ] as never);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: 'user-1', name: 'Awa', email: 'awa@example.com' },
     ] as never);
     const res = await GET(makeGet());
     expect(res.status).toBe(200);

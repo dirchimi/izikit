@@ -43,6 +43,14 @@ const METHOD_KEY: Record<PaymentMethod, string> = {
   mobile: 'method.mobile',
   credit: 'method.credit',
 };
+const METHOD_ICON: Record<PaymentMethod, string> = {
+  cash: 'banknote',
+  mobile: 'smartphone',
+  credit: 'hand-coins',
+};
+/** Montants ventilés du paiement mixte (chaînes contrôlées par les inputs). */
+type SplitAmounts = { cash: string; mobile: string; credit: string };
+const num = (v: string) => Math.max(0, Math.trunc(Number(v) || 0));
 
 export default function VendrePos() {
   const { toast } = useToast();
@@ -51,6 +59,8 @@ export default function VendrePos() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Tous');
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [split, setSplit] = useState(false);
+  const [amounts, setAmounts] = useState<SplitAmounts>({ cash: '', mobile: '', credit: '' });
   const [client, setClient] = useState<PickedClient | null>(null);
   const [cart, setCart] = useState<CartLineData[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +88,11 @@ export default function VendrePos() {
 
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   const subtotal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+
+  // Paiement mixte : somme ventilée + reste à répartir + part crédit.
+  const splitSum = num(amounts.cash) + num(amounts.mobile) + num(amounts.credit);
+  const remaining = subtotal - splitSum;
+  const creditPortion = split ? num(amounts.credit) : method === 'credit' ? subtotal : 0;
 
   function addToCart(product: ApiProduct) {
     setCart((prev) => {
@@ -142,7 +157,14 @@ export default function VendrePos() {
     const code = err instanceof ApiError ? err.code : '';
     if (code === 'INSUFFICIENT_STOCK') return t('pos.insufficientStock');
     if (code === 'CREDIT_NEEDS_CUSTOMER') return t('pos.creditNeedsClient');
+    if (code === 'PAYMENT_MISMATCH') return t('pos.pay.mustEqualTotal');
     return t('async.error');
+  }
+
+  function resetPayment() {
+    setSplit(false);
+    setMethod('cash');
+    setAmounts({ cash: '', mobile: '', credit: '' });
   }
 
   async function validate() {
@@ -150,16 +172,36 @@ export default function VendrePos() {
       toast(t('pos.cartEmpty'), 'info');
       return;
     }
-    if (method === 'credit' && !client) {
+    // La ventilation mixte doit solder exactement le total.
+    if (split && remaining !== 0) {
+      toast(t('pos.pay.mustEqualTotal'), 'error');
+      return;
+    }
+    // Une part à crédit exige un client débiteur.
+    if (creditPortion > 0 && !client) {
       toast(t('pos.creditNeedsClient'), 'error');
       return;
     }
+
+    // Ventilation envoyée au serveur : en mode mixte on ventile par méthode,
+    // sinon on envoie la méthode unique (compat).
+    const breakdown = split
+      ? { cash: num(amounts.cash), mobile: num(amounts.mobile), credit: num(amounts.credit) }
+      : {
+          cash: method === 'cash' ? subtotal : 0,
+          mobile: method === 'mobile' ? subtotal : 0,
+          credit: method === 'credit' ? subtotal : 0,
+        };
+    const payments = (['cash', 'mobile', 'credit'] as const)
+      .filter((k) => breakdown[k] > 0)
+      .map((k) => ({ method: k, amount: breakdown[k] }));
+
     setSubmitting(true);
     try {
       const res = await api<{ sale: { id: string; number: string; total: number } }>('/api/sales', {
         method: 'POST',
         body: {
-          method,
+          ...(split ? { payments } : { method }),
           items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
           // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé).
           ...(client ? { customer: client.id ? { id: client.id } : { name: client.name } } : {}),
@@ -172,12 +214,14 @@ export default function VendrePos() {
         createdAt: new Date().toISOString(),
         method: method.toUpperCase() as ReceiptMethod,
         total: subtotal,
+        payments: breakdown,
         customerName: client?.name ?? null,
         customerPhone: client?.phone ?? null,
         items: cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
       });
       setCart([]);
       setClient(null);
+      resetPayment();
       await refresh(); // le stock a changé
     } catch (err) {
       toast(checkoutError(err), 'error');
@@ -348,46 +392,101 @@ export default function VendrePos() {
               </div>
             </div>
 
-            {/* Mode de paiement */}
+            {/* Mode de paiement — simple (une méthode) ou mixte (ventilé) */}
             <div>
-              <p className="font-body text-muted-foreground mb-2 text-xs font-semibold">
-                {t('creances.form.method')}
-              </p>
-              <div className="flex gap-2">
-                {METHODS.map((m) => {
-                  const active = method === m;
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMethod(m)}
-                      className={`font-body flex-1 rounded-md border py-2 text-xs transition-colors ${
-                        active
-                          ? 'bg-primary text-primary-foreground border-primary font-semibold'
-                          : 'border-border text-muted-foreground hover:border-primary'
-                      }`}
-                    >
-                      {t(METHOD_KEY[m])}
-                    </button>
-                  );
-                })}
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-body text-muted-foreground text-xs font-semibold">
+                  {t('creances.form.method')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSplit((s) => !s)}
+                  className="font-body text-primary text-xs font-semibold"
+                >
+                  {split ? t('pos.pay.simple') : t('pos.pay.split')}
+                </button>
               </div>
+
+              {!split ? (
+                <div className="flex gap-2">
+                  {METHODS.map((m) => {
+                    const active = method === m;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMethod(m)}
+                        className={`font-body flex-1 rounded-md border py-2 text-xs transition-colors ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                            : 'border-border text-muted-foreground hover:border-primary'
+                        }`}
+                      >
+                        {t(METHOD_KEY[m])}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {METHODS.map((m) => (
+                    <div key={m} className="flex items-center gap-2">
+                      <span className="font-body text-muted-foreground flex w-24 shrink-0 items-center gap-1.5 text-xs">
+                        <Icon i={METHOD_ICON[m]} size={13} />
+                        {t(METHOD_KEY[m])}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={amounts[m]}
+                        onChange={(e) => setAmounts((a) => ({ ...a, [m]: e.target.value }))}
+                        placeholder="0"
+                        className="border-border bg-input text-foreground font-body focus:border-primary w-full rounded-md border px-2 py-1.5 text-end text-sm outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAmounts((a) => ({
+                            ...a,
+                            [m]: String(num(a[m]) + Math.max(0, remaining)),
+                          }))
+                        }
+                        title={t('pos.pay.fill')}
+                        className="border-border text-muted-foreground hover:border-primary font-body shrink-0 rounded-md border px-2 py-1.5 text-[11px]"
+                      >
+                        {t('pos.pay.fill')}
+                      </button>
+                    </div>
+                  ))}
+                  <div
+                    className={`font-body flex justify-between text-xs font-semibold ${
+                      remaining === 0 ? 'text-success' : 'text-warning'
+                    }`}
+                  >
+                    <span>{t('pos.pay.remaining')}</span>
+                    <span>
+                      {formatFCFA(remaining)} {t('common.fcfa')}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sélecteur de client — disponible pour TOUS les paiements
-                (optionnel ; requis seulement pour le crédit). */}
+                (optionnel ; requis dès qu'une part crédit est saisie). */}
             <div className="flex flex-col gap-1.5">
               <p
                 className={`font-body flex items-center gap-1.5 text-xs font-semibold ${
-                  method === 'credit' && !client
+                  creditPortion > 0 && !client
                     ? 'text-secondary-foreground'
                     : 'text-muted-foreground'
                 }`}
               >
-                {method === 'credit' && <Icon i="alert-circle" size={13} className="shrink-0" />}
-                {method === 'credit' ? t('pos.clientRequired') : t('pos.client.optional')}
+                {creditPortion > 0 && <Icon i="alert-circle" size={13} className="shrink-0" />}
+                {creditPortion > 0 ? t('pos.clientRequired') : t('pos.client.optional')}
               </p>
-              <ClientPicker value={client} onChange={setClient} required={method === 'credit'} />
+              <ClientPicker value={client} onChange={setClient} required={creditPortion > 0} />
             </div>
 
             {/* Valider */}

@@ -18,16 +18,23 @@ import { onProductAdjusted } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
-const Body = z.object({
-  delta: z.number().int(),
-  reason: z.string().trim().max(120).optional(),
-  // Type de mouvement explicite : 'IN' = réapprovisionnement (entrée),
-  // 'ADJUST' = correction (casse/vol/inventaire). Absent → dérivé du signe
-  // du delta (compat : IN si > 0, OUT si < 0).
-  type: z.enum(['IN', 'OUT', 'ADJUST']).optional(),
-  // Réapprovisionnement : met à jour le prix d'achat du produit si fourni.
-  buyPrice: z.number().int().min(0).optional(),
-});
+const Body = z
+  .object({
+    delta: z.number().int(),
+    reason: z.string().trim().max(120).optional(),
+    // Type de mouvement explicite : 'IN' = réapprovisionnement (entrée),
+    // 'ADJUST' = correction (casse/vol/inventaire). Absent → dérivé du signe
+    // du delta (compat : IN si > 0, OUT si < 0).
+    type: z.enum(['IN', 'OUT', 'ADJUST']).optional(),
+    // Réapprovisionnement : met à jour le prix d'achat du produit si fourni.
+    buyPrice: z.number().int().min(0).optional(),
+  })
+  // Un ajustement (correction) exige un motif — défense en profondeur (le
+  // formulaire l'impose déjà côté client).
+  .refine((d) => d.type !== 'ADJUST' || (d.reason?.trim().length ?? 0) > 0, {
+    message: 'reason_required_for_adjust',
+    path: ['reason'],
+  });
 
 type AdjustResult =
   | { kind: 'NOT_FOUND' }

@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
@@ -20,9 +21,15 @@ import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
 
+// Fenêtre d'annulation : une vente ne peut être annulée que dans les 24h.
+const CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const Body = z.object({ reason: z.string().trim().min(1).max(200) });
+
 type CancelResult =
   | { kind: 'NOT_FOUND' }
   | { kind: 'ALREADY_CANCELLED' }
+  | { kind: 'TOO_LATE' }
   | { kind: 'OK'; number: string };
 
 export async function POST(
@@ -49,6 +56,16 @@ export async function POST(
     const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
 
+    // Motif d'annulation obligatoire.
+    const parsed = Body.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'REASON_REQUIRED', message: "Le motif d'annulation est obligatoire" },
+        { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+    const reason = parsed.data.reason;
+
     const { id } = await ctx.params;
     const orgId = primary.organizationId;
     const userSub = auth.user.sub;
@@ -61,12 +78,17 @@ export async function POST(
             organizationId: true,
             number: true,
             status: true,
+            createdAt: true,
             items: { select: { productId: true, qty: true } },
             receivable: { select: { id: true } },
           },
         });
         if (!sale || sale.organizationId !== orgId) return { kind: 'NOT_FOUND' };
         if (sale.status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' };
+        // Au-delà de 24h, l'annulation est refusée (règle métier).
+        if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
+          return { kind: 'TOO_LATE' };
+        }
 
         // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
         // (productId null via SetNull) ne peuvent pas être re-créditées : on les
@@ -109,10 +131,15 @@ export async function POST(
           });
         }
 
-        // 3) Trace : la vente devient CANCELLED (jamais supprimée).
+        // 3) Trace : la vente devient CANCELLED (jamais supprimée) + motif.
         await tx.sale.update({
           where: { id },
-          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledById: userSub },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelledById: userSub,
+            cancelReason: reason,
+          },
         });
 
         return { kind: 'OK', number: sale.number };
@@ -129,6 +156,12 @@ export async function POST(
     if (result.kind === 'ALREADY_CANCELLED') {
       return NextResponse.json(
         { error: 'SALE_ALREADY_CANCELLED', message: 'Cette vente est déjà annulée' },
+        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+    if (result.kind === 'TOO_LATE') {
+      return NextResponse.json(
+        { error: 'CANCEL_WINDOW_EXPIRED', message: 'Annulation possible seulement dans les 24h' },
         { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }

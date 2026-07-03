@@ -1366,7 +1366,10 @@ const messages: Record<string, Msg> = {
   'method.cash': { fr: 'Espèces', en: 'Cash', ar: 'نقداً' },
   'method.mobile': { fr: 'Mobile Money', en: 'Mobile Money', ar: 'Mobile Money' },
   'method.credit': { fr: 'Crédit', en: 'Credit', ar: 'آجل' },
+  'method.mixed': { fr: 'Mixte', en: 'Mixed', ar: 'مختلط' },
   'method.transfer': { fr: 'Virement', en: 'Transfer', ar: 'تحويل' },
+  'ventes.seller': { fr: 'Vendeur', en: 'Seller', ar: 'البائع' },
+  'ventes.allSellers': { fr: 'Tous les vendeurs', en: 'All sellers', ar: 'كل البائعين' },
 
   // ── Ventes (historique) ───────────────────────────────────────────────────
   'ventes.subtitle': {
@@ -1400,6 +1403,26 @@ const messages: Record<string, Msg> = {
     fr: 'Vente {number} annulée',
     en: 'Sale {number} cancelled',
     ar: 'تم إلغاء البيع {number}',
+  },
+  'ventes.cancel.reasonLabel': {
+    fr: "Motif de l'annulation",
+    en: 'Cancellation reason',
+    ar: 'سبب الإلغاء',
+  },
+  'ventes.cancel.reasonPlaceholder': {
+    fr: 'Erreur de saisie, retour client…',
+    en: 'Wrong entry, customer return…',
+    ar: 'خطأ في الإدخال، إرجاع الزبون…',
+  },
+  'ventes.cancel.reasonRequired': {
+    fr: "Indiquez le motif de l'annulation.",
+    en: 'Please give a cancellation reason.',
+    ar: 'يرجى ذكر سبب الإلغاء.',
+  },
+  'ventes.cancel.tooLate': {
+    fr: 'Annulation impossible : au-delà de 24h.',
+    en: 'Cannot cancel: more than 24h old.',
+    ar: 'يتعذّر الإلغاء: مرّ أكثر من 24 ساعة.',
   },
   'ventes.empty': {
     fr: 'Aucune vente ne correspond à ces filtres.',
@@ -1560,6 +1583,11 @@ const messages: Record<string, Msg> = {
   },
   'documents.downloadPdf': { fr: 'Télécharger le PDF', en: 'Download PDF', ar: 'تنزيل PDF' },
   'documents.viewPdf': { fr: 'Aperçu PDF', en: 'PDF preview', ar: 'معاينة PDF' },
+  'documents.validityField': {
+    fr: 'Validité (jours)',
+    en: 'Validity (days)',
+    ar: 'الصلاحية (أيام)',
+  },
   'documents.pdfError': {
     fr: 'Impossible de charger le PDF.',
     en: 'Could not load the PDF.',
@@ -2036,6 +2064,16 @@ const messages: Record<string, Msg> = {
     fr: 'Vente enregistrée — {amount} FCFA (démo).',
     en: 'Sale recorded — {amount} FCFA (demo).',
     ar: 'تم تسجيل البيع — {amount} فرنك (تجريبي).',
+  },
+  // Paiement mixte (POS)
+  'pos.pay.split': { fr: 'Paiement mixte', en: 'Split payment', ar: 'دفع مختلط' },
+  'pos.pay.simple': { fr: 'Paiement simple', en: 'Single payment', ar: 'دفع بسيط' },
+  'pos.pay.remaining': { fr: 'Reste à répartir', en: 'Left to allocate', ar: 'المتبقّي للتوزيع' },
+  'pos.pay.fill': { fr: 'Tout', en: 'All', ar: 'الكل' },
+  'pos.pay.mustEqualTotal': {
+    fr: 'La répartition doit être égale au total.',
+    en: 'The split must equal the total.',
+    ar: 'يجب أن يساوي التوزيع الإجمالي.',
   },
   'cart.perUnit': { fr: '/ unité', en: '/ unit', ar: '/ للوحدة' },
   'cart.decrease': { fr: 'Diminuer', en: 'Decrease', ar: 'إنقاص' },
