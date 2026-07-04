@@ -20,11 +20,20 @@ interface BarcodeDetectorCtor {
 // Cause d'échec de la caméra → message + aide adaptés.
 type ErrKind = 'denied' | 'none' | 'busy' | 'insecure' | 'generic';
 
+// Contrôleur de scan ZXing (repli iOS/Safari) — juste ce qu'on utilise.
+interface ScannerControls {
+  stop(): void;
+}
+
 /**
- * Scan de code-barres par la caméra (mobile). Utilise l'API native
- * BarcodeDetector quand elle est disponible (Chrome/Android — cible PWA). Si
- * indisponible (ex. iOS/Safari), on l'annonce : la saisie manuelle / le lecteur
- * physique restent utilisables sur la page. Ferme dès le premier code lu.
+ * Scan de code-barres par la caméra (mobile), UNIVERSEL :
+ *  - Android/Chrome : API native `BarcodeDetector` (rapide, zéro dépendance).
+ *  - iOS/Safari & autres : repli sur ZXing (`@zxing/browser`, chargé à la volée)
+ *    qui décode le même flux caméra en JS. Le scan marche donc sur tous les
+ *    téléphones.
+ *
+ * On demande le flux caméra NOUS-MÊMES (gestion unifiée des permissions), puis
+ * on le passe au décodeur adéquat. Ferme dès le premier code lu.
  *
  * En cas d'échec, l'écran reste SIMPLE pour un utilisateur non technique :
  * un bouton « Réessayer » (relance la demande d'autorisation), des étapes
@@ -52,17 +61,14 @@ export default function BarcodeScannerModal({
     typeof window !== 'undefined'
       ? (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
       : undefined;
-  const supported = !!ctor;
 
   useEffect(() => {
-    if (!open || !ctor) return;
+    if (!open) return;
     let stream: MediaStream | null = null;
     let raf = 0;
     let cancelled = false;
+    let zxing: ScannerControls | null = null;
     setErrKind(null);
-    const detector = new ctor({
-      formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
-    });
 
     (async () => {
       try {
@@ -81,23 +87,44 @@ export default function BarcodeScannerModal({
         }
         const v = videoRef.current;
         if (!v) return;
-        v.srcObject = stream;
-        await v.play();
-        const tick = async () => {
-          if (cancelled) return;
-          try {
-            const codes = await detector.detect(v);
-            const code = codes[0]?.rawValue;
-            if (code) {
-              onDetectedRef.current(String(code));
-              return; // stop après le premier code
+
+        if (ctor) {
+          // Chemin natif (Android/Chrome) : BarcodeDetector sur le flux vidéo.
+          const detector = new ctor({
+            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
+          });
+          v.srcObject = stream;
+          await v.play();
+          const tick = async () => {
+            if (cancelled) return;
+            try {
+              const codes = await detector.detect(v);
+              const code = codes[0]?.rawValue;
+              if (code) {
+                onDetectedRef.current(String(code));
+                return; // stop après le premier code
+              }
+            } catch {
+              // frame illisible : on réessaie au tick suivant
             }
-          } catch {
-            // frame illisible : on réessaie au tick suivant
-          }
+            raf = requestAnimationFrame(() => void tick());
+          };
           raf = requestAnimationFrame(() => void tick());
-        };
-        raf = requestAnimationFrame(() => void tick());
+        } else {
+          // Repli universel (iOS/Safari…) : ZXing décode le même flux en JS.
+          // Chargé à la volée pour ne pas alourdir le bundle initial.
+          const { BrowserMultiFormatReader } = await import('@zxing/browser');
+          if (cancelled) {
+            stream.getTracks().forEach((tr) => tr.stop());
+            return;
+          }
+          const reader = new BrowserMultiFormatReader();
+          zxing = await reader.decodeFromStream(stream, v, (result) => {
+            if (cancelled || !result) return;
+            onDetectedRef.current(result.getText());
+          });
+          if (cancelled) zxing.stop();
+        }
       } catch (e) {
         // Cause réelle (nom d'erreur DOM) → aide adaptée à l'écran.
         const name = e instanceof Error ? e.name : '';
@@ -116,6 +143,13 @@ export default function BarcodeScannerModal({
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
+      if (zxing) {
+        try {
+          zxing.stop();
+        } catch {
+          // le contrôleur peut déjà être arrêté — sans conséquence
+        }
+      }
       if (stream) stream.getTracks().forEach((tr) => tr.stop());
     };
   }, [open, ctor, attempt]);
@@ -136,24 +170,7 @@ export default function BarcodeScannerModal({
 
   return (
     <Modal open={open} onClose={onClose} title={t('pos.scan.title')} size="sm">
-      {!supported ? (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
-              <Icon i="camera-off" size={22} />
-            </div>
-            <p className="font-body text-muted-foreground text-sm">{t('pos.scan.unsupported')}</p>
-          </div>
-          <button
-            type="button"
-            onClick={manualEntry}
-            className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
-          >
-            <Icon i="keyboard" size={16} />
-            {t('pos.scan.manual')}
-          </button>
-        </div>
-      ) : errKind ? (
+      {errKind ? (
         <div className="flex flex-col gap-4">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="bg-danger/10 text-danger flex h-12 w-12 items-center justify-center rounded-full">
