@@ -154,64 +154,89 @@ export default function ClientPicker({
       )}
 
       {open && (
-        <div className="animate-scale-in border-border bg-surface absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border shadow-xl">
-          <div className="border-border flex items-center gap-2 border-b px-3 py-2">
-            <Icon i="search" size={14} className="text-muted-foreground" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && canCreate) {
-                  e.preventDefault();
-                  create();
-                }
-              }}
-              placeholder={t('pos.client.searchOrCreate')}
-              className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
-            />
-          </div>
-
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filtered.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => pickExisting(c)}
-                className={`font-body flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm transition-colors ${
-                  value?.id === c.id
-                    ? 'bg-secondary text-secondary-foreground font-semibold'
-                    : 'text-foreground hover:bg-muted'
-                }`}
-              >
-                <div className="bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
-                  <Icon i="user" size={12} className="text-muted-foreground" />
-                </div>
-                <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                {c.phone && (
-                  <span className="text-muted-foreground shrink-0 text-xs">{c.phone}</span>
-                )}
-              </button>
-            ))}
-
-            {canCreate && (
+        <>
+          {/* Fond sombre — mobile uniquement : ferme au toucher. */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          {/* Panneau : feuille du bas plein écran sur mobile (toujours atteignable,
+              au-dessus du clavier), menu déroulant classique sur desktop (≥ sm). */}
+          <div className="border-border bg-surface animate-scale-in fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-hidden rounded-t-2xl border shadow-xl sm:absolute sm:bottom-auto sm:mt-1.5 sm:max-h-none sm:rounded-xl">
+            {/* En-tête (mobile) : titre + fermer. */}
+            <div className="border-border flex items-center justify-between border-b px-4 py-3 sm:hidden">
+              <span className="font-headings text-foreground text-sm font-bold">
+                {t('pos.client.choose')}
+              </span>
               <button
                 type="button"
-                onClick={create}
-                className="text-primary hover:bg-muted font-body flex w-full items-center gap-2 px-3 py-2 text-start text-sm font-semibold"
+                onClick={() => setOpen(false)}
+                aria-label={t('common.close')}
+                className="text-muted-foreground hover:text-foreground"
               >
-                <Icon i="plus" size={14} />
-                {t('pos.client.create', { name: trimmed })}
+                <Icon i="x" size={18} />
               </button>
-            )}
+            </div>
 
-            {filtered.length === 0 && !canCreate && (
-              <p className="text-muted-foreground font-body px-3 py-3 text-center text-sm">
-                {t('pos.client.empty')}
-              </p>
-            )}
+            <div className="border-border flex items-center gap-2 border-b px-3 py-2.5">
+              <Icon i="search" size={14} className="text-muted-foreground" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && canCreate) {
+                    e.preventDefault();
+                    create();
+                  }
+                }}
+                placeholder={t('pos.client.searchOrCreate')}
+                className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
+              />
+            </div>
+
+            <div className="max-h-[55vh] overflow-y-auto py-1 sm:max-h-56">
+              {filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => pickExisting(c)}
+                  className={`font-body flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm transition-colors ${
+                    value?.id === c.id
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
+                      : 'text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <div className="bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
+                    <Icon i="user" size={12} className="text-muted-foreground" />
+                  </div>
+                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  {c.phone && (
+                    <span className="text-muted-foreground shrink-0 text-xs">{c.phone}</span>
+                  )}
+                </button>
+              ))}
+
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={create}
+                  className="text-primary hover:bg-muted font-body flex w-full items-center gap-2 px-3 py-2 text-start text-sm font-semibold"
+                >
+                  <Icon i="plus" size={14} />
+                  {t('pos.client.create', { name: trimmed })}
+                </button>
+              )}
+
+              {filtered.length === 0 && !canCreate && (
+                <p className="text-muted-foreground font-body px-3 py-3 text-center text-sm">
+                  {t('pos.client.empty')}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
