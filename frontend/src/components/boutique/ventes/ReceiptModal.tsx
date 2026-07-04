@@ -116,6 +116,7 @@ export default function ReceiptModal({
     // Hauteur calculée à l'avance (le canvas est de taille fixe).
     let H = PAD + logoH + 24 + (city ? 18 : 6) + (phone ? 14 : 0) + (address ? 14 : 0) + 24 + 26;
     if (receipt.customerName) H += 18;
+    if (receipt.customerPhone) H += 16;
     H += 18 + receipt.items.length * 22 + 26 + 28 + 20 + 24 + 18 + PAD;
     // Lignes de paiement supplémentaires (ventilation mixte) : +16px chacune.
     H += 16 * Math.max(0, payLines.length - 1);
@@ -176,6 +177,11 @@ export default function ReceiptModal({
       ctx.fillText(`${t('receipt.client')}: ${receipt.customerName}`, PAD, y);
       y += 18;
     }
+    if (receipt.customerPhone) {
+      ctx.textAlign = 'left';
+      ctx.fillText(`${t('common.phone')}: ${receipt.customerPhone}`, PAD, y);
+      y += 16;
+    }
     y += 2;
     dashed(ctx, PAD, W - PAD, y);
     y += 20;
@@ -229,6 +235,37 @@ export default function ReceiptModal({
     return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
   }
 
+  /** Reçu en texte brut (repli image + envoi direct au client par wa.me). */
+  function receiptText(): string {
+    if (!receipt) return '';
+    const lines = receipt.items
+      .map((it) => `• ${it.name} x${it.qty} — ${formatFCFA(it.qty * it.unitPrice)}`)
+      .join('\n');
+    return (
+      `${shopName}\n${t('receipt.title')} ${receipt.number} · ${dateStr}\n` +
+      (receipt.customerName ? `${t('receipt.client')}: ${receipt.customerName}\n` : '') +
+      `--------------------\n${lines}\n--------------------\n` +
+      `${t('common.total')}: ${formatFCFA(receipt.total)} ${t('common.fcfa')}\n` +
+      `${note || t('receipt.thanks')}`
+    );
+  }
+
+  /**
+   * Envoi direct au client : ouvre la conversation WhatsApp de SON numéro
+   * (wa.me/<numéro>) avec le reçu en texte — aucun numéro à ressaisir. Affiché
+   * seulement quand le client a un téléphone enregistré.
+   */
+  function sendToClient() {
+    if (!receipt?.customerPhone) return;
+    const digits = receipt.customerPhone.replace(/\D/g, '');
+    if (!digits) return;
+    window.open(
+      `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  }
+
   /**
    * Envoi du reçu en IMAGE. Sur téléphone : partage natif (`navigator.share`)
    * avec le fichier → WhatsApp apparaît dans la liste et envoie la photo. Sur
@@ -267,18 +304,9 @@ export default function ReceiptModal({
         return;
       }
       // Repli texte (canvas indisponible).
-      const lines = receipt.items
-        .map((it) => `• ${it.name} x${it.qty} — ${formatFCFA(it.qty * it.unitPrice)}`)
-        .join('\n');
-      const text =
-        `${shopName}\n${t('receipt.title')} ${receipt.number} · ${dateStr}\n` +
-        (receipt.customerName ? `${t('receipt.client')}: ${receipt.customerName}\n` : '') +
-        `--------------------\n${lines}\n--------------------\n` +
-        `${t('common.total')}: ${formatFCFA(receipt.total)} ${t('common.fcfa')}\n` +
-        `${note || t('receipt.thanks')}`;
       const digits = (receipt.customerPhone ?? '').replace(/\D/g, '');
       window.open(
-        `https://wa.me/${digits}?text=${encodeURIComponent(text)}`,
+        `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
         '_blank',
         'noopener,noreferrer',
       );
@@ -319,6 +347,11 @@ export default function ReceiptModal({
             {receipt.customerName && (
               <p className="font-body mt-1 text-xs text-neutral-500">
                 {t('receipt.client')}: {receipt.customerName}
+              </p>
+            )}
+            {receipt.customerPhone && (
+              <p className="font-body text-xs text-neutral-500">
+                {t('common.phone')}: {receipt.customerPhone}
               </p>
             )}
 
@@ -366,28 +399,42 @@ export default function ReceiptModal({
           </div>
 
           {/* Actions — non imprimées */}
-          <div className="no-print flex gap-2">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
-            >
-              <Icon i="printer" size={15} />
-              {t('receipt.print')}
-            </button>
-            <button
-              type="button"
-              onClick={shareWhatsapp}
-              disabled={busy}
-              className="bg-primary text-primary-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
-            >
-              <Icon
-                i={busy ? 'loader-2' : 'share-2'}
-                size={15}
-                className={busy ? 'animate-spin' : ''}
-              />
-              {t('receipt.whatsapp')}
-            </button>
+          <div className="no-print flex flex-col gap-2">
+            {/* Envoi direct au client : ouvre SA conversation WhatsApp (numéro
+                enregistré), aucun numéro à ressaisir. */}
+            {receipt.customerPhone && (
+              <button
+                type="button"
+                onClick={sendToClient}
+                className="bg-success text-success-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
+              >
+                <Icon i="send" size={15} />
+                {t('receipt.sendToClient')}
+              </button>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+              >
+                <Icon i="printer" size={15} />
+                {t('receipt.print')}
+              </button>
+              <button
+                type="button"
+                onClick={shareWhatsapp}
+                disabled={busy}
+                className="bg-primary text-primary-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
+              >
+                <Icon
+                  i={busy ? 'loader-2' : 'share-2'}
+                  size={15}
+                  className={busy ? 'animate-spin' : ''}
+                />
+                {t('receipt.whatsapp')}
+              </button>
+            </div>
           </div>
         </div>
       )}

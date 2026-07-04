@@ -203,8 +203,15 @@ export default function VendrePos() {
         body: {
           ...(split ? { payments } : { method }),
           items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
-          // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé).
-          ...(client ? { customer: client.id ? { id: client.id } : { name: client.name } } : {}),
+          // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé
+          // à la volée avec son numéro → reçu + WhatsApp direct).
+          ...(client
+            ? {
+                customer: client.id
+                  ? { id: client.id }
+                  : { name: client.name, ...(client.phone ? { phone: client.phone } : {}) },
+              }
+            : {}),
         },
       });
       toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');

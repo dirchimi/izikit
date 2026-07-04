@@ -39,6 +39,7 @@ export default function ClientPicker({
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -77,12 +78,16 @@ export default function ClientPicker({
     onChange({ id: c.id, name: c.name, phone: c.phone });
     setOpen(false);
     setQuery('');
+    setNewPhone('');
   }
   function create() {
     if (!trimmed) return;
-    onChange({ name: trimmed });
+    const phone = newPhone.trim();
+    // Numéro capturé à la création → reçu + envoi WhatsApp direct au client.
+    onChange(phone ? { name: trimmed, phone } : { name: trimmed });
     setOpen(false);
     setQuery('');
+    setNewPhone('');
   }
 
   return (
@@ -165,14 +170,33 @@ export default function ClientPicker({
             ))}
 
             {canCreate && (
-              <button
-                type="button"
-                onClick={create}
-                className="text-primary hover:bg-muted font-body flex w-full items-center gap-2 px-3 py-2 text-start text-sm font-semibold"
-              >
-                <Icon i="plus" size={14} />
-                {t('pos.client.create', { name: trimmed })}
-              </button>
+              <div className="flex flex-col gap-2 px-3 py-2">
+                <div className="border-border bg-input flex items-center gap-2 rounded-md border px-2.5 py-1.5">
+                  <Icon i="phone" size={13} className="text-muted-foreground shrink-0" />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        create();
+                      }
+                    }}
+                    placeholder={t('pos.client.phonePlaceholder')}
+                    className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={create}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 font-body flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold"
+                >
+                  <Icon i="plus" size={14} />
+                  {t('pos.client.create', { name: trimmed })}
+                </button>
+              </div>
             )}
 
             {filtered.length === 0 && !canCreate && (

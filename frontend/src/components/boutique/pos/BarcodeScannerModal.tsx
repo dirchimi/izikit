@@ -55,6 +55,12 @@ export default function BarcodeScannerModal({
 
     (async () => {
       try {
+        // getUserMedia n'existe qu'en contexte sécurisé (HTTPS ou localhost).
+        // Servi en HTTP simple (ex. accès par IP LAN), `mediaDevices` est absent.
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setErr(t('pos.scan.cameraInsecure'));
+          return;
+        }
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
         });
@@ -81,8 +87,18 @@ export default function BarcodeScannerModal({
           raf = requestAnimationFrame(() => void tick());
         };
         raf = requestAnimationFrame(() => void tick());
-      } catch {
-        setErr(t('pos.scan.cameraError'));
+      } catch (e) {
+        // Message actionnable selon la cause réelle (nom d'erreur DOM).
+        const name = e instanceof Error ? e.name : '';
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+          setErr(t('pos.scan.cameraDenied'));
+        } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+          setErr(t('pos.scan.cameraNone'));
+        } else if (name === 'NotReadableError') {
+          setErr(t('pos.scan.cameraBusy'));
+        } else {
+          setErr(t('pos.scan.cameraError'));
+        }
       }
     })();
 

@@ -35,6 +35,11 @@ const messages: Record<string, Msg> = {
   'receipt.title': { fr: 'Reçu', en: 'Receipt', ar: 'إيصال' },
   'receipt.print': { fr: 'Imprimer', en: 'Print', ar: 'طباعة' },
   'receipt.whatsapp': { fr: 'Envoyer (WhatsApp)', en: 'Send (WhatsApp)', ar: 'إرسال (واتساب)' },
+  'receipt.sendToClient': {
+    fr: 'Envoyer au client (WhatsApp)',
+    en: 'Send to customer (WhatsApp)',
+    ar: 'إرسال إلى الزبون (واتساب)',
+  },
   'receipt.client': { fr: 'Client', en: 'Customer', ar: 'الزبون' },
   'receipt.paidWith': { fr: 'Payé en', en: 'Paid with', ar: 'الدفع' },
   'receipt.thanks': {
@@ -2002,6 +2007,11 @@ const messages: Record<string, Msg> = {
     ar: 'بحث أو إنشاء…',
   },
   'pos.client.create': { fr: 'Ajouter « {name} »', en: 'Add “{name}”', ar: 'إضافة «{name}»' },
+  'pos.client.phonePlaceholder': {
+    fr: 'Téléphone (optionnel) — +235 …',
+    en: 'Phone (optional) — +235 …',
+    ar: 'الهاتف (اختياري) — +235 …',
+  },
   'pos.client.clear': { fr: 'Retirer le client', en: 'Remove customer', ar: 'إزالة الزبون' },
   'pos.client.empty': { fr: 'Aucun client', en: 'No customer', ar: 'لا يوجد زبون' },
   'pos.newClient': { fr: '+ Nouveau client', en: '+ New client', ar: '+ زبون جديد' },
@@ -2038,6 +2048,26 @@ const messages: Record<string, Msg> = {
     fr: 'Impossible d’accéder à la caméra.',
     en: 'Unable to access the camera.',
     ar: 'تعذّر الوصول إلى الكاميرا.',
+  },
+  'pos.scan.cameraDenied': {
+    fr: 'Accès à la caméra refusé. Autorisez la caméra pour ce site dans les réglages du navigateur, puis réessayez.',
+    en: 'Camera access denied. Allow the camera for this site in your browser settings, then try again.',
+    ar: 'تم رفض الوصول إلى الكاميرا. اسمح للكاميرا لهذا الموقع في إعدادات المتصفح ثم أعد المحاولة.',
+  },
+  'pos.scan.cameraNone': {
+    fr: 'Aucune caméra détectée sur cet appareil.',
+    en: 'No camera detected on this device.',
+    ar: 'لم يتم اكتشاف كاميرا على هذا الجهاز.',
+  },
+  'pos.scan.cameraBusy': {
+    fr: 'La caméra est déjà utilisée par une autre application. Fermez-la puis réessayez.',
+    en: 'The camera is already in use by another app. Close it, then try again.',
+    ar: 'الكاميرا مستخدمة بالفعل من تطبيق آخر. أغلقه ثم أعد المحاولة.',
+  },
+  'pos.scan.cameraInsecure': {
+    fr: 'La caméra nécessite une connexion sécurisée (https). Ouvrez l’application via son adresse https.',
+    en: 'The camera requires a secure (https) connection. Open the app via its https address.',
+    ar: 'تتطلب الكاميرا اتصالاً آمناً (https). افتح التطبيق عبر عنوان https.',
   },
   'pos.scan.notFound': {
     fr: 'Aucun produit avec le code {code}.',
