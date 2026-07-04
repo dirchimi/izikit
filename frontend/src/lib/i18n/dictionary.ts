@@ -2056,9 +2056,35 @@ const messages: Record<string, Msg> = {
     ar: 'تعذّر الوصول إلى الكاميرا.',
   },
   'pos.scan.cameraDenied': {
-    fr: 'Accès à la caméra refusé. Autorisez la caméra pour ce site dans les réglages du navigateur, puis réessayez.',
-    en: 'Camera access denied. Allow the camera for this site in your browser settings, then try again.',
-    ar: 'تم رفض الوصول إلى الكاميرا. اسمح للكاميرا لهذا الموقع في إعدادات المتصفح ثم أعد المحاولة.',
+    fr: 'La caméra n’est pas autorisée pour cette application.',
+    en: 'The camera is not allowed for this app.',
+    ar: 'الكاميرا غير مسموح بها لهذا التطبيق.',
+  },
+  'pos.scan.errTitle': {
+    fr: 'Caméra indisponible',
+    en: 'Camera unavailable',
+    ar: 'الكاميرا غير متوفرة',
+  },
+  'pos.scan.retry': { fr: 'Réessayer', en: 'Try again', ar: 'أعد المحاولة' },
+  'pos.scan.manual': {
+    fr: 'Saisir le code à la main',
+    en: 'Type the code by hand',
+    ar: 'أدخل الرمز يدويًا',
+  },
+  'pos.scan.deniedStep1': {
+    fr: 'Touchez l’icône 🔒 (ou ⓘ) à gauche de l’adresse, en haut de l’écran.',
+    en: 'Tap the 🔒 (or ⓘ) icon on the left of the address, at the top of the screen.',
+    ar: 'اضغط على أيقونة 🔒 (أو ⓘ) على يسار العنوان أعلى الشاشة.',
+  },
+  'pos.scan.deniedStep2': {
+    fr: 'Ouvrez « Autorisations » puis activez « Caméra ».',
+    en: 'Open “Permissions” then turn on “Camera”.',
+    ar: 'افتح «الأذونات» ثم فعّل «الكاميرا».',
+  },
+  'pos.scan.deniedStep3': {
+    fr: 'Revenez ici et touchez « Réessayer ».',
+    en: 'Come back here and tap “Try again”.',
+    ar: 'ارجع إلى هنا واضغط «أعد المحاولة».',
   },
   'pos.scan.cameraNone': {
     fr: 'Aucune caméra détectée sur cet appareil.',

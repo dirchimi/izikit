@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Modal from '@/components/ui/Modal';
+import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 
 // L'API BarcodeDetector n'est pas encore typée dans la lib DOM de TS — on en
@@ -16,11 +17,19 @@ interface BarcodeDetectorCtor {
   new (opts?: { formats?: string[] }): BarcodeDetectorLike;
 }
 
+// Cause d'échec de la caméra → message + aide adaptés.
+type ErrKind = 'denied' | 'none' | 'busy' | 'insecure' | 'generic';
+
 /**
  * Scan de code-barres par la caméra (mobile). Utilise l'API native
  * BarcodeDetector quand elle est disponible (Chrome/Android — cible PWA). Si
  * indisponible (ex. iOS/Safari), on l'annonce : la saisie manuelle / le lecteur
  * physique restent utilisables sur la page. Ferme dès le premier code lu.
+ *
+ * En cas d'échec, l'écran reste SIMPLE pour un utilisateur non technique :
+ * un bouton « Réessayer » (relance la demande d'autorisation), des étapes
+ * concrètes pour débloquer, et surtout un bouton « Saisir à la main » — le
+ * plan B fiable qui ne dépend d'aucun réglage.
  */
 export default function BarcodeScannerModal({
   open,
@@ -35,7 +44,9 @@ export default function BarcodeScannerModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onDetectedRef = useRef(onDetected);
   onDetectedRef.current = onDetected;
-  const [err, setErr] = useState<string | null>(null);
+  const [errKind, setErrKind] = useState<ErrKind | null>(null);
+  // Incrémenté par « Réessayer » → relance l'effet (nouvelle demande caméra).
+  const [attempt, setAttempt] = useState(0);
 
   const ctor =
     typeof window !== 'undefined'
@@ -48,7 +59,7 @@ export default function BarcodeScannerModal({
     let stream: MediaStream | null = null;
     let raf = 0;
     let cancelled = false;
-    setErr(null);
+    setErrKind(null);
     const detector = new ctor({
       formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
     });
@@ -58,7 +69,7 @@ export default function BarcodeScannerModal({
         // getUserMedia n'existe qu'en contexte sécurisé (HTTPS ou localhost).
         // Servi en HTTP simple (ex. accès par IP LAN), `mediaDevices` est absent.
         if (!navigator.mediaDevices?.getUserMedia) {
-          setErr(t('pos.scan.cameraInsecure'));
+          setErrKind('insecure');
           return;
         }
         stream = await navigator.mediaDevices.getUserMedia({
@@ -88,16 +99,16 @@ export default function BarcodeScannerModal({
         };
         raf = requestAnimationFrame(() => void tick());
       } catch (e) {
-        // Message actionnable selon la cause réelle (nom d'erreur DOM).
+        // Cause réelle (nom d'erreur DOM) → aide adaptée à l'écran.
         const name = e instanceof Error ? e.name : '';
         if (name === 'NotAllowedError' || name === 'SecurityError') {
-          setErr(t('pos.scan.cameraDenied'));
+          setErrKind('denied');
         } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-          setErr(t('pos.scan.cameraNone'));
+          setErrKind('none');
         } else if (name === 'NotReadableError') {
-          setErr(t('pos.scan.cameraBusy'));
+          setErrKind('busy');
         } else {
-          setErr(t('pos.scan.cameraError'));
+          setErrKind('generic');
         }
       }
     })();
@@ -107,14 +118,90 @@ export default function BarcodeScannerModal({
       cancelAnimationFrame(raf);
       if (stream) stream.getTracks().forEach((tr) => tr.stop());
     };
-  }, [open, ctor, t]);
+  }, [open, ctor, attempt]);
+
+  // Message principal selon la cause.
+  const errMessage: Record<ErrKind, string> = {
+    denied: t('pos.scan.cameraDenied'),
+    none: t('pos.scan.cameraNone'),
+    busy: t('pos.scan.cameraBusy'),
+    insecure: t('pos.scan.cameraInsecure'),
+    generic: t('pos.scan.cameraError'),
+  };
+
+  /** Bouton « Saisir à la main » : ferme le scanner → le champ code reprend le focus. */
+  function manualEntry() {
+    onClose();
+  }
 
   return (
     <Modal open={open} onClose={onClose} title={t('pos.scan.title')} size="sm">
       {!supported ? (
-        <p className="font-body text-muted-foreground text-sm">{t('pos.scan.unsupported')}</p>
-      ) : err ? (
-        <p className="font-body text-danger text-sm">{err}</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
+              <Icon i="camera-off" size={22} />
+            </div>
+            <p className="font-body text-muted-foreground text-sm">{t('pos.scan.unsupported')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={manualEntry}
+            className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
+          >
+            <Icon i="keyboard" size={16} />
+            {t('pos.scan.manual')}
+          </button>
+        </div>
+      ) : errKind ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="bg-danger/10 text-danger flex h-12 w-12 items-center justify-center rounded-full">
+              <Icon i="camera-off" size={22} />
+            </div>
+            <p className="font-headings text-foreground text-base font-bold">
+              {t('pos.scan.errTitle')}
+            </p>
+            <p className="font-body text-muted-foreground text-sm">{errMessage[errKind]}</p>
+          </div>
+
+          {/* Débloquer la caméra : étapes concrètes (utilisateur non technique). */}
+          {errKind === 'denied' && (
+            <ol className="bg-muted/50 border-border flex flex-col gap-2 rounded-lg border p-3">
+              {[1, 2, 3].map((n) => (
+                <li key={n} className="font-body text-foreground flex items-start gap-2.5 text-sm">
+                  <span className="bg-primary text-primary-foreground flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                    {n}
+                  </span>
+                  <span>{t(`pos.scan.deniedStep${n}`)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {/* Plan B fiable en premier : taper le code. */}
+            <button
+              type="button"
+              onClick={manualEntry}
+              className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
+            >
+              <Icon i="keyboard" size={16} />
+              {t('pos.scan.manual')}
+            </button>
+            {/* Réessayer : relance la demande d'autorisation / la caméra. */}
+            {errKind !== 'insecure' && (
+              <button
+                type="button"
+                onClick={() => setAttempt((a) => a + 1)}
+                className="border-border bg-surface text-foreground font-body flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+              >
+                <Icon i="refresh-cw" size={15} />
+                {t('pos.scan.retry')}
+              </button>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           <video
@@ -126,6 +213,14 @@ export default function BarcodeScannerModal({
           <p className="font-body text-muted-foreground text-center text-xs">
             {t('pos.scan.hint')}
           </p>
+          <button
+            type="button"
+            onClick={manualEntry}
+            className="border-border bg-surface text-foreground font-body flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold"
+          >
+            <Icon i="keyboard" size={15} />
+            {t('pos.scan.manual')}
+          </button>
         </div>
       )}
     </Modal>
