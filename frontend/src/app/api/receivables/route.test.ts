@@ -61,6 +61,15 @@ describe('GET /api/receivables', () => {
             sale: { items: [{ name: 'Sucre' }] },
           },
         ],
+        repayments: [
+          {
+            id: 'p1',
+            amount: 4000,
+            method: 'CASH',
+            note: null,
+            createdAt: new Date('2026-06-11T09:00:00Z'),
+          },
+        ],
       },
     ] as never);
 
@@ -76,6 +85,9 @@ describe('GET /api/receivables', () => {
     expect(d.history[0].id).toBe('r2');
     expect(d.history[1].label).toBe('Riz +1');
     expect(d.history[1].status).toBe('partial');
+    // timeline des remboursements exposée (méthode en minuscules pour l'UI)
+    expect(d.repayments).toHaveLength(1);
+    expect(d.repayments[0]).toMatchObject({ id: 'p1', amount: 4000, method: 'cash' });
   });
 
   it('401 sans session', async () => {

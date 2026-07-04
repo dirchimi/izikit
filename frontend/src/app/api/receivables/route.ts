@@ -57,6 +57,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             sale: { select: { items: { select: { name: true } } } },
           },
         },
+        // Remboursements reçus (timeline du détail débiteur, plus récent d'abord).
+        repayments: {
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, amount: true, method: true, note: true, createdAt: true },
+        },
       },
     });
 
@@ -84,6 +89,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       });
       // historique le plus récent en premier
       history.reverse();
+      const repayments = c.repayments.map((p) => ({
+        id: p.id,
+        date: iso(p.createdAt),
+        amount: p.amount,
+        method: p.method.toLowerCase(), // CASH|MOBILE → cash|mobile (libellé UI)
+        note: p.note ?? '',
+      }));
       return {
         id: c.id,
         name: c.name,
@@ -94,6 +106,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         since: iso(c.createdAt),
         lastSale: iso(lastSale),
         history,
+        repayments,
       };
     });
 

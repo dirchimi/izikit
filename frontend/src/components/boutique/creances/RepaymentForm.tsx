@@ -2,10 +2,19 @@
 
 import { forwardRef, useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
+import DatePicker from '@/components/ui/DatePicker';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
+
+/** Date du jour au format 'YYYY-MM-DD' (local) — défaut du champ date. */
+function todayYmd(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 /** Modes de remboursement acceptés par l'API (/api/receivables/[id]/repay). */
 export type RepayMethod = 'cash' | 'mobile';
@@ -18,7 +27,7 @@ interface Props {
   debtorName: string;
   maxAmount: number;
   disabled?: boolean;
-  onSubmit: (amount: number, method: RepayMethod, note: string) => void;
+  onSubmit: (amount: number, method: RepayMethod, note: string, date: string) => void;
 }
 
 /**
@@ -31,15 +40,18 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
   ref,
 ) {
   const t = useT();
+  const today = todayYmd();
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<RepayMethod>('cash');
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(today);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(Number(amount) || 0, method, note.trim());
+    onSubmit(Number(amount) || 0, method, note.trim(), date);
     setAmount('');
     setNote('');
+    setDate(today);
   }
 
   return (
@@ -93,6 +105,11 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="flex flex-col gap-1 lg:w-[160px]">
+          <label className={labelClass}>{t('creances.form.date')}</label>
+          <DatePicker value={date} onChange={setDate} max={today} />
         </div>
 
         <div className="flex flex-1 flex-col gap-1">

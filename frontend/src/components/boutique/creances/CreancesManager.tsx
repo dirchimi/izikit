@@ -22,6 +22,13 @@ interface ApiCredit {
   amountPaid: number;
   status: CreditStatus; // credit | partial | paid
 }
+interface ApiRepayment {
+  id: string;
+  date: string; // ISO
+  amount: number;
+  method: string; // cash | mobile
+  note: string;
+}
 interface ApiDebtor {
   id: string;
   name: string;
@@ -32,6 +39,7 @@ interface ApiDebtor {
   since: string; // ISO
   lastSale: string; // ISO
   history: ApiCredit[];
+  repayments: ApiRepayment[];
 }
 
 function fmtDate(iso: string): string {
@@ -50,6 +58,7 @@ export default function CreancesManager() {
   const t = useT();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showSettled, setShowSettled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
@@ -58,20 +67,24 @@ export default function CreancesManager() {
 
   const totalDebt = debtors.reduce((sum, d) => sum + d.debt, 0);
   const debtorCount = debtors.filter((d) => d.debt > 0).length;
+  const settledCount = debtors.filter((d) => d.debt <= 0).length;
 
   const visible = useMemo(() => {
+    // Par défaut, les clients soldés (dette = 0) sortent de la liste active ;
+    // un interrupteur permet de les réafficher (consultation de l'historique).
+    const base = showSettled ? debtors : debtors.filter((d) => d.debt > 0);
     const q = search.trim().toLowerCase();
-    if (q === '') return debtors;
-    return debtors.filter(
+    if (q === '') return base;
+    return base.filter(
       (d) =>
         d.name.toLowerCase().includes(q) ||
         d.phone.replace(/\s/g, '').includes(q.replace(/\s/g, '')),
     );
-  }, [debtors, search]);
+  }, [debtors, search, showSettled]);
 
-  const selected = debtors.find((d) => d.id === selectedId) ?? debtors[0] ?? null;
+  const selected = debtors.find((d) => d.id === selectedId) ?? visible[0] ?? null;
 
-  async function recordRepayment(amount: number, method: RepayMethod, note: string) {
+  async function recordRepayment(amount: number, method: RepayMethod, note: string, date: string) {
     if (!selected) return;
     if (amount <= 0) {
       toast(t('creances.amountInvalid'), 'error');
@@ -85,7 +98,7 @@ export default function CreancesManager() {
     try {
       const res = await api<{ applied: number }>(`/api/receivables/${selected.id}/repay`, {
         method: 'POST',
-        body: { amount, method, ...(note ? { note } : {}) },
+        body: { amount, method, ...(note ? { note } : {}), ...(date ? { date } : {}) },
       });
       const suffix = note ? ` — ${note}` : '';
       toast(
@@ -141,7 +154,7 @@ export default function CreancesManager() {
             </div>
 
             {/* Recherche */}
-            <div className="border-border border-b px-4 py-3">
+            <div className="border-border flex flex-col gap-2 border-b px-4 py-3">
               <div className="border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2">
                 <Icon i="search" size={14} className="text-muted-foreground" />
                 <input
@@ -152,6 +165,19 @@ export default function CreancesManager() {
                   className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
                 />
               </div>
+              {/* Les clients soldés sortent de la liste active — réaffichables ici. */}
+              {settledCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowSettled((s) => !s)}
+                  className="font-body text-muted-foreground hover:text-foreground flex items-center gap-1.5 self-start text-xs"
+                >
+                  <Icon i={showSettled ? 'eye-off' : 'eye'} size={13} />
+                  {showSettled
+                    ? t('creances.hideSettled')
+                    : t('creances.showSettled', { n: settledCount })}
+                </button>
+              )}
             </div>
 
             {/* Liste */}
@@ -179,13 +205,19 @@ export default function CreancesManager() {
                         >
                           {d.name}
                         </span>
-                        <span
-                          className={`font-body shrink-0 text-sm font-bold ${
-                            active ? 'text-secondary-foreground' : 'text-danger'
-                          }`}
-                        >
-                          {formatFCFA(d.debt)} {t('common.fcfa')}
-                        </span>
+                        {d.debt > 0 ? (
+                          <span
+                            className={`font-body shrink-0 text-sm font-bold ${
+                              active ? 'text-secondary-foreground' : 'text-danger'
+                            }`}
+                          >
+                            {formatFCFA(d.debt)} {t('common.fcfa')}
+                          </span>
+                        ) : (
+                          <span className="font-body text-success shrink-0 text-xs font-semibold">
+                            {t('credit.status.paid')}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 flex items-center justify-between gap-2">
                         <span className="text-muted-foreground font-body truncate text-xs">
@@ -311,6 +343,47 @@ export default function CreancesManager() {
                   </div>
                 </div>
               </div>
+
+              {/* Remboursements reçus (timeline) */}
+              {selected.repayments.length > 0 && (
+                <div className="bg-surface border-border rounded-lg border">
+                  <div className="border-border border-b px-5 py-4">
+                    <h3 className="font-headings text-foreground text-base font-bold">
+                      {t('creances.repayments.title')}
+                    </h3>
+                  </div>
+                  <div className="flex flex-col">
+                    {selected.repayments.map((p) => (
+                      <div
+                        key={p.id}
+                        className="border-border flex items-center gap-3 border-b px-5 py-3 last:border-b-0"
+                      >
+                        <div className="bg-success/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                          <Icon i="arrow-down-left" size={15} className="text-success" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-body text-foreground text-sm font-semibold">
+                              {t(p.method === 'mobile' ? 'method.mobile' : 'method.cash')}
+                            </span>
+                            {p.note && (
+                              <span className="text-muted-foreground font-body truncate text-xs">
+                                · {p.note}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-muted-foreground font-body text-xs">
+                            {fmtDate(p.date)}
+                          </span>
+                        </div>
+                        <span className="font-body text-success shrink-0 text-sm font-bold">
+                          + {formatFCFA(p.amount)} {t('common.fcfa')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Formulaire de remboursement */}
               <RepaymentForm

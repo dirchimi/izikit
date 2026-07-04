@@ -25,7 +25,23 @@ const Body = z.object({
   amount: z.number().int().positive(),
   method: z.enum(['cash', 'mobile']),
   note: z.string().trim().max(200).optional(),
+  // Date du remboursement (YYYY-MM-DD) — permet d'antidater une réception passée.
+  // Absente → maintenant. Une date future est refusée.
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
+
+/** Convertit un 'YYYY-MM-DD' en Date (midi local) ; null si future/invalide. */
+function repaymentDate(ymd: string | undefined): Date | null {
+  if (!ymd) return null;
+  const d = new Date(`${ymd}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  // Pas de remboursement daté dans le futur.
+  if (d.getTime() > Date.now()) return null;
+  return d;
+}
 
 type RepayResult =
   | { kind: 'CUSTOMER_NOT_FOUND' }
@@ -68,6 +84,7 @@ export async function POST(
     const method = parsed.data.method.toUpperCase();
     const amount = parsed.data.amount;
     const note = parsed.data.note;
+    const backdated = repaymentDate(parsed.data.date);
 
     const result: RepayResult = await prisma.$transaction(
       async (tx) => {
@@ -102,6 +119,7 @@ export async function POST(
             amount: applied,
             method,
             ...(note ? { note } : {}),
+            ...(backdated ? { createdAt: backdated } : {}),
             createdById: userSub,
           },
         });

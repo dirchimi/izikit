@@ -1494,6 +1494,21 @@ const messages: Record<string, Msg> = {
     en: 'Credit purchase history',
     ar: 'سجل المشتريات الآجلة',
   },
+  'creances.repayments.title': {
+    fr: 'Remboursements reçus',
+    en: 'Repayments received',
+    ar: 'الدفعات المستلمة',
+  },
+  'creances.showSettled': {
+    fr: 'Voir les clients soldés ({n})',
+    en: 'Show settled customers ({n})',
+    ar: 'عرض الزبائن المسدّدين ({n})',
+  },
+  'creances.hideSettled': {
+    fr: 'Masquer les soldés',
+    en: 'Hide settled',
+    ar: 'إخفاء المسدّدين',
+  },
   'credit.status.paid': { fr: 'Remboursé', en: 'Repaid', ar: 'مسدّد' },
   'credit.status.partial': { fr: 'Partiel', en: 'Partial', ar: 'جزئي' },
   'credit.status.credit': { fr: 'Dû', en: 'Owed', ar: 'مستحق' },
@@ -1524,6 +1539,7 @@ const messages: Record<string, Msg> = {
   },
   'creances.form.amount': { fr: 'Montant reçu', en: 'Amount received', ar: 'المبلغ المستلَم' },
   'creances.form.method': { fr: 'Mode de paiement', en: 'Payment method', ar: 'وسيلة الدفع' },
+  'creances.form.date': { fr: 'Date', en: 'Date', ar: 'التاريخ' },
   'creances.form.note': { fr: 'Note (optionnel)', en: 'Note (optional)', ar: 'ملاحظة (اختياري)' },
   'creances.form.notePlaceholder': {
     fr: 'Ex: acompte du 15 jan',
