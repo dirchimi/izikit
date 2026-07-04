@@ -1809,6 +1809,12 @@ const messages: Record<string, Msg> = {
   'parametres.field.name': { fr: 'Nom de la boutique', en: 'Shop name', ar: 'اسم المتجر' },
   'parametres.field.phone': { fr: 'Numéro de téléphone', en: 'Phone number', ar: 'رقم الهاتف' },
   'parametres.field.city': { fr: 'Ville', en: 'City', ar: 'المدينة' },
+  'parametres.field.country': { fr: 'Pays', en: 'Country', ar: 'البلد' },
+  'parametres.field.countryHint': {
+    fr: 'Fixe l’indicatif par défaut — les clients saisissent leur numéro sans l’indicatif.',
+    en: 'Sets the default dialing code — customers enter their number without it.',
+    ar: 'يحدّد رمز الاتصال الافتراضي — يُدخل الزبائن أرقامهم بدونه.',
+  },
   'parametres.field.businessType': {
     fr: 'Type de commerce',
     en: 'Business type',
@@ -2007,10 +2013,10 @@ const messages: Record<string, Msg> = {
     ar: 'بحث أو إنشاء…',
   },
   'pos.client.create': { fr: 'Ajouter « {name} »', en: 'Add “{name}”', ar: 'إضافة «{name}»' },
-  'pos.client.phonePlaceholder': {
-    fr: 'Téléphone (optionnel) — +235 …',
-    en: 'Phone (optional) — +235 …',
-    ar: 'الهاتف (اختياري) — +235 …',
+  'pos.client.phoneAdd': {
+    fr: 'Numéro (sans indicatif)',
+    en: 'Number (no dialing code)',
+    ar: 'الرقم (بدون رمز الاتصال)',
   },
   'pos.client.clear': { fr: 'Retirer le client', en: 'Remove customer', ar: 'إزالة الزبون' },
   'pos.client.empty': { fr: 'Aucun client', en: 'No customer', ar: 'لا يوجد زبون' },

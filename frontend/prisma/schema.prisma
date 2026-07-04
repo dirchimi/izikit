@@ -339,6 +339,10 @@ model BoutiqueSettings {
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   currency       String       @default("XAF") // XAF | XOF | …
+  // Pays de la boutique (ISO 3166-1 alpha-2, ex. "TD"). Fixe l'indicatif
+  // téléphonique par défaut → les clients saisissent leur numéro LOCAL et
+  // l'envoi WhatsApp recompose le numéro international. Défaut Tchad.
+  country        String       @default("TD")
   phone          String?
   city           String?
   address        String?

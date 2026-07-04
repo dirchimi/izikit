@@ -8,6 +8,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
 import { uploadImage } from '@/lib/upload';
+import { COUNTRIES } from '@/lib/boutique/countries';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 const fieldClass =
@@ -31,6 +32,7 @@ export interface BoutiqueInfoValues {
   name: string;
   phone: string;
   city: string;
+  country: string;
   businessType: string;
   address: string;
   note: string;
@@ -70,6 +72,7 @@ export default function BoutiqueInfoForm({
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [city, setCity] = useState(initial.city);
+  const [country, setCountry] = useState(initial.country);
   const [businessType, setBusinessType] = useState(initial.businessType);
   const [address, setAddress] = useState(initial.address);
   const [note, setNote] = useState(initial.note);
@@ -95,7 +98,7 @@ export default function BoutiqueInfoForm({
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({ name, phone, city, businessType, address, note });
+      await onSave({ name, phone, city, country, businessType, address, note });
     } finally {
       setSaving(false);
     }
@@ -212,6 +215,26 @@ export default function BoutiqueInfoForm({
               onChange={(e) => setCity(e.target.value)}
               className={fieldClass}
             />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className={labelClass} htmlFor="bi-country">
+              {t('parametres.field.country')}
+            </label>
+            <select
+              id="bi-country"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className={fieldClass}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.flag} {c.name} (+{c.dial})
+                </option>
+              ))}
+            </select>
+            <span className="text-muted-foreground font-body text-xs">
+              {t('parametres.field.countryHint')}
+            </span>
           </div>
           <div className="flex flex-col gap-1">
             <label className={labelClass}>{t('parametres.field.businessType')}</label>

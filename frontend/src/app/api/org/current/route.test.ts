@@ -31,6 +31,7 @@ const boutiqueCtx = {
   organization: { id: 'org1', slug: 'me', name: 'Me' },
   settings: {
     currency: 'XAF',
+    country: 'TD',
     phone: null,
     city: null,
     address: null,

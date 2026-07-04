@@ -21,6 +21,7 @@ import type { OrgRole } from '../middleware/require-org-role';
 
 export interface BoutiqueSettingsView {
   currency: string;
+  country: string;
   phone: string | null;
   city: string | null;
   address: string | null;
@@ -39,6 +40,7 @@ export interface BoutiqueContext {
 
 const SETTINGS_SELECT = {
   currency: true,
+  country: true,
   phone: true,
   city: true,
   address: true,
@@ -59,6 +61,7 @@ function deriveName(email: string): string {
 function viewSettings(s: BoutiqueSettingsView): BoutiqueSettingsView {
   return {
     currency: s.currency,
+    country: s.country,
     phone: s.phone,
     city: s.city,
     address: s.address,
@@ -169,6 +172,7 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
     organization: created,
     settings: {
       currency: 'XAF',
+      country: 'TD',
       phone: null,
       city: null,
       address: null,

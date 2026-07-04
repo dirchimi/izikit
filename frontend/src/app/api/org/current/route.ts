@@ -18,6 +18,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 
 const SETTINGS_SELECT = {
   currency: true,
+  country: true,
   phone: true,
   city: true,
   address: true,
@@ -39,6 +40,11 @@ const PatchBody = z.object({
   currency: z
     .string()
     .regex(/^[A-Z]{3}$/)
+    .optional(),
+  // Pays de la boutique (ISO 3166-1 alpha-2) — fixe l'indicatif téléphonique.
+  country: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
     .optional(),
   // Seuils de notifications (réglés dans Paramètres).
   overdueDays: z.number().int().min(1).max(365).optional(),
@@ -109,6 +115,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       create: {
         organizationId: orgId,
         currency: d.currency ?? 'XAF',
+        country: d.country ?? 'TD',
         phone: d.phone ?? null,
         city: d.city ?? null,
         address: d.address ?? null,
@@ -122,6 +129,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       },
       update: {
         ...(d.currency !== undefined ? { currency: d.currency } : {}),
+        ...(d.country !== undefined ? { country: d.country } : {}),
         ...(d.phone !== undefined ? { phone: d.phone } : {}),
         ...(d.city !== undefined ? { city: d.city } : {}),
         ...(d.address !== undefined ? { address: d.address } : {}),

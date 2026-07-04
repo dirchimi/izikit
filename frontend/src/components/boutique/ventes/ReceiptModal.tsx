@@ -6,6 +6,8 @@ import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
+import { dialCodeFor } from '@/lib/boutique/countries';
+import { toWhatsAppNumber } from '@/lib/boutique/phone';
 
 export type ReceiptMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
 
@@ -48,6 +50,7 @@ function paymentLines(r: ReceiptData): { key: ReceiptMethod; amount: number }[] 
 interface OrgCurrent {
   organization: { name: string };
   settings: {
+    country: string;
     city: string | null;
     phone: string | null;
     address: string | null;
@@ -97,6 +100,7 @@ export default function ReceiptModal({
   const address = org?.settings.address ?? '';
   const logoUrl = org?.settings.logoUrl ?? '';
   const note = org?.settings.invoiceNote ?? '';
+  const dial = dialCodeFor(org?.settings.country);
 
   const dateStr = receipt
     ? new Date(receipt.createdAt).toLocaleString('fr-FR', {
@@ -257,7 +261,8 @@ export default function ReceiptModal({
    */
   function sendToClient() {
     if (!receipt?.customerPhone) return;
-    const digits = receipt.customerPhone.replace(/\D/g, '');
+    // Numéro local → recomposé en international avec l'indicatif de la boutique.
+    const digits = toWhatsAppNumber(receipt.customerPhone, dial);
     if (!digits) return;
     window.open(
       `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
@@ -304,7 +309,7 @@ export default function ReceiptModal({
         return;
       }
       // Repli texte (canvas indisponible).
-      const digits = (receipt.customerPhone ?? '').replace(/\D/g, '');
+      const digits = toWhatsAppNumber(receipt.customerPhone, dial);
       window.open(
         `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
         '_blank',

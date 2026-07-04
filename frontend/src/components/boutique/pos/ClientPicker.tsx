@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useApi } from '@/lib/useApi';
 import { useT } from '@/contexts/LocaleContext';
+import { countryByCode } from '@/lib/boutique/countries';
+
+interface OrgCurrentLite {
+  settings: { country: string };
+}
 
 /** Client choisi : soit un existant (avec id), soit un nouveau (nom seul). */
 export interface PickedClient {
@@ -36,10 +41,12 @@ export default function ClientPicker({
   const t = useT();
   const { data } = useApi<{ customers: ApiCustomer[] }>('/api/customers');
   const customers = data?.customers ?? [];
+  // Indicatif du pays de la boutique → préfixe affiché (le client saisit local).
+  const { data: org } = useApi<OrgCurrentLite>('/api/org/current');
+  const country = countryByCode(org?.settings.country);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [newPhone, setNewPhone] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,16 +85,13 @@ export default function ClientPicker({
     onChange({ id: c.id, name: c.name, phone: c.phone });
     setOpen(false);
     setQuery('');
-    setNewPhone('');
   }
   function create() {
     if (!trimmed) return;
-    const phone = newPhone.trim();
-    // Numéro capturé à la création → reçu + envoi WhatsApp direct au client.
-    onChange(phone ? { name: trimmed, phone } : { name: trimmed });
+    // Le numéro se saisit sous le sélecteur (ligne toujours visible après choix).
+    onChange({ name: trimmed });
     setOpen(false);
     setQuery('');
-    setNewPhone('');
   }
 
   return (
@@ -127,6 +131,27 @@ export default function ClientPicker({
           </button>
         )}
       </div>
+
+      {/* Numéro du client — toujours visible dès qu'un client est choisi.
+          Le client saisit son numéro LOCAL ; l'indicatif du pays est préfixé
+          (ex. 🇹🇩 +235) et l'envoi WhatsApp recompose le numéro international. */}
+      {value && (
+        <div className="border-border bg-input mt-1.5 flex items-center gap-2 rounded-md border px-2.5 py-1.5">
+          <span className="font-body text-muted-foreground shrink-0 text-xs font-semibold">
+            {country.flag} +{country.dial}
+          </span>
+          <input
+            type="tel"
+            inputMode="tel"
+            value={value.phone ?? ''}
+            onChange={(e) =>
+              onChange({ ...value, phone: e.target.value.trim() === '' ? null : e.target.value })
+            }
+            placeholder={t('pos.client.phoneAdd')}
+            className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
+          />
+        </div>
+      )}
 
       {open && (
         <div className="animate-scale-in border-border bg-surface absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border shadow-xl">
@@ -170,33 +195,14 @@ export default function ClientPicker({
             ))}
 
             {canCreate && (
-              <div className="flex flex-col gap-2 px-3 py-2">
-                <div className="border-border bg-input flex items-center gap-2 rounded-md border px-2.5 py-1.5">
-                  <Icon i="phone" size={13} className="text-muted-foreground shrink-0" />
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        create();
-                      }
-                    }}
-                    placeholder={t('pos.client.phonePlaceholder')}
-                    className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={create}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 font-body flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold"
-                >
-                  <Icon i="plus" size={14} />
-                  {t('pos.client.create', { name: trimmed })}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={create}
+                className="text-primary hover:bg-muted font-body flex w-full items-center gap-2 px-3 py-2 text-start text-sm font-semibold"
+              >
+                <Icon i="plus" size={14} />
+                {t('pos.client.create', { name: trimmed })}
+              </button>
             )}
 
             {filtered.length === 0 && !canCreate && (
