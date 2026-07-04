@@ -52,6 +52,8 @@ const Body = z
         phone: z.string().trim().max(40).optional(),
       })
       .optional(),
+    // Remise globale accordée sur la vente (FCFA). Bornée [0, brut] côté serveur.
+    discount: z.number().int().nonnegative().optional(),
   })
   .refine((d) => d.method !== undefined || (d.payments?.length ?? 0) > 0, {
     message: 'method_or_payments_required',
@@ -89,6 +91,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         number: true,
         method: true,
         total: true,
+        discount: true,
         cashAmount: true,
         mobileAmount: true,
         creditAmount: true,
@@ -119,6 +122,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       number: s.number,
       method: s.method,
       total: s.total,
+      discount: s.discount,
       cashAmount: s.cashAmount,
       mobileAmount: s.mobileAmount,
       creditAmount: s.creditAmount,
@@ -217,13 +221,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
           customerId = c.id;
         }
-        const total = items.reduce((sum, item) => {
+        // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
+        const gross = items.reduce((sum, item) => {
           const p = byId.get(item.productId);
           return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
         }, 0);
+        const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
+        const total = gross - discount;
 
         // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
-        // égaler le total. Sinon : paiement unique via `method` (compat).
+        // égaler le total NET. Sinon : paiement unique via `method` (compat).
         const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
         if (paymentsInput && paymentsInput.length > 0) {
           for (const p of paymentsInput) {
@@ -249,6 +256,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             number,
             method,
             total,
+            discount,
             cashAmount: bd.CASH,
             mobileAmount: bd.MOBILE,
             creditAmount,

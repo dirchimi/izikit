@@ -24,6 +24,7 @@ interface ApiSale {
   number: string;
   method: ApiMethod;
   total: number;
+  discount: number;
   cashAmount: number;
   mobileAmount: number;
   creditAmount: number;
@@ -184,6 +185,8 @@ export default function VentesManager() {
       createdAt: s.createdAt,
       method: s.method,
       total: s.total,
+      subtotal: s.total + s.discount,
+      discount: s.discount,
       payments: { cash: s.cashAmount, mobile: s.mobileAmount, credit: s.creditAmount },
       customerName: s.customerName,
       customerPhone: s.customerPhone,

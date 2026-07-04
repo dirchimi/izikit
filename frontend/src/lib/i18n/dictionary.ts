@@ -2062,6 +2062,7 @@ const messages: Record<string, Msg> = {
   'pos.validate': { fr: 'Valider la vente', en: 'Confirm sale', ar: 'تأكيد البيع' },
   'pos.retail': { fr: 'Détail', en: 'Retail', ar: 'تجزئة' },
   'pos.wholesale': { fr: 'Gros', en: 'Wholesale', ar: 'جملة' },
+  'pos.discount': { fr: 'Remise', en: 'Discount', ar: 'خصم' },
   'pos.priceMode.prompt': {
     fr: 'Vendre au détail ou en gros ?',
     en: 'Sell at retail or wholesale?',

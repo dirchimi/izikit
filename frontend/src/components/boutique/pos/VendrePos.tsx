@@ -64,6 +64,7 @@ export default function VendrePos() {
   const [amounts, setAmounts] = useState<SplitAmounts>({ cash: '', mobile: '', credit: '' });
   const [client, setClient] = useState<PickedClient | null>(null);
   const [cart, setCart] = useState<CartLineData[]>([]);
+  const [discount, setDiscount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [barcode, setBarcode] = useState('');
@@ -90,12 +91,15 @@ export default function VendrePos() {
   }, [products, query, category]);
 
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
+  // Brut = somme des lignes ; la remise (bornée) le réduit → total NET encaissé.
   const subtotal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+  const discountAmount = Math.min(num(discount), subtotal);
+  const netTotal = subtotal - discountAmount;
 
-  // Paiement mixte : somme ventilée + reste à répartir + part crédit.
+  // Paiement mixte : somme ventilée + reste à répartir + part crédit (sur le NET).
   const splitSum = num(amounts.cash) + num(amounts.mobile) + num(amounts.credit);
-  const remaining = subtotal - splitSum;
-  const creditPortion = split ? num(amounts.credit) : method === 'credit' ? subtotal : 0;
+  const remaining = netTotal - splitSum;
+  const creditPortion = split ? num(amounts.credit) : method === 'credit' ? netTotal : 0;
 
   /** Ajoute un produit au panier au tarif choisi (détail ou gros). */
   function addToCart(product: ApiProduct, wholesale: boolean) {
@@ -176,6 +180,7 @@ export default function VendrePos() {
     setSplit(false);
     setMethod('cash');
     setAmounts({ cash: '', mobile: '', credit: '' });
+    setDiscount('');
   }
 
   async function validate() {
@@ -195,13 +200,13 @@ export default function VendrePos() {
     }
 
     // Ventilation envoyée au serveur : en mode mixte on ventile par méthode,
-    // sinon on envoie la méthode unique (compat).
+    // sinon on envoie la méthode unique (compat). Elle porte sur le NET.
     const breakdown = split
       ? { cash: num(amounts.cash), mobile: num(amounts.mobile), credit: num(amounts.credit) }
       : {
-          cash: method === 'cash' ? subtotal : 0,
-          mobile: method === 'mobile' ? subtotal : 0,
-          credit: method === 'credit' ? subtotal : 0,
+          cash: method === 'cash' ? netTotal : 0,
+          mobile: method === 'mobile' ? netTotal : 0,
+          credit: method === 'credit' ? netTotal : 0,
         };
     const payments = (['cash', 'mobile', 'credit'] as const)
       .filter((k) => breakdown[k] > 0)
@@ -213,6 +218,7 @@ export default function VendrePos() {
         method: 'POST',
         body: {
           ...(split ? { payments } : { method }),
+          ...(discountAmount > 0 ? { discount: discountAmount } : {}),
           items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
           // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé
           // à la volée avec son numéro → reçu + WhatsApp direct).
@@ -225,13 +231,15 @@ export default function VendrePos() {
             : {}),
         },
       });
-      toast(t('pos.saleRecorded', { amount: formatFCFA(subtotal) }), 'success');
+      toast(t('pos.saleRecorded', { amount: formatFCFA(netTotal) }), 'success');
       // Reçu proposé tout de suite (imprimer / envoyer par WhatsApp).
       setReceipt({
         number: res.sale.number,
         createdAt: new Date().toISOString(),
         method: method.toUpperCase() as ReceiptMethod,
-        total: subtotal,
+        total: netTotal,
+        subtotal,
+        discount: discountAmount,
         payments: breakdown,
         customerName: client?.name ?? null,
         customerPhone: client?.phone ?? null,
@@ -395,6 +403,31 @@ export default function VendrePos() {
 
           {/* Paiement */}
           <div className="border-border flex flex-col gap-4 border-t px-5 py-5">
+            {/* Remise globale (FCFA) — réduit le total encaissé. */}
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="pos-discount"
+                className="font-body text-muted-foreground flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Icon i="badge-percent" size={14} />
+                {t('pos.discount')}
+              </label>
+              <div className="border-border bg-input focus-within:border-primary flex w-32 items-center gap-1 rounded-md border px-2 py-1.5">
+                <input
+                  id="pos-discount"
+                  type="number"
+                  min="0"
+                  max={subtotal}
+                  inputMode="numeric"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="0"
+                  className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-end text-sm outline-none"
+                />
+                <span className="text-muted-foreground text-[11px]">{t('common.fcfa')}</span>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1">
               <div className="font-body text-muted-foreground flex justify-between text-sm">
                 <span>{t('common.subtotal')}</span>
@@ -402,10 +435,18 @@ export default function VendrePos() {
                   {formatFCFA(subtotal)} {t('common.fcfa')}
                 </span>
               </div>
+              {discountAmount > 0 && (
+                <div className="font-body text-success flex justify-between text-sm">
+                  <span>{t('pos.discount')}</span>
+                  <span>
+                    − {formatFCFA(discountAmount)} {t('common.fcfa')}
+                  </span>
+                </div>
+              )}
               <div className="font-body text-foreground flex justify-between text-base font-bold">
                 <span>{t('common.total')}</span>
                 <span>
-                  {formatFCFA(subtotal)} {t('common.fcfa')}
+                  {formatFCFA(netTotal)} {t('common.fcfa')}
                 </span>
               </div>
             </div>

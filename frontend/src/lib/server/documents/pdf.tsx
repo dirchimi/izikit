@@ -145,17 +145,29 @@ function buildElement(input: PdfInput) {
           </View>
         ))}
 
-        {/* Totaux */}
-        <View style={s.totals}>
-          <View style={s.totalRow}>
-            <Text style={s.muted}>Sous-total</Text>
-            <Text>{money(input.total, cur)}</Text>
-          </View>
-          <View style={s.grand}>
-            <Text style={s.grandLabel}>{isProforma ? 'Total estimé' : 'Total'}</Text>
-            <Text style={s.grandValue}>{money(input.total, cur)}</Text>
-          </View>
-        </View>
+        {/* Totaux — remise dérivée (brut des lignes − total net) si > 0. */}
+        {(() => {
+          const gross = input.lines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+          const discount = gross - input.total;
+          return (
+            <View style={s.totals}>
+              <View style={s.totalRow}>
+                <Text style={s.muted}>Sous-total</Text>
+                <Text>{money(gross, cur)}</Text>
+              </View>
+              {discount > 0 ? (
+                <View style={s.totalRow}>
+                  <Text style={s.muted}>Remise</Text>
+                  <Text>- {money(discount, cur)}</Text>
+                </View>
+              ) : null}
+              <View style={s.grand}>
+                <Text style={s.grandLabel}>{isProforma ? 'Total estimé' : 'Total'}</Text>
+                <Text style={s.grandValue}>{money(input.total, cur)}</Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {input.note ? <Text style={[s.small, { marginTop: 12 }]}>{input.note}</Text> : null}
         <Text style={s.footer}>{footer}</Text>

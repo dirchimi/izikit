@@ -116,25 +116,41 @@ export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: B
           </div>
         </div>
 
-        {/* Totaux */}
-        <div className="mt-4 flex flex-col items-end gap-1">
-          <div className="flex w-64 items-center gap-8">
-            <span className="text-muted-foreground font-body flex-1 text-sm">
-              {t('documents.preview.subtotal')}
-            </span>
-            <span className="font-body text-foreground text-sm font-semibold">
-              {formatFCFA(doc.total)} {t('common.fcfa')}
-            </span>
-          </div>
-          <div className="border-border mt-1 flex w-64 items-center gap-8 border-t pt-2">
-            <span className="font-body text-foreground flex-1 text-base font-bold">
-              {t(isProforma ? 'documents.preview.totalEstimated' : 'common.total')}
-            </span>
-            <span className="font-headings text-primary text-base font-bold">
-              {formatFCFA(doc.total)} {t('common.fcfa')}
-            </span>
-          </div>
-        </div>
+        {/* Totaux — remise dérivée (brut des lignes − total net) si > 0. */}
+        {(() => {
+          const gross = doc.lines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+          const discount = gross - doc.total;
+          return (
+            <div className="mt-4 flex flex-col items-end gap-1">
+              <div className="flex w-64 items-center gap-8">
+                <span className="text-muted-foreground font-body flex-1 text-sm">
+                  {t('documents.preview.subtotal')}
+                </span>
+                <span className="font-body text-foreground text-sm font-semibold">
+                  {formatFCFA(gross)} {t('common.fcfa')}
+                </span>
+              </div>
+              {discount > 0 && (
+                <div className="flex w-64 items-center gap-8">
+                  <span className="text-muted-foreground font-body flex-1 text-sm">
+                    {t('pos.discount')}
+                  </span>
+                  <span className="font-body text-success text-sm font-semibold">
+                    − {formatFCFA(discount)} {t('common.fcfa')}
+                  </span>
+                </div>
+              )}
+              <div className="border-border mt-1 flex w-64 items-center gap-8 border-t pt-2">
+                <span className="font-body text-foreground flex-1 text-base font-bold">
+                  {t(isProforma ? 'documents.preview.totalEstimated' : 'common.total')}
+                </span>
+                <span className="font-headings text-primary text-base font-bold">
+                  {formatFCFA(doc.total)} {t('common.fcfa')}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Note de pied */}

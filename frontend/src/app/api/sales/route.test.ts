@@ -91,6 +91,48 @@ describe('POST /api/sales (checkout)', () => {
     expect(saleArg.data.items.create[0]?.buyPrice).toBe(4500);
   });
 
+  it('applique une remise : total NET = brut − remise, discount enregistré', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ method: 'cash', discount: 500, items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.sale.total).toBe(11500); // 12000 − 500
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ total: 11500, discount: 500, cashAmount: 11500 }),
+      }),
+    );
+  });
+
+  it('remise bornée au brut (jamais de total négatif)', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ method: 'cash', discount: 999999, items: [{ productId: 'p1', qty: 1 }] }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.sale.total).toBe(0); // remise plafonnée à 6000
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ discount: 6000, total: 0 }) }),
+    );
+  });
+
   it('409 INSUFFICIENT_STOCK si la quantité dépasse le stock', async () => {
     prismaMock.product.findMany.mockResolvedValueOnce([
       { id: 'p1', name: 'Riz', sellPrice: 6000, qty: 1 },
@@ -207,6 +249,7 @@ describe('GET /api/sales', () => {
         number: 'V-0006',
         method: 'CREDIT',
         total: 13500,
+        discount: 0,
         cashAmount: 0,
         mobileAmount: 0,
         creditAmount: 13500,

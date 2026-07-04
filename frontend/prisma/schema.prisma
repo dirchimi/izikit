@@ -201,7 +201,8 @@ model Sale {
   customerId     String?
   customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   method         String // CASH | MOBILE | CREDIT | MIXED
-  total          Int
+  total          Int // total NET encaissé (= brut des lignes − remise)
+  discount       Int          @default(0) // remise globale accordée (FCFA)
   cashAmount     Int          @default(0) // part réglée en espèces
   mobileAmount   Int          @default(0) // part réglée en mobile money
   creditAmount   Int          @default(0) // part à crédit (= montant de la créance)

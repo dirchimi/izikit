@@ -27,7 +27,10 @@ export interface ReceiptData {
   number: string;
   createdAt: string; // ISO
   method: ReceiptMethod;
-  total: number;
+  total: number; // total NET (après remise)
+  // Sous-total (brut) + remise — affichés seulement si une remise a été accordée.
+  subtotal?: number;
+  discount?: number;
   // Ventilation du paiement (mixte). Absent → affichage mono-méthode (`method`).
   payments?: { cash: number; mobile: number; credit: number };
   customerName: string | null;
@@ -124,6 +127,9 @@ export default function ReceiptModal({
     H += 18 + receipt.items.length * 22 + 26 + 28 + 20 + 24 + 18 + PAD;
     // Lignes de paiement supplémentaires (ventilation mixte) : +16px chacune.
     H += 16 * Math.max(0, payLines.length - 1);
+    // Sous-total + remise (2 lignes) si une remise a été accordée.
+    const hasDiscount = (receipt.discount ?? 0) > 0;
+    if (hasDiscount) H += 32;
 
     const dpr = 2;
     const canvas = document.createElement('canvas');
@@ -210,6 +216,25 @@ export default function ReceiptModal({
     ctx.lineTo(W - PAD, y);
     ctx.stroke();
     y += 24;
+    // Sous-total + remise (avant le total NET) si une remise a été accordée.
+    if (hasDiscount) {
+      ctx.fillStyle = '#737373';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(t('common.subtotal'), PAD, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(
+        `${formatFCFA(receipt.subtotal ?? receipt.total)} ${t('common.fcfa')}`,
+        W - PAD,
+        y,
+      );
+      y += 16;
+      ctx.textAlign = 'left';
+      ctx.fillText(t('pos.discount'), PAD, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(`- ${formatFCFA(receipt.discount ?? 0)} ${t('common.fcfa')}`, W - PAD, y);
+      y += 16;
+    }
     // Total
     ctx.fillStyle = '#171717';
     ctx.font = 'bold 16px sans-serif';
@@ -379,6 +404,23 @@ export default function ReceiptModal({
             </div>
 
             <div className="my-3 border-t border-neutral-300" />
+
+            {(receipt.discount ?? 0) > 0 && (
+              <div className="font-body mb-1 flex flex-col gap-0.5 text-xs text-neutral-500">
+                <div className="flex justify-between">
+                  <span>{t('common.subtotal')}</span>
+                  <span>
+                    {formatFCFA(receipt.subtotal ?? receipt.total)} {t('common.fcfa')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{t('pos.discount')}</span>
+                  <span>
+                    − {formatFCFA(receipt.discount ?? 0)} {t('common.fcfa')}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="font-body flex justify-between text-base font-bold text-neutral-900">
               <span>{t('common.total')}</span>
