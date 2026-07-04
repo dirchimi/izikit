@@ -94,7 +94,7 @@ export default function DashboardManager() {
 
                   {/* Graphe + alertes stock */}
                   <div className="flex flex-col gap-5 lg:flex-row">
-                    <div className="bg-surface border-border flex-1 rounded-lg border px-6 py-5">
+                    <div className="bg-surface border-border min-w-0 flex-1 rounded-lg border px-6 py-5">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
                           <h2 className="font-headings text-foreground text-base font-bold">

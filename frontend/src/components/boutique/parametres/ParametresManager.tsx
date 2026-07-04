@@ -141,7 +141,7 @@ export default function ParametresManager() {
         </div>
 
         {/* Panneau */}
-        <div className="flex flex-1 flex-col gap-6 px-4 py-6 md:px-8">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 md:px-8">
           {active === 'boutique' && renderBoutiquePanel()}
 
           {active === 'facturation' && <FacturationSection />}

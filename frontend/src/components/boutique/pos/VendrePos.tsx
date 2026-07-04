@@ -271,7 +271,7 @@ export default function VendrePos() {
 
       <div className="flex flex-col lg:flex-row">
         {/* Catalogue produits */}
-        <div className="border-border flex flex-1 flex-col lg:border-e">
+        <div className="border-border flex min-w-0 flex-1 flex-col lg:border-e">
           {/* Recherche + scan code-barres */}
           <div className="flex flex-col gap-2 px-4 pt-5 pb-3 md:px-6">
             <div className="border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2.5">

@@ -87,7 +87,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {/* pb sous lg : laisse la place à la barre de navigation basse */}
         <main
           key={pathname}
-          className="animate-fade-in min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+          className="animate-fade-in min-w-0 flex-1 overflow-x-clip pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0"
         >
           {children}
         </main>

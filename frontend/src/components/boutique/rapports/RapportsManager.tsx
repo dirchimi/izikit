@@ -275,7 +275,7 @@ export default function RapportsManager() {
 
               {/* Graphe + Top produits */}
               <div className="flex flex-col gap-5 lg:flex-row">
-                <div className="bg-surface border-border flex flex-1 flex-col gap-4 rounded-lg border px-5 py-5 md:px-6">
+                <div className="bg-surface border-border flex min-w-0 flex-1 flex-col gap-4 rounded-lg border px-5 py-5 md:px-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-headings text-foreground text-base font-bold">
                       {t('rapports.chartTitle')}

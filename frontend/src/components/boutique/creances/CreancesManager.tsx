@@ -244,7 +244,7 @@ export default function CreancesManager() {
 
           {/* Détail du débiteur */}
           {selected && (
-            <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+            <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
               {/* En-tête client */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-center gap-4">

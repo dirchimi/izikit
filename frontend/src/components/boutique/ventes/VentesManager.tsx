@@ -266,7 +266,7 @@ export default function VentesManager() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+      <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
         {/* KPI */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <KpiCard
@@ -399,7 +399,7 @@ export default function VentesManager() {
           emptyLabel={t('ventes.emptyAll')}
           emptyIcon="receipt"
         >
-          <div className="bg-surface border-border hidden rounded-lg border md:block">
+          <div className="bg-surface border-border hidden rounded-lg border lg:block">
             <div className="overflow-x-auto">
               <div className="min-w-[840px]">
                 <div className="bg-muted border-border flex items-center gap-4 rounded-t-lg border-b px-5 py-3">
@@ -533,8 +533,8 @@ export default function VentesManager() {
             </div>
           </div>
 
-          {/* Cartes (mobile / tablette < md) */}
-          <div className="flex flex-col gap-3 md:hidden">
+          {/* Cartes (mobile / tablette < lg) */}
+          <div className="flex flex-col gap-3 lg:hidden">
             {rows.map((r) => (
               <div
                 key={r.id}

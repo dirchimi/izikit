@@ -292,9 +292,9 @@ export default function StockManager() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-col">
+      <div className="flex min-w-0 flex-col">
         {/* Liste produits */}
-        <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+        <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
           {/* KPI */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
@@ -393,7 +393,7 @@ export default function StockManager() {
             emptyLabel={t('stock.emptyAll')}
             emptyIcon="package"
           >
-            <div className="bg-surface border-border hidden rounded-lg border md:block">
+            <div className="bg-surface border-border hidden rounded-lg border lg:block">
               <div className="overflow-x-auto">
                 <div className="min-w-[860px]">
                   {/* En-tête */}
@@ -555,8 +555,8 @@ export default function StockManager() {
               </div>
             </div>
 
-            {/* Cartes (mobile / tablette < md) */}
-            <div className="flex flex-col gap-3 md:hidden">
+            {/* Cartes (mobile / tablette < lg) */}
+            <div className="flex flex-col gap-3 lg:hidden">
               {visible.map((p) => {
                 const s = stockStatusConfig[p.status];
                 return (

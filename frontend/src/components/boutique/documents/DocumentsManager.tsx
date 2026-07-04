@@ -338,7 +338,7 @@ export default function DocumentsManager() {
 
         {/* Aperçu du document */}
         {selected && (
-          <div className="flex flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+          <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
             {/* En-tête de l'aperçu */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
