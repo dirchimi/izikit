@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import Modal from '@/components/ui/Modal';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import AsyncState from '@/components/boutique/AsyncState';
@@ -67,6 +68,8 @@ export default function VendrePos() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [barcode, setBarcode] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+  // Produit en attente de choix « Détail / Gros » (ouvert à chaque ajout).
+  const [choosing, setChoosing] = useState<ApiProduct | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
   const products = data?.products ?? [];
@@ -94,22 +97,29 @@ export default function VendrePos() {
   const remaining = subtotal - splitSum;
   const creditPortion = split ? num(amounts.credit) : method === 'credit' ? subtotal : 0;
 
-  function addToCart(product: ApiProduct) {
+  /** Ajoute un produit au panier au tarif choisi (détail ou gros). */
+  function addToCart(product: ApiProduct, wholesale: boolean) {
+    const useWholesale = wholesale && product.prixGros > 0;
+    const unitPrice = useWholesale ? product.prixGros : product.sellPrice;
     setCart((prev) => {
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
-        return prev.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l));
+        return prev.map((l) =>
+          l.productId === product.id
+            ? { ...l, qty: l.qty + 1, wholesale: useWholesale, unitPrice }
+            : l,
+        );
       }
       return [
         ...prev,
         {
           productId: product.id,
           name: product.name,
-          unitPrice: product.sellPrice,
+          unitPrice,
           qty: 1,
           sellPrice: product.sellPrice,
           prixGros: product.prixGros,
-          wholesale: false,
+          wholesale: useWholesale,
         },
       ];
     });
@@ -147,7 +157,8 @@ export default function VendrePos() {
       toast(t('pos.scan.notFound', { code }), 'error');
       return;
     }
-    addToCart(p);
+    // Scan → ajout direct au détail (le choix gros/détail reste sur la ligne).
+    addToCart(p, false);
     // Rupture : on avertit mais on laisse le choix (la ligne est ajoutée).
     if (p.qty <= 0) toast(t('pos.scan.outOfStock', { name: p.name }), 'info');
     else toast(t('pos.scan.added', { name: p.name }), 'success');
@@ -337,7 +348,7 @@ export default function VendrePos() {
                         low: p.status !== 'ok',
                         imageUrl: p.imageUrl,
                       }}
-                      onAdd={() => addToCart(p)}
+                      onAdd={() => setChoosing(p)}
                     />
                   ))}
                 </div>
@@ -520,6 +531,58 @@ export default function VendrePos() {
           addByBarcode(code);
         }}
       />
+
+      {/* Choix Détail / Gros à l'ajout d'un produit. Le bouton « Gros » est
+          désactivé si le produit n'a pas de prix de gros défini. */}
+      <Modal
+        open={choosing !== null}
+        onClose={() => setChoosing(null)}
+        title={choosing?.name ?? ''}
+        size="sm"
+      >
+        {choosing && (
+          <div className="flex flex-col gap-3">
+            <p className="font-body text-muted-foreground text-sm">{t('pos.priceMode.prompt')}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  addToCart(choosing, false);
+                  setChoosing(null);
+                }}
+                className="border-border hover:border-primary flex flex-col items-center gap-1 rounded-lg border px-4 py-4 transition-colors"
+              >
+                <span className="font-body text-muted-foreground text-xs font-semibold">
+                  {t('pos.retail')}
+                </span>
+                <span className="font-headings text-foreground text-lg font-bold">
+                  {formatFCFA(choosing.sellPrice)}
+                </span>
+                <span className="text-muted-foreground text-[11px]">{t('common.fcfa')}</span>
+              </button>
+              <button
+                type="button"
+                disabled={choosing.prixGros <= 0}
+                onClick={() => {
+                  addToCart(choosing, true);
+                  setChoosing(null);
+                }}
+                className="border-primary bg-primary/5 hover:bg-primary/10 flex flex-col items-center gap-1 rounded-lg border px-4 py-4 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className="font-body text-primary text-xs font-semibold">
+                  {t('pos.wholesale')}
+                </span>
+                <span className="font-headings text-foreground text-lg font-bold">
+                  {choosing.prixGros > 0 ? formatFCFA(choosing.prixGros) : '—'}
+                </span>
+                <span className="text-muted-foreground text-[11px]">
+                  {choosing.prixGros > 0 ? t('common.fcfa') : t('pos.priceMode.noWholesale')}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

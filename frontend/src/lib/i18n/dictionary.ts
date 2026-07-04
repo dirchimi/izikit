@@ -2062,6 +2062,16 @@ const messages: Record<string, Msg> = {
   'pos.validate': { fr: 'Valider la vente', en: 'Confirm sale', ar: 'تأكيد البيع' },
   'pos.retail': { fr: 'Détail', en: 'Retail', ar: 'تجزئة' },
   'pos.wholesale': { fr: 'Gros', en: 'Wholesale', ar: 'جملة' },
+  'pos.priceMode.prompt': {
+    fr: 'Vendre au détail ou en gros ?',
+    en: 'Sell at retail or wholesale?',
+    ar: 'البيع بالتجزئة أم بالجملة؟',
+  },
+  'pos.priceMode.noWholesale': {
+    fr: 'Prix de gros non défini',
+    en: 'No wholesale price',
+    ar: 'سعر الجملة غير محدّد',
+  },
   'pos.scan.field': {
     fr: 'Scanner ou saisir un code-barres…',
     en: 'Scan or type a barcode…',
