@@ -1389,6 +1389,13 @@ const messages: Record<string, Msg> = {
   'ventes.period.all': { fr: 'Tout l’historique', en: 'All history', ar: 'كل السجل' },
   'ventes.col.time': { fr: 'Heure', en: 'Time', ar: 'الوقت' },
   'ventes.col.payment': { fr: 'Paiement', en: 'Payment', ar: 'الدفع' },
+  'ventes.col.actions': { fr: 'Actions', en: 'Actions', ar: 'إجراءات' },
+  'ventes.invoiceGenerate': {
+    fr: 'Générer la facture',
+    en: 'Generate invoice',
+    ar: 'إنشاء الفاتورة',
+  },
+  'ventes.invoiceView': { fr: 'Voir la facture', en: 'View invoice', ar: 'عرض الفاتورة' },
   'ventes.col.sync': { fr: 'Sync', en: 'Sync', ar: 'المزامنة' },
   'ventes.unsynced': { fr: '{n} non synchronisées', en: '{n} not synced', ar: '{n} غير مزامَنة' },
   'ventes.cancel': { fr: 'Annuler la vente', en: 'Cancel sale', ar: 'إلغاء البيع' },

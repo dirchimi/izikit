@@ -15,6 +15,8 @@ import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
+import PdfPreviewModal from '@/components/boutique/documents/PdfPreviewModal';
+import type { ApiDocument } from '@/components/boutique/documents/types';
 
 type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
 interface ApiSale {
@@ -79,14 +81,69 @@ export default function VentesManager() {
   const [cancelTarget, setCancelTarget] = useState<{ id: string; number: string } | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  // Facture depuis une vente : PDF ouvert + vente en cours de facturation.
+  const [pdfDoc, setPdfDoc] = useState<ApiDocument | null>(null);
+  const [invoicing, setInvoicing] = useState<string | null>(null);
 
   const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
   const sales = data?.sales ?? [];
 
   // Le bouton « Annuler » n'est visible que pour le Patron (OWNER) et le
   // Manager (ADMIN) — le serveur applique la même règle (défense en profondeur).
-  const { data: org } = useApi<{ role: string }>('/api/org/current');
+  const { data: org } = useApi<{ role: string; organization: { name: string } }>(
+    '/api/org/current',
+  );
   const canCancel = org?.role === 'OWNER' || org?.role === 'ADMIN';
+  const orgName = org?.organization.name ?? 'Boutique';
+
+  // Factures déjà émises → on peut ouvrir le PDF au lieu de re-générer.
+  const { data: docData, refresh: refreshDocs } = useApi<{ documents: ApiDocument[] }>(
+    '/api/documents',
+  );
+  const factureBySaleId = useMemo(() => {
+    const map = new Map<string, ApiDocument>();
+    for (const d of docData?.documents ?? []) {
+      if (d.type === 'FACTURE' && d.saleId) map.set(d.saleId, d);
+    }
+    return map;
+  }, [docData]);
+
+  function docTitle(doc: ApiDocument): string {
+    return `${t('documents.kind.facture')} ${doc.number}`;
+  }
+  function docShareText(doc: ApiDocument): string {
+    return `${orgName} — ${t('documents.kind.facture')} ${doc.number}\n${t('common.total')}: ${formatFCFA(doc.total)} ${t('common.fcfa')}`;
+  }
+
+  /** 1 tap depuis une vente : ouvre la facture existante, sinon la génère puis l'ouvre. */
+  async function openInvoice(saleId: string) {
+    const existing = factureBySaleId.get(saleId);
+    if (existing) {
+      setPdfDoc(existing);
+      return;
+    }
+    if (invoicing) return;
+    setInvoicing(saleId);
+    try {
+      const { document } = await api<{ document: ApiDocument }>('/api/documents', {
+        method: 'POST',
+        body: { type: 'FACTURE', saleId },
+      });
+      toast(t('documents.invoiceCreated', { num: document.number }), 'success');
+      await refreshDocs();
+      setPdfDoc(document);
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      if (code === 'DOC_EXISTS') {
+        toast(t('documents.alreadyInvoiced'), 'info');
+        await refreshDocs();
+      } else {
+        toast(t('async.error'), 'error');
+      }
+    } finally {
+      setInvoicing(null);
+    }
+  }
 
   function closeCancel() {
     setCancelTarget(null);
@@ -364,8 +421,8 @@ export default function VentesManager() {
                   <span className="font-body text-muted-foreground w-28 text-center text-xs font-semibold">
                     {t('ventes.col.payment')}
                   </span>
-                  <span className="font-body text-muted-foreground w-16 text-center text-xs font-semibold">
-                    {t('receipt.title')}
+                  <span className="font-body text-muted-foreground w-24 text-center text-xs font-semibold">
+                    {t('ventes.col.actions')}
                   </span>
                 </div>
 
@@ -411,7 +468,7 @@ export default function VentesManager() {
                         </span>
                       )}
                     </div>
-                    <div className="flex w-16 items-center justify-center gap-1">
+                    <div className="flex w-24 items-center justify-center gap-1">
                       <button
                         type="button"
                         onClick={() => openReceipt(r.id)}
@@ -421,6 +478,34 @@ export default function VentesManager() {
                       >
                         <Icon i="receipt-text" size={16} />
                       </button>
+                      {!r.cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => openInvoice(r.id)}
+                          disabled={invoicing === r.id}
+                          aria-label={
+                            factureBySaleId.has(r.id)
+                              ? t('ventes.invoiceView')
+                              : t('ventes.invoiceGenerate')
+                          }
+                          title={
+                            factureBySaleId.has(r.id)
+                              ? t('ventes.invoiceView')
+                              : t('ventes.invoiceGenerate')
+                          }
+                          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${
+                            factureBySaleId.has(r.id)
+                              ? 'text-success hover:bg-success/10'
+                              : 'text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <Icon
+                            i={invoicing === r.id ? 'loader-2' : 'file-text'}
+                            size={16}
+                            className={invoicing === r.id ? 'animate-spin' : ''}
+                          />
+                        </button>
+                      )}
                       {canCancel && !r.cancelled && (
                         <button
                           type="button"
@@ -502,6 +587,29 @@ export default function VentesManager() {
                     >
                       <Icon i="receipt-text" size={16} />
                     </button>
+                    {!r.cancelled && (
+                      <button
+                        type="button"
+                        onClick={() => openInvoice(r.id)}
+                        disabled={invoicing === r.id}
+                        aria-label={
+                          factureBySaleId.has(r.id)
+                            ? t('ventes.invoiceView')
+                            : t('ventes.invoiceGenerate')
+                        }
+                        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${
+                          factureBySaleId.has(r.id)
+                            ? 'text-success hover:bg-success/10'
+                            : 'text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <Icon
+                          i={invoicing === r.id ? 'loader-2' : 'file-text'}
+                          size={16}
+                          className={invoicing === r.id ? 'animate-spin' : ''}
+                        />
+                      </button>
+                    )}
                     {canCancel && !r.cancelled && (
                       <button
                         type="button"
@@ -526,6 +634,16 @@ export default function VentesManager() {
       </div>
 
       <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
+
+      <PdfPreviewModal
+        open={pdfDoc !== null}
+        path={pdfDoc ? `/api/documents/${pdfDoc.id}/pdf` : null}
+        fileName={pdfDoc ? `${pdfDoc.number}.pdf` : ''}
+        title={pdfDoc ? docTitle(pdfDoc) : ''}
+        shareText={pdfDoc ? docShareText(pdfDoc) : ''}
+        phone={pdfDoc?.clientPhone ?? null}
+        onClose={() => setPdfDoc(null)}
+      />
 
       <Modal
         open={cancelTarget !== null}
