@@ -18,9 +18,7 @@ export default function ScreenTopActions({ extra }: { extra?: ReactNode }) {
   return (
     <div className="flex items-center gap-2">
       <div className="bg-muted flex items-center gap-2 rounded-md px-3 py-2">
-        <div
-          className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`}
-        />
+        <div className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-success' : 'bg-warning'}`} />
         <span className="text-muted-foreground font-body text-xs font-semibold">
           {online ? t('online.connected') : t('offline.short')}
         </span>

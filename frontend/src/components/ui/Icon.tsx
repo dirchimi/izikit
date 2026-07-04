@@ -17,5 +17,7 @@ export default function Icon({
   size?: number;
   className?: string;
 }) {
-  return <DynamicIcon name={i as IconName} size={size} className={className} />;
+  // Icônes décoratives : masquées des lecteurs d'écran (le nom accessible vient
+  // du bouton/lien parent, jamais de l'icône).
+  return <DynamicIcon name={i as IconName} size={size} className={className} aria-hidden="true" />;
 }

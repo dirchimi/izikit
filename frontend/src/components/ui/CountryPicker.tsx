@@ -112,17 +112,20 @@ export default function CountryPicker({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('parametres.field.countrySearch')}
+                aria-label={t('parametres.field.countrySearch')}
                 className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
               />
             </div>
 
-            <div className="max-h-[55vh] overflow-y-auto py-1 sm:max-h-64">
+            <div className="max-h-[55vh] overflow-y-auto py-1 sm:max-h-64" role="listbox">
               {filtered.map((c) => {
                 const active = c.code === selected.code;
                 return (
                   <button
                     key={c.code}
                     type="button"
+                    role="option"
+                    aria-selected={active}
                     onClick={() => pick(c.code)}
                     className={`font-body flex w-full items-center gap-2.5 px-3 py-2.5 text-start text-sm transition-colors ${
                       active

@@ -161,9 +161,7 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
 
       {/* Statut connexion — reflète l'état réseau réel (consultation hors-ligne) */}
       <div className="bg-muted mx-4 mt-3 mb-1 flex items-center gap-2 rounded-md px-3 py-1.5">
-        <div
-          className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`}
-        />
+        <div className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-success' : 'bg-warning'}`} />
         <span className="text-muted-foreground font-body text-xs font-semibold">
           {online ? t('online.connected') : t('offline.short')}
         </span>

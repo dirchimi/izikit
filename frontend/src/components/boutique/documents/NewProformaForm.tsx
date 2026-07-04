@@ -144,6 +144,7 @@ export default function NewProformaForm({
                   value={l.article}
                   onChange={(e) => updateLine(i, { article: e.target.value })}
                   placeholder={t('common.article')}
+                  aria-label={t('common.article')}
                   className={`${fieldClass} flex-1`}
                 />
                 <input
@@ -160,6 +161,7 @@ export default function NewProformaForm({
                   value={l.unitPrice}
                   onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
                   placeholder={t('documents.preview.pu')}
+                  aria-label={t('documents.preview.pu')}
                   className={`${fieldClass} w-28`}
                 />
                 <button

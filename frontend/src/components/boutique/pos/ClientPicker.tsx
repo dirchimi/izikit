@@ -98,7 +98,7 @@ export default function ClientPicker({
     <div ref={rootRef} className="relative">
       <div
         className={`bg-surface flex items-center rounded-md border ${
-          value ? 'border-primary' : required ? 'border-amber-400' : 'border-border'
+          value ? 'border-primary' : required ? 'border-warning' : 'border-border'
         }`}
       >
         <button
@@ -148,6 +148,7 @@ export default function ClientPicker({
               onChange({ ...value, phone: e.target.value.trim() === '' ? null : e.target.value })
             }
             placeholder={t('pos.client.phoneAdd')}
+            aria-label={t('pos.client.phoneAdd')}
             className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
           />
         </div>
@@ -192,6 +193,7 @@ export default function ClientPicker({
                   }
                 }}
                 placeholder={t('pos.client.searchOrCreate')}
+                aria-label={t('pos.client.searchOrCreate')}
                 className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
               />
             </div>

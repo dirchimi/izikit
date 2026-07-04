@@ -241,7 +241,9 @@ export default function VendrePos() {
       setReceipt({
         number: res.sale.number,
         createdAt: new Date().toISOString(),
-        method: method.toUpperCase() as ReceiptMethod,
+        // Paiement mixte → 'MIXED' (sinon le reçu affichait une méthode unique
+        // trompeuse même quand plusieurs modes étaient réglés).
+        method: split ? 'MIXED' : (method.toUpperCase() as ReceiptMethod),
         total: netTotal,
         subtotal,
         discount: discountAmount,
@@ -301,6 +303,7 @@ export default function VendrePos() {
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
                   placeholder={t('pos.scan.field')}
+                  aria-label={t('pos.scan.field')}
                   autoFocus
                   autoComplete="off"
                   className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"

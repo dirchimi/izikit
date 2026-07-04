@@ -114,12 +114,13 @@ export default function ComboBox({
                   }
                 }}
                 placeholder={creatable ? 'Rechercher ou créer…' : 'Rechercher…'}
+                aria-label={creatable ? 'Rechercher ou créer…' : 'Rechercher…'}
                 className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
               />
             </div>
           )}
 
-          <div className="max-h-60 overflow-y-auto py-1">
+          <div className="max-h-60 overflow-y-auto py-1" role="listbox">
             {allLabel && !query && (
               <Row selected={value === ''} onClick={() => pick('')}>
                 {allLabel}
@@ -164,6 +165,8 @@ function Row({
   return (
     <button
       type="button"
+      role="option"
+      aria-selected={selected}
       onClick={onClick}
       className={`font-body flex w-full items-center justify-between gap-2 px-3 py-2 text-start text-sm transition-colors ${
         selected
