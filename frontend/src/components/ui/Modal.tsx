@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon';
+
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /**
  * Modale maison (charte Sahilley) : fond flouté, panneau centré avec animation
@@ -28,17 +31,48 @@ export default function Modal({
   /** Fond plein (cache l'arrière-plan) au lieu du voile semi-transparent. */
   solidBackdrop?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
   useEffect(() => {
     if (!open) return;
+    // Restaure le focus sur l'élément déclencheur à la fermeture.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Piège de focus : Tab boucle à l'intérieur du panneau (a11y clavier).
+      if (e.key === 'Tab') {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const items = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
+        if (items.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = items[0]!;
+        const last = items[items.length - 1]!;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     }
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Focus initial sur le panneau (le lecteur d'écran annonce la modale).
+    panelRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
     };
   }, [open, onClose]);
 
@@ -53,6 +87,7 @@ export default function Modal({
       className="animate-fade-in fixed inset-0 z-[120] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      {...(title ? { 'aria-labelledby': titleId } : {})}
     >
       <button
         type="button"
@@ -65,11 +100,15 @@ export default function Modal({
         }
       />
       <div
-        className={`animate-scale-in bg-surface border-border relative z-10 flex max-h-[90vh] w-full flex-col ${width} overflow-hidden rounded-2xl border shadow-2xl`}
+        ref={panelRef}
+        tabIndex={-1}
+        className={`animate-scale-in bg-surface border-border relative z-10 flex max-h-[90vh] w-full flex-col ${width} overflow-hidden rounded-2xl border shadow-2xl outline-none`}
       >
         {(title || !hideClose) && (
           <div className="no-print border-border flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
-            <h2 className="font-headings text-foreground text-base font-bold">{title}</h2>
+            <h2 id={titleId} className="font-headings text-foreground text-base font-bold">
+              {title}
+            </h2>
             {!hideClose && (
               <button
                 type="button"

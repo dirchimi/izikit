@@ -157,13 +157,14 @@ export default function CreancesManager() {
 
             {/* Recherche */}
             <div className="border-border flex flex-col gap-2 border-b px-4 py-3">
-              <div className="border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2">
+              <div className="border-border bg-input focus-within:border-primary flex items-center gap-2 rounded-md border px-3 py-2">
                 <Icon i="search" size={14} className="text-muted-foreground" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('common.search.client')}
+                  aria-label={t('common.search.client')}
                   className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
                 />
               </div>

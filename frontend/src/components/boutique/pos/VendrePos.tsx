@@ -274,13 +274,14 @@ export default function VendrePos() {
         <div className="border-border flex min-w-0 flex-1 flex-col lg:border-e">
           {/* Recherche + scan code-barres */}
           <div className="flex flex-col gap-2 px-4 pt-5 pb-3 md:px-6">
-            <div className="border-border bg-input flex items-center gap-2 rounded-md border px-3 py-2.5">
+            <div className="border-border bg-input focus-within:border-primary flex items-center gap-2 rounded-md border px-3 py-2.5">
               <Icon i="search" size={15} className="text-muted-foreground" />
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('common.search.article')}
+                aria-label={t('common.search.article')}
                 className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               />
             </div>

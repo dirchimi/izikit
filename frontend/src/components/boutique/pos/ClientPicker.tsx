@@ -136,7 +136,7 @@ export default function ClientPicker({
           Le client saisit son numéro LOCAL ; l'indicatif du pays est préfixé
           (ex. 🇹🇩 +235) et l'envoi WhatsApp recompose le numéro international. */}
       {value && (
-        <div className="border-border bg-input mt-1.5 flex items-center gap-2 rounded-md border px-2.5 py-1.5">
+        <div className="border-border bg-input focus-within:border-primary mt-1.5 flex items-center gap-2 rounded-md border px-2.5 py-1.5">
           <span className="font-body text-muted-foreground shrink-0 text-xs font-semibold">
             {country.flag} +{country.dial}
           </span>

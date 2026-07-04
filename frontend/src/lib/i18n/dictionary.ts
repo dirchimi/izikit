@@ -10,6 +10,7 @@ type Msg = { fr: string; en: string; ar?: string };
 const messages: Record<string, Msg> = {
   // ── Commun / navigation / chrome ──────────────────────────────────────────
   'nav.dashboard': { fr: 'Tableau de bord', en: 'Dashboard', ar: 'لوحة التحكم' },
+  'nav.primary': { fr: 'Navigation principale', en: 'Primary navigation', ar: 'التنقّل الرئيسي' },
   'nav.vendre': { fr: 'Vendre', en: 'Sell', ar: 'بيع' },
   'nav.ventes': { fr: 'Ventes', en: 'Sales', ar: 'المبيعات' },
   'nav.stock': { fr: 'Stock', en: 'Inventory', ar: 'المخزون' },

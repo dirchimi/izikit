@@ -34,7 +34,7 @@ export default function BottomNav({ onMore }: { onMore: () => void }) {
   return (
     <nav
       className="bg-sidebar border-sidebar-muted fixed inset-x-0 bottom-0 z-[90] flex border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
-      aria-label={t('nav.dashboard')}
+      aria-label={t('nav.primary')}
     >
       {visibleItems.map((it) => {
         const active = isActive(pathname, it.href);

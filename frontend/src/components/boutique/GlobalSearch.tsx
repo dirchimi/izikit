@@ -90,6 +90,7 @@ export default function GlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           placeholder={t('search.placeholder')}
+          aria-label={t('search.placeholder')}
           className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
         />
       </div>

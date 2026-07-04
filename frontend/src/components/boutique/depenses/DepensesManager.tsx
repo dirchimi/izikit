@@ -179,13 +179,14 @@ export default function DepensesManager() {
 
           {/* Filtres */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="border-border bg-input flex w-full items-center gap-2 rounded-md border px-3 py-2 sm:w-[260px]">
+            <div className="border-border bg-input focus-within:border-primary flex w-full items-center gap-2 rounded-md border px-3 py-2 sm:w-[260px]">
               <Icon i="search" size={14} className="text-muted-foreground" />
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('common.search.expense')}
+                aria-label={t('common.search.expense')}
                 className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
               />
             </div>
