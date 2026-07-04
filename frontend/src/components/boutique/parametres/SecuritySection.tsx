@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
@@ -28,11 +29,13 @@ export default function SecuritySection() {
   const user = useUser();
   const { refresh } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!user) {
@@ -45,6 +48,7 @@ export default function SecuritySection() {
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
+  const userEmail = user.email;
 
   async function onSubmitPassword(e: FormEvent) {
     e.preventDefault();
@@ -82,6 +86,29 @@ export default function SecuritySection() {
     }
   }
 
+  // « Mot de passe oublié ? » — pour les comptes connectés via Google qui ont
+  // défini un mot de passe puis l'ont oublié : on envoie l'e-mail de
+  // réinitialisation à l'adresse du compte (déjà connue) et on redirige vers
+  // l'écran de saisie du code. Évite le cul-de-sac de « Changer » qui exige le
+  // mot de passe actuel.
+  async function onForgotCurrentPassword() {
+    setError(null);
+    setSendingReset(true);
+    try {
+      await api('/api/auth/forgot-password', { method: 'POST', body: { email: userEmail } });
+      toast('E-mail de réinitialisation envoyé. Vérifie ta boîte mail.', 'info');
+      router.push(`/reinitialiser-mot-de-passe?email=${encodeURIComponent(userEmail)}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === 'TOO_MANY_FORGOT_ATTEMPTS'
+          ? 'Trop de demandes de réinitialisation. Réessaie dans un moment.'
+          : 'Erreur réseau. Réessaie.',
+      );
+    } finally {
+      setSendingReset(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Mot de passe */}
@@ -110,6 +137,14 @@ export default function SecuritySection() {
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 className={fieldClass}
               />
+              <button
+                type="button"
+                onClick={onForgotCurrentPassword}
+                disabled={sendingReset}
+                className="text-primary font-body mt-0.5 self-start text-xs font-semibold hover:underline disabled:opacity-60"
+              >
+                {sendingReset ? 'Envoi…' : 'Mot de passe oublié ?'}
+              </button>
             </div>
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
