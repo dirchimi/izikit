@@ -27,7 +27,7 @@ interface Props {
   debtorName: string;
   maxAmount: number;
   disabled?: boolean;
-  onSubmit: (amount: number, method: RepayMethod, note: string, date: string) => void;
+  onSubmit: (amount: number, method: RepayMethod, note: string, date: string) => Promise<boolean>;
 }
 
 /**
@@ -46,12 +46,22 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
   const [note, setNote] = useState('');
   const [date, setDate] = useState(today);
 
-  function handleSubmit(e: FormEvent) {
+  const amountNum = Number(amount) || 0;
+  // Montant valide : > 0 et ≤ solde dû (le serveur plafonne aussi, mais on évite
+  // une soumission manifestement invalide côté client).
+  const amountValid = amountNum > 0 && amountNum <= maxAmount;
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(Number(amount) || 0, method, note.trim(), date);
-    setAmount('');
-    setNote('');
-    setDate(today);
+    if (!amountValid) return;
+    // On ne vide les champs QUE si le remboursement a réussi — sinon la saisie
+    // était perdue et devait être re-tapée en cas d'échec réseau.
+    const ok = await onSubmit(amountNum, method, note.trim(), date);
+    if (ok) {
+      setAmount('');
+      setNote('');
+      setDate(today);
+    }
   }
 
   return (
@@ -127,7 +137,7 @@ const RepaymentForm = forwardRef<HTMLInputElement, Props>(function RepaymentForm
 
         <button
           type="submit"
-          disabled={disabled}
+          disabled={disabled || !amountValid}
           className="bg-primary text-primary-foreground font-body flex shrink-0 items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold disabled:opacity-60"
         >
           <Icon i="check" size={15} />

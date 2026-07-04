@@ -86,15 +86,20 @@ export default function CreancesManager() {
 
   const selected = debtors.find((d) => d.id === selectedId) ?? visible[0] ?? null;
 
-  async function recordRepayment(amount: number, method: RepayMethod, note: string, date: string) {
-    if (!selected) return;
+  async function recordRepayment(
+    amount: number,
+    method: RepayMethod,
+    note: string,
+    date: string,
+  ): Promise<boolean> {
+    if (!selected) return false;
     if (amount <= 0) {
       toast(t('creances.amountInvalid'), 'error');
-      return;
+      return false;
     }
     if (selected.debt <= 0) {
       toast(t('creances.noDebt', { name: selected.name }), 'info');
-      return;
+      return false;
     }
     setSubmitting(true);
     try {
@@ -113,10 +118,12 @@ export default function CreancesManager() {
         'success',
       );
       await refresh();
+      return true;
     } catch (err) {
       const code = err instanceof ApiError ? err.code : '';
       if (code === 'NO_DEBT') toast(t('creances.noDebt', { name: selected.name }), 'info');
       else toast(t('async.error'), 'error');
+      return false;
     } finally {
       setSubmitting(false);
     }

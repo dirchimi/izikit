@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/useApi';
 
@@ -45,6 +46,7 @@ export default function UsersSection({
 }) {
   const t = useT();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState('');
   const [newRole, setNewRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
@@ -60,7 +62,7 @@ export default function UsersSection({
     if (code === 'USER_NOT_REGISTERED') return t('parametres.users.errNotRegistered');
     if (code === 'ALREADY_MEMBER') return t('parametres.users.errAlready');
     if (code === 'LAST_OWNER') return t('parametres.users.errLastOwner');
-    return e instanceof Error ? e.message : 'Error';
+    return e instanceof Error ? e.message : t('async.error');
   }
 
   async function handleAdd(e: FormEvent) {
@@ -115,6 +117,15 @@ export default function UsersSection({
   }
 
   async function handleRemove(m: OrgMember) {
+    const ok = await confirm({
+      title: t('parametres.users.removeConfirmTitle'),
+      message: t('parametres.users.removeConfirmMsg', { name: m.name ?? m.email }),
+      confirmLabel: t('parametres.users.remove'),
+      cancelLabel: t('common.cancel'),
+      variant: 'danger',
+      icon: 'trash-2',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await api(`/api/org/members/${m.id}`, { method: 'DELETE' });

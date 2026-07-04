@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
@@ -44,7 +45,12 @@ export default function ParametresManager() {
   const [active, setActive] = useState('boutique');
   const current = settingsSections.find((s) => s.key === active);
 
-  const { data: boutique, refresh: refreshBoutique } = useApi<BoutiqueCurrent>('/api/org/current');
+  const {
+    data: boutique,
+    loading: boutiqueLoading,
+    error: boutiqueError,
+    refresh: refreshBoutique,
+  } = useApi<BoutiqueCurrent>('/api/org/current');
   const { data: me } = useApi<MeResp>('/api/auth/me');
   const { data: membersData, refresh: refreshMembers } = useApi<MembersResp>('/api/org/members');
 
@@ -53,58 +59,70 @@ export default function ParametresManager() {
   const canManage = boutique?.role === 'OWNER' || boutique?.role === 'ADMIN';
 
   async function saveBoutique(v: BoutiqueInfoValues) {
-    await api('/api/org/current', {
-      method: 'PATCH',
-      body: {
-        name: v.name,
-        phone: v.phone || null,
-        city: v.city || null,
-        country: v.country || 'TD',
-        businessType: v.businessType || null,
-        address: v.address || null,
-        invoiceNote: v.note || null,
-      },
-    });
-    toast(t('parametres.savedToast'), 'success');
-    await refreshBoutique();
+    try {
+      await api('/api/org/current', {
+        method: 'PATCH',
+        body: {
+          name: v.name,
+          phone: v.phone || null,
+          city: v.city || null,
+          country: v.country || 'TD',
+          businessType: v.businessType || null,
+          address: v.address || null,
+          invoiceNote: v.note || null,
+        },
+      });
+      toast(t('parametres.savedToast'), 'success');
+      await refreshBoutique();
+    } catch {
+      // Sans ça, un PATCH en échec ne remontait aucun retour → l'utilisateur
+      // croyait avoir sauvegardé.
+      toast(t('async.error'), 'error');
+    }
   }
 
   async function saveLogo(logoUrl: string) {
-    await api('/api/org/current', { method: 'PATCH', body: { logoUrl } });
-    await refreshBoutique();
+    try {
+      await api('/api/org/current', { method: 'PATCH', body: { logoUrl } });
+      await refreshBoutique();
+    } catch {
+      toast(t('async.error'), 'error');
+    }
   }
 
   function renderBoutiquePanel() {
-    if (!boutique) {
-      return (
-        <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
-          {t('common.loading')}
-        </div>
-      );
-    }
     return (
-      <>
-        <BoutiqueInfoForm
-          initial={{
-            name: boutique.organization.name,
-            phone: boutique.settings.phone ?? '',
-            city: boutique.settings.city ?? '',
-            country: boutique.settings.country ?? 'TD',
-            businessType: boutique.settings.businessType ?? '',
-            address: boutique.settings.address ?? '',
-            note: boutique.settings.invoiceNote ?? '',
-          }}
-          initialLogoUrl={boutique.settings.logoUrl}
-          onSave={saveBoutique}
-          onSaveLogo={saveLogo}
-        />
-        <UsersSection
-          members={members}
-          currentUserId={currentUserId}
-          canManage={!!canManage}
-          onChanged={refreshMembers}
-        />
-      </>
+      <AsyncState
+        loading={boutiqueLoading}
+        error={boutiqueError}
+        onRetry={refreshBoutique}
+        isEmpty={!boutique}
+      >
+        {boutique && (
+          <>
+            <BoutiqueInfoForm
+              initial={{
+                name: boutique.organization.name,
+                phone: boutique.settings.phone ?? '',
+                city: boutique.settings.city ?? '',
+                country: boutique.settings.country ?? 'TD',
+                businessType: boutique.settings.businessType ?? '',
+                address: boutique.settings.address ?? '',
+                note: boutique.settings.invoiceNote ?? '',
+              }}
+              initialLogoUrl={boutique.settings.logoUrl}
+              onSave={saveBoutique}
+              onSaveLogo={saveLogo}
+            />
+            <UsersSection
+              members={members}
+              currentUserId={currentUserId}
+              canManage={!!canManage}
+              onChanged={refreshMembers}
+            />
+          </>
+        )}
+      </AsyncState>
     );
   }
 

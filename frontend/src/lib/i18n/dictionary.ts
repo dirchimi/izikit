@@ -1930,6 +1930,16 @@ const messages: Record<string, Msg> = {
   'parametres.users.submit': { fr: 'Ajouter', en: 'Add', ar: 'إضافة' },
   'parametres.users.cancel': { fr: 'Annuler', en: 'Cancel', ar: 'إلغاء' },
   'parametres.users.remove': { fr: 'Retirer', en: 'Remove', ar: 'إزالة' },
+  'parametres.users.removeConfirmTitle': {
+    fr: 'Retirer cet utilisateur ?',
+    en: 'Remove this user?',
+    ar: 'إزالة هذا المستخدم؟',
+  },
+  'parametres.users.removeConfirmMsg': {
+    fr: '{name} perdra l’accès à la boutique. Cette action est réversible en le réinvitant.',
+    en: '{name} will lose access to the shop. You can re-invite them later.',
+    ar: 'سيفقد {name} الوصول إلى المتجر. يمكنك دعوته مجدداً لاحقاً.',
+  },
   'parametres.users.empty': {
     fr: 'Aucun autre membre pour le moment.',
     en: 'No other members yet.',

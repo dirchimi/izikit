@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ImageCropModal from '@/components/boutique/ImageCropModal';
+import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
@@ -34,7 +35,7 @@ const fieldClass =
 export default function FacturationSection() {
   const t = useT();
   const { toast } = useToast();
-  const { data, refresh } = useApi<OrgCurrent>('/api/org/current');
+  const { data, loading, error, refresh } = useApi<OrgCurrent>('/api/org/current');
 
   const [form, setForm] = useState<{ phone: string; address: string; note: string } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -107,11 +108,15 @@ export default function FacturationSection() {
     }
   }
 
+  // Tant que le formulaire n'est pas initialisé : squelette / erreur+retry si le
+  // GET a échoué (avant : chargement perpétuel silencieux).
   if (!form) {
     return (
-      <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
-        {t('common.loading')}
-      </div>
+      <AsyncState loading={loading} error={error} onRetry={refresh}>
+        <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
+          {t('common.loading')}
+        </div>
+      </AsyncState>
     );
   }
 
