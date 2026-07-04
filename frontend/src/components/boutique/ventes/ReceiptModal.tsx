@@ -280,27 +280,14 @@ export default function ReceiptModal({
   }
 
   /**
-   * Envoi direct au client : ouvre la conversation WhatsApp de SON numéro
-   * (wa.me/<numéro>) avec le reçu en texte — aucun numéro à ressaisir. Affiché
-   * seulement quand le client a un téléphone enregistré.
-   */
-  function sendToClient() {
-    if (!receipt?.customerPhone) return;
-    // Numéro local → recomposé en international avec l'indicatif de la boutique.
-    const digits = toWhatsAppNumber(receipt.customerPhone, dial);
-    if (!digits) return;
-    window.open(
-      `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
-      '_blank',
-      'noopener,noreferrer',
-    );
-  }
-
-  /**
-   * Envoi du reçu en IMAGE. Sur téléphone : partage natif (`navigator.share`)
-   * avec le fichier → WhatsApp apparaît dans la liste et envoie la photo. Sur
-   * PC (ou partage de fichier indisponible) : téléchargement de l'image. Ultime
-   * repli (canvas indispo) : message texte via wa.me, comme avant.
+   * Bouton WhatsApp unique — envoie le reçu en IMAGE, au client en priorité.
+   *  • Téléphone : partage natif (`navigator.share` avec le fichier) → on choisit
+   *    WhatsApp puis le client, la photo part telle quelle. (WhatsApp n'autorise
+   *    pas de joindre un fichier à un numéro pré-ciblé via un lien — le partage
+   *    natif est le seul moyen d'envoyer réellement l'image.)
+   *  • PC / partage fichier indispo : télécharge l'image ET ouvre la conversation
+   *    du client (wa.me/<son numéro>, texte du reçu) pour joindre l'image d'un geste.
+   *  • Ultime repli (canvas indispo) : message texte vers le numéro du client.
    */
   async function shareWhatsapp() {
     if (!receipt || busy) return;
@@ -308,11 +295,10 @@ export default function ReceiptModal({
     try {
       const blob = await buildReceiptImage();
       const fileName = `recu-${receipt.number || 'vente'}.png`;
+      const digits = receipt.customerPhone ? toWhatsAppNumber(receipt.customerPhone, dial) : '';
+      const caption = receiptText();
       if (blob) {
         const file = new File([blob], fileName, { type: 'image/png' });
-        const caption = `${shopName} · ${t('receipt.title')} ${receipt.number} · ${formatFCFA(
-          receipt.total,
-        )} ${t('common.fcfa')}`;
         if (
           typeof navigator.canShare === 'function' &&
           navigator.canShare({ files: [file] }) &&
@@ -325,21 +311,30 @@ export default function ReceiptModal({
             // Annulé par l'utilisateur ou non supporté → repli téléchargement.
           }
         }
+        // PC : télécharge l'image puis ouvre la conversation du client (texte).
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
+        if (digits) {
+          window.open(
+            `https://wa.me/${digits}?text=${encodeURIComponent(caption)}`,
+            '_blank',
+            'noopener,noreferrer',
+          );
+        }
         return;
       }
       // Repli texte (canvas indisponible).
-      const digits = toWhatsAppNumber(receipt.customerPhone, dial);
-      window.open(
-        `https://wa.me/${digits}?text=${encodeURIComponent(receiptText())}`,
-        '_blank',
-        'noopener,noreferrer',
-      );
+      if (digits) {
+        window.open(
+          `https://wa.me/${digits}?text=${encodeURIComponent(caption)}`,
+          '_blank',
+          'noopener,noreferrer',
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -445,43 +440,30 @@ export default function ReceiptModal({
             </p>
           </div>
 
-          {/* Actions — non imprimées */}
-          <div className="no-print flex flex-col gap-2">
-            {/* Envoi direct au client : ouvre SA conversation WhatsApp (numéro
-                enregistré), aucun numéro à ressaisir. */}
-            {receipt.customerPhone && (
-              <button
-                type="button"
-                onClick={sendToClient}
-                className="bg-success text-success-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
-              >
-                <Icon i="send" size={15} />
-                {t('receipt.sendToClient')}
-              </button>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
-              >
-                <Icon i="printer" size={15} />
-                {t('receipt.print')}
-              </button>
-              <button
-                type="button"
-                onClick={shareWhatsapp}
-                disabled={busy}
-                className="bg-primary text-primary-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
-              >
-                <Icon
-                  i={busy ? 'loader-2' : 'share-2'}
-                  size={15}
-                  className={busy ? 'animate-spin' : ''}
-                />
-                {t('receipt.whatsapp')}
-              </button>
-            </div>
+          {/* Actions — non imprimées. Un seul bouton WhatsApp : envoie l'image du
+              reçu, au client en priorité (voir shareWhatsapp). */}
+          <div className="no-print flex gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+            >
+              <Icon i="printer" size={15} />
+              {t('receipt.print')}
+            </button>
+            <button
+              type="button"
+              onClick={shareWhatsapp}
+              disabled={busy}
+              className="bg-success text-success-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
+            >
+              <Icon
+                i={busy ? 'loader-2' : 'send'}
+                size={15}
+                className={busy ? 'animate-spin' : ''}
+              />
+              {receipt.customerPhone ? t('receipt.sendToClient') : t('receipt.whatsapp')}
+            </button>
           </div>
         </div>
       )}

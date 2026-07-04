@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
@@ -21,17 +22,34 @@ export default function CartLine({
   line,
   onInc,
   onDec,
+  onSetQty,
   onRemove,
   onToggleWholesale,
 }: {
   line: CartLineData;
   onInc: () => void;
   onDec: () => void;
+  onSetQty: (qty: number) => void;
   onRemove: () => void;
   onToggleWholesale: (wholesale: boolean) => void;
 }) {
   const t = useT();
   const hasWholesale = line.prixGros > 0;
+
+  // Quantité éditable : on saisit directement le nombre (utile pour de grosses
+  // commandes — pas besoin de taper « + » des centaines de fois). `draft` garde
+  // la frappe en cours ; on valide (min 1) au blur ou sur Entrée.
+  const [draft, setDraft] = useState(String(line.qty));
+  useEffect(() => {
+    setDraft(String(line.qty));
+  }, [line.qty]);
+
+  function commitQty() {
+    const n = parseInt(draft.replace(/\D/g, ''), 10);
+    const qty = Number.isFinite(n) && n > 0 ? n : 1;
+    setDraft(String(qty));
+    if (qty !== line.qty) onSetQty(qty);
+  }
   return (
     <div className="border-border flex flex-col gap-2 border-b py-3">
       <div className="flex items-center gap-3">
@@ -52,9 +70,19 @@ export default function CartLine({
           >
             −
           </button>
-          <span className="font-body text-foreground w-7 text-center text-sm font-semibold">
-            {line.qty}
-          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            aria-label={t('cart.quantity')}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}
+            onFocus={(e) => e.target.select()}
+            onBlur={commitQty}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            className="font-body text-foreground w-12 bg-transparent text-center text-sm font-semibold outline-none"
+          />
           <button
             type="button"
             aria-label={t('cart.increase')}

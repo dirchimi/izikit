@@ -138,6 +138,11 @@ export default function VendrePos() {
       ),
     );
   }
+  /** Quantité saisie directement (grosse commande) — bornée à ≥ 1. */
+  function setQty(id: string, qty: number) {
+    const q = Math.max(1, Math.floor(qty));
+    setCart((prev) => prev.map((l) => (l.productId === id ? { ...l, qty: q } : l)));
+  }
   function remove(id: string) {
     setCart((prev) => prev.filter((l) => l.productId !== id));
   }
@@ -394,6 +399,7 @@ export default function VendrePos() {
                   line={line}
                   onInc={() => inc(line.productId)}
                   onDec={() => dec(line.productId)}
+                  onSetQty={(q) => setQty(line.productId, q)}
                   onRemove={() => remove(line.productId)}
                   onToggleWholesale={(w) => toggleWholesale(line.productId, w)}
                 />
