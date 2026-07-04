@@ -1822,6 +1822,16 @@ const messages: Record<string, Msg> = {
     en: 'Sets the default dialing code — customers enter their number without it.',
     ar: 'يحدّد رمز الاتصال الافتراضي — يُدخل الزبائن أرقامهم بدونه.',
   },
+  'parametres.field.countrySearch': {
+    fr: 'Rechercher un pays…',
+    en: 'Search a country…',
+    ar: 'ابحث عن بلد…',
+  },
+  'parametres.field.countryEmpty': {
+    fr: 'Aucun pays trouvé',
+    en: 'No country found',
+    ar: 'لم يتم العثور على بلد',
+  },
   'parametres.field.businessType': {
     fr: 'Type de commerce',
     en: 'Business type',

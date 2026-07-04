@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
 import ImageCropModal from '@/components/boutique/ImageCropModal';
+import CountryPicker from '@/components/ui/CountryPicker';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
 import { uploadImage } from '@/lib/upload';
-import { COUNTRIES } from '@/lib/boutique/countries';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 const fieldClass =
@@ -217,21 +217,8 @@ export default function BoutiqueInfoForm({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className={labelClass} htmlFor="bi-country">
-              {t('parametres.field.country')}
-            </label>
-            <select
-              id="bi-country"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              className={fieldClass}
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.flag} {c.name} (+{c.dial})
-                </option>
-              ))}
-            </select>
+            <label className={labelClass}>{t('parametres.field.country')}</label>
+            <CountryPicker value={country} onChange={setCountry} />
             <span className="text-muted-foreground font-body text-xs">
               {t('parametres.field.countryHint')}
             </span>
