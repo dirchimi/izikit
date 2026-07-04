@@ -6,18 +6,20 @@ import Icon from '@/components/ui/Icon';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useT } from '@/contexts/LocaleContext';
 
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 const fieldClass =
   'border-border bg-input text-foreground font-body focus:border-primary rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-60';
 
-const ERR: Record<string, string> = {
-  INVALID_CREDENTIALS: 'Mot de passe actuel incorrect.',
-  PASSWORD_BANNED: 'Ce mot de passe est trop courant.',
-  PASSWORD_TOO_SHORT: 'Mot de passe trop court.',
-  PASSWORD_PWNED: 'Ce mot de passe a fuité — choisis-en un autre.',
-  PASSWORD_ALREADY_SET: 'Un mot de passe est déjà défini.',
-  VALIDATION_FAILED: 'Champs invalides.',
+// Code d'erreur API → clé i18n dédiée.
+const ERR_KEY: Record<string, string> = {
+  INVALID_CREDENTIALS: 'security.err.invalidCredentials',
+  PASSWORD_BANNED: 'security.err.banned',
+  PASSWORD_TOO_SHORT: 'security.err.tooShort',
+  PASSWORD_PWNED: 'security.err.pwned',
+  PASSWORD_ALREADY_SET: 'security.err.alreadySet',
+  VALIDATION_FAILED: 'security.err.validation',
 };
 
 /**
@@ -30,6 +32,7 @@ export default function SecuritySection() {
   const { refresh } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const t = useT();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -41,7 +44,7 @@ export default function SecuritySection() {
   if (!user) {
     return (
       <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
-        Chargement…
+        {t('common.loading')}
       </div>
     );
   }
@@ -54,11 +57,11 @@ export default function SecuritySection() {
     e.preventDefault();
     setError(null);
     if (newPassword.length === 0) {
-      setError('Saisis un nouveau mot de passe.');
+      setError(t('security.err.newRequired'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('La confirmation ne correspond pas.');
+      setError(t('security.err.confirmMismatch'));
       return;
     }
     setSubmitting(true);
@@ -68,18 +71,23 @@ export default function SecuritySection() {
           method: 'PUT',
           body: { currentPassword, newPassword },
         });
-        toast('Mot de passe mis à jour.', 'success');
+        toast(t('security.pwUpdated'), 'success');
       } else {
         await api('/api/auth/set-password', { method: 'POST', body: { newPassword } });
-        toast('Mot de passe défini. Tu peux maintenant te connecter par email.', 'success');
+        toast(t('security.pwSet'), 'success');
       }
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       await refresh();
     } catch (err) {
+      const key = err instanceof ApiError ? ERR_KEY[err.code] : undefined;
       setError(
-        err instanceof ApiError ? (ERR[err.code] ?? err.message) : 'Erreur réseau. Réessaie.',
+        key
+          ? t(key)
+          : err instanceof ApiError && err.message
+            ? err.message
+            : t('security.err.network'),
       );
     } finally {
       setSubmitting(false);
@@ -96,13 +104,13 @@ export default function SecuritySection() {
     setSendingReset(true);
     try {
       await api('/api/auth/forgot-password', { method: 'POST', body: { email: userEmail } });
-      toast('E-mail de réinitialisation envoyé. Vérifie ta boîte mail.', 'info');
+      toast(t('security.resetSent'), 'info');
       router.push(`/reinitialiser-mot-de-passe?email=${encodeURIComponent(userEmail)}`);
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === 'TOO_MANY_FORGOT_ATTEMPTS'
-          ? 'Trop de demandes de réinitialisation. Réessaie dans un moment.'
-          : 'Erreur réseau. Réessaie.',
+          ? t('security.err.tooManyResets')
+          : t('security.err.network'),
       );
     } finally {
       setSendingReset(false);
@@ -115,19 +123,17 @@ export default function SecuritySection() {
       <form onSubmit={onSubmitPassword} className="bg-surface border-border rounded-lg border">
         <div className="border-border border-b px-5 py-4 md:px-6">
           <h2 className="font-headings text-foreground text-base font-bold">
-            {hasPassword ? 'Changer le mot de passe' : 'Définir un mot de passe'}
+            {hasPassword ? t('security.changeTitle') : t('security.setTitle')}
           </h2>
           <p className="text-muted-foreground font-body mt-0.5 text-xs">
-            {hasPassword
-              ? 'Les autres sessions seront déconnectées.'
-              : 'Tu t’es connecté via Google. Définis un mot de passe pour te connecter aussi par email.'}
+            {hasPassword ? t('security.changeSub') : t('security.setSub')}
           </p>
         </div>
         <div className="flex flex-col gap-4 px-5 py-5 md:px-6">
           {hasPassword && (
             <div className="flex flex-col gap-1">
               <label className={labelClass} htmlFor="sec-current">
-                Mot de passe actuel
+                {t('security.currentLabel')}
               </label>
               <input
                 id="sec-current"
@@ -143,14 +149,14 @@ export default function SecuritySection() {
                 disabled={sendingReset}
                 className="text-primary font-body mt-0.5 self-start text-xs font-semibold hover:underline disabled:opacity-60"
               >
-                {sendingReset ? 'Envoi…' : 'Mot de passe oublié ?'}
+                {sendingReset ? t('security.sending') : t('security.forgot')}
               </button>
             </div>
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label className={labelClass} htmlFor="sec-new">
-                Nouveau mot de passe
+                {t('security.newLabel')}
               </label>
               <input
                 id="sec-new"
@@ -163,7 +169,7 @@ export default function SecuritySection() {
             </div>
             <div className="flex flex-col gap-1">
               <label className={labelClass} htmlFor="sec-confirm">
-                Confirmer
+                {t('security.confirmLabel')}
               </label>
               <input
                 id="sec-confirm"
@@ -187,7 +193,11 @@ export default function SecuritySection() {
               className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold disabled:opacity-60"
             >
               <Icon i="lock" size={14} />
-              {submitting ? 'Enregistrement…' : hasPassword ? 'Changer' : 'Définir'}
+              {submitting
+                ? t('security.saving')
+                : hasPassword
+                  ? t('security.changeBtn')
+                  : t('security.setBtn')}
             </button>
           </div>
         </div>
@@ -196,9 +206,11 @@ export default function SecuritySection() {
       {/* Comptes liés */}
       <div className="bg-surface border-border rounded-lg border">
         <div className="border-border border-b px-5 py-4 md:px-6">
-          <h2 className="font-headings text-foreground text-base font-bold">Comptes liés</h2>
+          <h2 className="font-headings text-foreground text-base font-bold">
+            {t('security.linkedTitle')}
+          </h2>
           <p className="text-muted-foreground font-body mt-0.5 text-xs">
-            Connecte-toi en un clic via Google.
+            {t('security.linkedSub')}
           </p>
         </div>
         <div className="flex items-center justify-between gap-3 px-5 py-5 md:px-6">
@@ -209,20 +221,20 @@ export default function SecuritySection() {
             <div className="flex flex-col">
               <span className="font-body text-foreground text-sm font-semibold">Google</span>
               <span className="text-muted-foreground font-body text-xs">
-                {googleLinked ? 'Connexion Google active.' : 'Non lié pour le moment.'}
+                {googleLinked ? t('security.googleActive') : t('security.googleNotLinked')}
               </span>
             </div>
           </div>
           {googleLinked ? (
             <span className="bg-primary/10 text-primary font-body inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold">
-              <Icon i="check" size={13} /> Lié
+              <Icon i="check" size={13} /> {t('security.linked')}
             </span>
           ) : (
             <a
               href="/api/auth/oauth/google/start?next=/parametres"
               className="border-border bg-surface text-foreground font-body rounded-md border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
             >
-              Lier Google
+              {t('security.linkGoogle')}
             </a>
           )}
         </div>

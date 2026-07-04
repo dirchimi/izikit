@@ -20,11 +20,11 @@ interface SearchResult {
   total: number;
 }
 
-const GROUPS: Array<{ key: keyof SearchResult; label: string; icon: string }> = [
-  { key: 'products', label: 'Produits', icon: 'package' },
-  { key: 'customers', label: 'Clients', icon: 'users' },
-  { key: 'sales', label: 'Ventes', icon: 'receipt-text' },
-  { key: 'expenses', label: 'Dépenses', icon: 'wallet' },
+const GROUPS: Array<{ key: keyof SearchResult; labelKey: string; icon: string }> = [
+  { key: 'products', labelKey: 'search.group.products', icon: 'package' },
+  { key: 'customers', labelKey: 'search.group.customers', icon: 'users' },
+  { key: 'sales', labelKey: 'search.group.sales', icon: 'receipt-text' },
+  { key: 'expenses', labelKey: 'search.group.expenses', icon: 'wallet' },
 ];
 
 /** Recherche globale (TopBar) : produits, clients, ventes, dépenses. */
@@ -109,7 +109,7 @@ export default function GlobalSearch() {
                 <div key={g.key} className="mb-1">
                   <div className="text-muted-foreground font-body flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-bold tracking-wider uppercase">
                     <Icon i={g.icon} size={12} />
-                    {g.label}
+                    {t(g.labelKey)}
                   </div>
                   {hits.map((h) => (
                     <button
