@@ -2176,6 +2176,26 @@ const messages: Record<string, Msg> = {
     en: 'The camera requires a secure (https) connection. Open the app via its https address.',
     ar: 'تتطلب الكاميرا اتصالاً آمناً (https). افتح التطبيق عبر عنوان https.',
   },
+  'pos.scan.desktopHint': {
+    fr: 'Sur ordinateur, branchez un lecteur de code-barres (il saisit le code tout seul) ou tapez le code à la main.',
+    en: 'On a computer, plug in a barcode scanner (it types the code for you) or enter the code by hand.',
+    ar: 'على الحاسوب، استخدم قارئ رموز شريطية (يُدخل الرمز تلقائياً) أو اكتب الرمز يدوياً.',
+  },
+  'pos.scan.inappTitle': {
+    fr: 'Navigateur non compatible',
+    en: 'Unsupported browser',
+    ar: 'متصفح غير مدعوم',
+  },
+  'pos.scan.inappHint': {
+    fr: 'Ce navigateur intégré (ouvert depuis WhatsApp, Facebook…) bloque la caméra. Ouvrez Sahilley dans Chrome ou Safari, puis réessayez — ou saisissez le code à la main.',
+    en: 'This in-app browser (opened from WhatsApp, Facebook…) blocks the camera. Open Sahilley in Chrome or Safari, then try again — or enter the code by hand.',
+    ar: 'هذا المتصفح المدمج (المفتوح من واتساب أو فيسبوك…) يمنع الكاميرا. افتح Sahilley في Chrome أو Safari ثم أعد المحاولة — أو اكتب الرمز يدوياً.',
+  },
+  'pos.scan.openBrowser': {
+    fr: 'Ouvrir dans le navigateur',
+    en: 'Open in browser',
+    ar: 'افتح في المتصفح',
+  },
   'pos.scan.notFound': {
     fr: 'Aucun produit avec le code {code}.',
     en: 'No product with code {code}.',
