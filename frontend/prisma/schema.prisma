@@ -115,6 +115,13 @@ model Organization {
   sales     Sale[]
   expenses  Expense[]
   documents Document[]
+  subPayments SubscriptionPayment[]
+  // ── Abonnement (Phase 8 — SaaS billing, gestion manuelle v1) ──────────────
+  // Le STATUT (essai / actif / expiré) n'est jamais stocké : il est DÉRIVÉ de
+  // ces trois champs par lib/subscription/status.ts, ce qui évite toute dérive.
+  plan             String? // "SOLO" | "BOUTIQUE" — null tant qu'aucun plan choisi
+  trialEndsAt      DateTime? // fin de l'essai gratuit (création + TRIAL_DAYS jours)
+  currentPeriodEnd DateTime? // fin de l'abonnement payé (null si jamais payé)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -359,6 +366,32 @@ model BoutiqueSettings {
   bigExpenseThreshold Int @default(50000) // « grosse » dépense ≥ ce montant (FCFA)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+// Journal des paiements d'abonnement (Phase 8). Encaissement MANUEL v1 :
+// le patron (OWNER) émet une demande PENDING (espèces / mobile money) ; un
+// SUPERADMIN la confirme, ce qui prolonge Organization.currentPeriodEnd.
+// Montants entiers en FCFA (plus petite unité, pas de décimales).
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           String // "SOLO" | "BOUTIQUE"
+  amount         Int // FCFA
+  method         String // "CASH" | "MOBILE"
+  months         Int          @default(1) // durée couverte par le paiement
+  status         String       @default("PENDING") // PENDING | CONFIRMED | REJECTED
+  periodStart    DateTime? // renseigné à la confirmation
+  periodEnd      DateTime? // renseigné à la confirmation
+  note           String?
+  requestedById  String // user (patron) ayant émis la demande
+  confirmedById  String? // admin ayant confirmé/refusé
+  confirmedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
 }
 
 // Role precedence: OWNER > ADMIN > MEMBER. The owner is also a member row

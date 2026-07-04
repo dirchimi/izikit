@@ -18,6 +18,7 @@ import 'server-only';
 import { prisma } from '../prisma';
 import { slugify, ensureUniqueSlug } from '../slug';
 import type { OrgRole } from '../middleware/require-org-role';
+import { TRIAL_DAYS } from '@/lib/subscription/plans';
 
 export interface BoutiqueSettingsView {
   currency: string;
@@ -151,9 +152,14 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
   const name = deriveName(email);
   let created: { id: string; slug: string; name: string } | null = null;
 
+  // Essai gratuit démarré à la création (statut dérivé — voir subscription).
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+
   await ensureUniqueSlug(base, async (slug) => {
     const org = await prisma.$transaction(async (tx) => {
-      const o = await tx.organization.create({ data: { slug, name, ownerId: userId } });
+      const o = await tx.organization.create({
+        data: { slug, name, ownerId: userId, trialEndsAt },
+      });
       await tx.organizationMember.create({
         data: { organizationId: o.id, userId, role: 'OWNER' },
       });

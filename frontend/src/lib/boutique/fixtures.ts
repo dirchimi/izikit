@@ -706,6 +706,7 @@ export interface SettingsSection {
 
 export const settingsSections: SettingsSection[] = [
   { key: 'boutique', icon: 'store', label: 'Boutique' },
+  { key: 'abonnement', icon: 'badge-check', label: 'Abonnement' },
   { key: 'facturation', icon: 'receipt', label: 'Facturation' },
   { key: 'devise', icon: 'coins', label: 'Devise' },
   { key: 'utilisateurs', icon: 'users', label: 'Utilisateurs' },

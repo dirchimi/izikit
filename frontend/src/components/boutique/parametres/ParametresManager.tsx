@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
@@ -11,6 +11,7 @@ import { useApi } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { settingsSections } from '@/lib/boutique/fixtures';
 import BoutiqueInfoForm, { type BoutiqueInfoValues } from './BoutiqueInfoForm';
+import AbonnementSection from './AbonnementSection';
 import FacturationSection from './FacturationSection';
 import NotificationSettings from './NotificationSettings';
 import SecuritySection from './SecuritySection';
@@ -45,6 +46,13 @@ export default function ParametresManager() {
   const [active, setActive] = useState('boutique');
   const current = settingsSections.find((s) => s.key === active);
 
+  // Lien profond depuis le bandeau d'abonnement : /parametres?section=abonnement.
+  // Lu côté client (pas de useSearchParams → évite une frontière Suspense).
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    if (section && settingsSections.some((s) => s.key === section)) setActive(section);
+  }, []);
+
   const {
     data: boutique,
     loading: boutiqueLoading,
@@ -57,6 +65,9 @@ export default function ParametresManager() {
   const members = membersData?.members ?? [];
   const currentUserId = me?.user.id ?? '';
   const canManage = boutique?.role === 'OWNER' || boutique?.role === 'ADMIN';
+  const isOwner = boutique?.role === 'OWNER';
+  // L'abonnement est géré par le patron uniquement → onglet masqué aux autres.
+  const visibleSections = settingsSections.filter((s) => s.key !== 'abonnement' || isOwner);
 
   async function saveBoutique(v: BoutiqueInfoValues) {
     try {
@@ -137,7 +148,7 @@ export default function ParametresManager() {
       <div className="flex flex-col lg:flex-row">
         {/* Sous-navigation des réglages */}
         <div className="border-border flex flex-row overflow-x-auto border-b lg:w-[220px] lg:flex-col lg:overflow-visible lg:border-e lg:border-b-0 lg:py-4">
-          {settingsSections.map((s) => {
+          {visibleSections.map((s) => {
             const isActive = s.key === active;
             return (
               <button
@@ -161,6 +172,8 @@ export default function ParametresManager() {
         {/* Panneau */}
         <div className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 md:px-8">
           {active === 'boutique' && renderBoutiquePanel()}
+
+          {active === 'abonnement' && isOwner && <AbonnementSection />}
 
           {active === 'facturation' && <FacturationSection />}
 
@@ -189,6 +202,7 @@ export default function ParametresManager() {
             ))}
 
           {active !== 'boutique' &&
+            active !== 'abonnement' &&
             active !== 'facturation' &&
             active !== 'utilisateurs' &&
             active !== 'securite' &&

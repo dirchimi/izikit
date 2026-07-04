@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/orders', label: 'Commandes', icon: 'shopping-bag' },
   { href: '/admin/withdrawals', label: 'Retraits', icon: 'banknote' },
+  { href: '/admin/subscriptions', label: 'Abonnements', icon: 'badge-check' },
   { href: '/admin/audit-log', label: "Journal d'audit", icon: 'scroll-text' },
 ];
 

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
 import BottomNav from './BottomNav';
+import SubscriptionBanner from './SubscriptionBanner';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import OfflineBanner from '@/components/pwa/OfflineBanner';
 import { useApi } from '@/lib/useApi';
@@ -83,6 +84,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
         </header>
+
+        {/* Bandeau d'abonnement (essai finissant / expiré) — application douce */}
+        <SubscriptionBanner />
 
         {/* pb sous lg : laisse la place à la barre de navigation basse */}
         <main
