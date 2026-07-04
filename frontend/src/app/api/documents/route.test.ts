@@ -65,6 +65,7 @@ describe('GET /api/documents', () => {
         clientPhone: null,
         status: 'CREDIT',
         total: 12000,
+        balanceAfter: null,
         note: null,
         lines: [{ article: 'Riz', qty: 2, unitPrice: 6000 }],
         validityDays: null,
@@ -78,6 +79,7 @@ describe('GET /api/documents', () => {
     expect(body.documents[0].status).toBe('credit');
     expect(body.documents[0].lines[0].article).toBe('Riz');
     expect(body.documents[0].clientPhone).toBe('');
+    expect(body.documents[0].balanceAfter).toBeNull();
   });
 
   it('401 sans session', async () => {

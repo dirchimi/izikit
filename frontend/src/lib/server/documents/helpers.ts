@@ -1,7 +1,7 @@
 // Phase 6 — logique métier des documents (pure, testable sans Prisma).
 import { z } from 'zod';
 
-export type DocType = 'FACTURE' | 'PROFORMA';
+export type DocType = 'FACTURE' | 'PROFORMA' | 'RECU';
 export type DocStatus = 'PAID' | 'PENDING' | 'CREDIT';
 /** Statut côté UI (aligné sur `DocStatus` des fixtures / dictionnaire). */
 export type UiDocStatus = 'paid' | 'pending' | 'credit';
@@ -26,10 +26,15 @@ export function linesTotal(lines: DocLine[]): number {
   return lines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
 }
 
-/** Numéro séquentiel par (boutique, type) : F-0001 (facture) / PRO-0001 (proforma). */
+/** Numéro séquentiel par (boutique, type) : F-0001 / PRO-0001 / R-0001 (reçu). */
 export function docNumber(type: DocType, countForType: number): string {
-  const prefix = type === 'FACTURE' ? 'F' : 'PRO';
+  const prefix = type === 'FACTURE' ? 'F' : type === 'RECU' ? 'R' : 'PRO';
   return `${prefix}-${String(countForType + 1).padStart(4, '0')}`;
+}
+
+/** Libellé instantané FR d'un mode de remboursement (stocké dans la ligne du reçu). */
+export function repaymentLineLabel(method: string): string {
+  return method === 'MOBILE' ? 'Remboursement (Mobile Money)' : 'Remboursement (Espèces)';
 }
 
 /** Statut d'une facture dérivé du mode de paiement de la vente. */

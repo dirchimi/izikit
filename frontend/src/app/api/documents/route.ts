@@ -54,6 +54,7 @@ interface DbDocument {
   clientPhone: string | null;
   status: string;
   total: number;
+  balanceAfter: number | null;
   note: string | null;
   lines: unknown;
   validityDays: number | null;
@@ -70,6 +71,7 @@ function documentView(d: DbDocument) {
     clientPhone: d.clientPhone ?? '',
     status: uiDocStatus(d.status),
     total: d.total,
+    balanceAfter: d.balanceAfter,
     note: d.note ?? '',
     lines: coerceLines(d.lines),
     validityDays: d.validityDays,
@@ -86,6 +88,7 @@ const DOC_SELECT = {
   clientPhone: true,
   status: true,
   total: true,
+  balanceAfter: true,
   note: true,
   lines: true,
   validityDays: true,

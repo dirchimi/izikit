@@ -23,6 +23,9 @@ export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: B
   const isProforma = doc.type === 'PROFORMA';
   const s = docStatusConfig[doc.status];
 
+  // Le reçu de remboursement a son propre gabarit (montant reçu + solde restant).
+  if (doc.type === 'RECU') return <RecuPreview doc={doc} org={org} />;
+
   return (
     <div className="bg-surface border-border flex-1 rounded-lg border">
       {/* En-tête du document */}
@@ -158,6 +161,96 @@ export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: B
         <p className="text-muted-foreground font-body text-xs">
           {doc.note ||
             t(isProforma ? 'documents.preview.proformaFooter' : 'documents.preview.invoiceFooter')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Aperçu d'un reçu de remboursement — montant reçu + solde restant. */
+function RecuPreview({ doc, org }: { doc: ApiDocument; org: BoutiqueHeader }) {
+  const t = useT();
+  const method = doc.lines[0]?.article ?? t('documents.recu.received');
+
+  return (
+    <div className="bg-surface border-border flex-1 rounded-lg border">
+      {/* En-tête */}
+      <div className="border-border flex flex-col gap-4 border-b px-5 py-6 sm:flex-row sm:items-start sm:justify-between md:px-8">
+        <div>
+          {org.logoUrl ? (
+            <img
+              src={org.logoUrl}
+              alt=""
+              className="border-border mb-3 h-12 w-12 rounded-md border object-cover"
+              crossOrigin="anonymous"
+            />
+          ) : (
+            <div className="bg-primary mb-3 flex h-10 w-10 items-center justify-center rounded-md">
+              <span className="font-headings text-primary-foreground text-base font-bold">
+                {org.name.charAt(0).toUpperCase() || 'B'}
+              </span>
+            </div>
+          )}
+          <p className="font-headings text-foreground text-base font-bold">{org.name}</p>
+          <p className="text-muted-foreground font-body mt-1 text-xs">{org.city}</p>
+        </div>
+        <div className="sm:text-end">
+          <p className="font-headings text-foreground text-2xl font-bold">
+            {t('documents.preview.recuTitle')}
+          </p>
+          <p className="text-muted-foreground font-body mt-1 text-sm">{doc.number}</p>
+          <p className="text-muted-foreground font-body mt-0.5 text-xs">
+            {t('documents.preview.dateLabel')} {fmtLong(doc.issuedAt)}
+          </p>
+          <span className="bg-badge-cash text-badge-cash-foreground font-body mt-2 inline-block rounded-sm px-2 py-0.5 text-xs font-semibold">
+            {t('doc.status.paid')}
+          </span>
+        </div>
+      </div>
+
+      {/* Reçu de */}
+      <div className="border-border border-b px-5 py-4 md:px-8">
+        <p className="text-muted-foreground font-body mb-1 text-xs font-semibold">
+          {t('documents.recu.receivedFrom')}
+        </p>
+        <p className="font-body text-foreground text-sm font-semibold">{doc.clientName}</p>
+        {doc.clientPhone && (
+          <p className="text-muted-foreground font-body text-xs">{doc.clientPhone}</p>
+        )}
+      </div>
+
+      {/* Montant reçu (encart) */}
+      <div className="px-5 py-5 md:px-8">
+        <div className="border-border bg-muted flex flex-col gap-1 rounded-lg border px-5 py-4">
+          <span className="text-muted-foreground font-body text-xs">
+            {t('documents.recu.received')} · {method}
+          </span>
+          <span className="font-headings text-success text-3xl font-bold">
+            + {formatFCFA(doc.total)} <span className="text-lg">{t('common.fcfa')}</span>
+          </span>
+        </div>
+
+        {/* Solde restant après remboursement */}
+        {doc.balanceAfter != null && (
+          <div className="border-border mt-4 flex items-center justify-between border-t pt-4">
+            <span className="font-body text-foreground text-sm font-semibold">
+              {t('documents.recu.balanceAfter')}
+            </span>
+            <span
+              className={`font-headings text-base font-bold ${
+                doc.balanceAfter > 0 ? 'text-danger' : 'text-success'
+              }`}
+            >
+              {formatFCFA(doc.balanceAfter)} {t('common.fcfa')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Note de pied */}
+      <div className="border-border border-t px-5 py-4 md:px-8">
+        <p className="text-muted-foreground font-body text-xs">
+          {doc.note || t('documents.recu.footer')}
         </p>
       </div>
     </div>

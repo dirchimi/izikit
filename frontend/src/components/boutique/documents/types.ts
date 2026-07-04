@@ -1,5 +1,5 @@
 // Phase 6 — types partagés de l'écran Documents (forme renvoyée par /api/documents).
-export type DocType = 'FACTURE' | 'PROFORMA';
+export type DocType = 'FACTURE' | 'PROFORMA' | 'RECU';
 export type UiDocStatus = 'paid' | 'pending' | 'credit';
 
 export interface ApiDocLine {
@@ -17,6 +17,7 @@ export interface ApiDocument {
   clientPhone: string;
   status: UiDocStatus;
   total: number;
+  balanceAfter: number | null; // RECU : solde restant après remboursement
   note: string;
   lines: ApiDocLine[];
   validityDays: number | null;

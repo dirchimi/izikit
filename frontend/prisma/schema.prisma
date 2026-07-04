@@ -309,16 +309,18 @@ model Document {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  type           String // FACTURE | PROFORMA
+  type           String // FACTURE | PROFORMA | RECU
   number         String
   saleId         String?      @unique // facture issue d'une vente (Phase 3)
   sale           Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
   customerId     String?
   customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  repaymentId    String?      @unique // reçu ↔ remboursement (Phase 7) — dédup si rejoué
   clientName     String // instantané du destinataire
   clientPhone    String?
   status         String // PAID | PENDING | CREDIT
-  total          Int // instantané Σ(lignes)
+  total          Int // instantané Σ(lignes) ; pour un RECU = montant remboursé
+  balanceAfter   Int? // RECU : solde restant du client après ce remboursement
   note           String?
   lines          Json // instantané [{ article, qty, unitPrice }]
   validityDays   Int? // proforma : durée de validité (jours)

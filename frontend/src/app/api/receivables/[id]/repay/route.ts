@@ -19,6 +19,7 @@ import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { allocateRepayment } from '@/lib/server/receivables/helpers';
+import { docNumber, repaymentLineLabel } from '@/lib/server/documents/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
@@ -90,7 +91,7 @@ export async function POST(
       async (tx) => {
         const customer = await tx.customer.findUnique({
           where: { id: customerId },
-          select: { organizationId: true },
+          select: { organizationId: true, name: true, phone: true },
         });
         if (!customer || customer.organizationId !== orgId) {
           return { kind: 'CUSTOMER_NOT_FOUND' };
@@ -112,7 +113,7 @@ export async function POST(
           });
         }
 
-        await tx.repayment.create({
+        const repayment = await tx.repayment.create({
           data: {
             organizationId: orgId,
             customerId,
@@ -125,7 +126,33 @@ export async function POST(
         });
 
         const totalDue = open.reduce((sum, r) => sum + (r.amount - r.amountPaid), 0);
-        return { kind: 'OK', applied, remainingDebt: totalDue - applied };
+        const remainingDebt = totalDue - applied;
+
+        // Reçu de remboursement (Document type RECU) — instantané figé, partageable
+        // au même titre qu'une facture. `balanceAfter` fige le solde restant.
+        const recuCount = await tx.document.count({
+          where: { organizationId: orgId, type: 'RECU' },
+        });
+        await tx.document.create({
+          data: {
+            organizationId: orgId,
+            type: 'RECU',
+            number: docNumber('RECU', recuCount),
+            customerId,
+            repaymentId: repayment.id,
+            clientName: customer.name,
+            status: 'PAID',
+            total: applied,
+            balanceAfter: remainingDebt,
+            lines: [{ article: repaymentLineLabel(method), qty: 1, unitPrice: applied }],
+            createdById: userSub,
+            ...(customer.phone ? { clientPhone: customer.phone } : {}),
+            ...(note ? { note } : {}),
+            ...(backdated ? { issuedAt: backdated } : {}),
+          },
+        });
+
+        return { kind: 'OK', applied, remainingDebt };
       },
       { isolationLevel: 'Serializable' },
     );

@@ -23,7 +23,7 @@ interface OrgCurrent {
   settings: { city: string | null; logoUrl: string | null };
 }
 
-type Tab = 'factures' | 'proformas';
+type Tab = 'factures' | 'proformas' | 'recus';
 type StatusFilter = UiDocStatus | 'all';
 
 function fmtShort(iso: string): string {
@@ -57,8 +57,9 @@ export default function DocumentsManager() {
 
   const factures = documents.filter((d) => d.type === 'FACTURE');
   const proformas = documents.filter((d) => d.type === 'PROFORMA');
-  const docs = tab === 'factures' ? factures : proformas;
-  const listIcon = tab === 'factures' ? 'file-text' : 'file';
+  const recus = documents.filter((d) => d.type === 'RECU');
+  const docs = tab === 'factures' ? factures : tab === 'proformas' ? proformas : recus;
+  const listIcon = tab === 'factures' ? 'file-text' : tab === 'recus' ? 'receipt' : 'file';
   const invoicedSaleIds = useMemo(
     () => new Set(factures.map((d) => d.saleId).filter((x): x is string => x !== null)),
     [factures],
@@ -126,18 +127,23 @@ export default function DocumentsManager() {
     }
   }
 
+  function docKind(doc: ApiDocument): string {
+    const key =
+      doc.type === 'FACTURE'
+        ? 'documents.kind.facture'
+        : doc.type === 'RECU'
+          ? 'documents.kind.recu'
+          : 'documents.kind.proforma';
+    return t(key);
+  }
+
   function docShareText(doc: ApiDocument): string {
-    const kindLabel = t(
-      doc.type === 'FACTURE' ? 'documents.kind.facture' : 'documents.kind.proforma',
-    );
-    return `${org.name} — ${kindLabel} ${doc.number}\n${t('common.total')}: ${formatFCFA(doc.total)} ${t('common.fcfa')}`;
+    const amountLabel = doc.type === 'RECU' ? t('documents.recu.received') : t('common.total');
+    return `${org.name} — ${docKind(doc)} ${doc.number}\n${amountLabel}: ${formatFCFA(doc.total)} ${t('common.fcfa')}`;
   }
 
   function docTitle(doc: ApiDocument): string {
-    const kindLabel = t(
-      doc.type === 'FACTURE' ? 'documents.kind.facture' : 'documents.kind.proforma',
-    );
-    return `${kindLabel} ${doc.number}`;
+    return `${docKind(doc)} ${doc.number}`;
   }
 
   // Partage direct : récupère le PDF puis le partage (natif sur mobile avec le
@@ -196,18 +202,36 @@ export default function DocumentsManager() {
             >
               {t('documents.tab.proformas')}
             </button>
-          </div>
-
-          {/* Action création */}
-          <div className="border-border border-b px-4 py-3">
             <button
               type="button"
-              onClick={() => setCreating(true)}
-              className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold"
+              onClick={() => switchTab('recus')}
+              className={`font-body flex-1 py-3 text-sm ${
+                tab === 'recus'
+                  ? 'text-primary border-primary border-b-2 font-semibold'
+                  : 'text-muted-foreground'
+              }`}
             >
-              <Icon i="plus" size={15} />
-              {t(tab === 'factures' ? 'documents.invoiceFromSale' : 'documents.newProforma')}
+              {t('documents.tab.recus')}
             </button>
+          </div>
+
+          {/* Action création — les reçus sont générés automatiquement au remboursement. */}
+          <div className="border-border border-b px-4 py-3">
+            {tab === 'recus' ? (
+              <p className="text-muted-foreground font-body flex items-center gap-2 text-xs">
+                <Icon i="info" size={14} className="shrink-0" />
+                {t('documents.recu.autoHint')}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="bg-primary text-primary-foreground font-body flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold"
+              >
+                <Icon i="plus" size={15} />
+                {t(tab === 'factures' ? 'documents.invoiceFromSale' : 'documents.newProforma')}
+              </button>
+            )}
           </div>
 
           {/* Recherche + filtres */}
@@ -250,7 +274,11 @@ export default function DocumentsManager() {
             onRetry={refresh}
             isEmpty={docs.length === 0}
             emptyLabel={t(
-              tab === 'factures' ? 'documents.emptyFactures' : 'documents.emptyProformas',
+              tab === 'factures'
+                ? 'documents.emptyFactures'
+                : tab === 'recus'
+                  ? 'documents.emptyRecus'
+                  : 'documents.emptyProformas',
             )}
             emptyIcon={listIcon}
           >
@@ -315,12 +343,7 @@ export default function DocumentsManager() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h2 className="font-headings text-foreground text-lg font-bold">
-                  {t(
-                    selected.type === 'FACTURE'
-                      ? 'documents.kind.facture'
-                      : 'documents.kind.proforma',
-                  )}{' '}
-                  {selected.number}
+                  {docKind(selected)} {selected.number}
                 </h2>
                 <p className="text-muted-foreground font-body mt-0.5 text-xs">
                   {fmtShort(selected.issuedAt)} · {selected.clientName}

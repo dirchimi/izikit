@@ -43,6 +43,7 @@ export async function GET(
         clientName: true,
         clientPhone: true,
         total: true,
+        balanceAfter: true,
         lines: true,
         validityDays: true,
         issuedAt: true,
@@ -74,12 +75,14 @@ export async function GET(
 
     const settings = doc.organization.settings;
     const logo = await fetchLogoDataUri(settings?.logoUrl ?? null);
+    const docType = doc.type === 'PROFORMA' ? 'PROFORMA' : doc.type === 'RECU' ? 'RECU' : 'FACTURE';
     const buffer = await renderDocumentPdf({
-      type: doc.type === 'PROFORMA' ? 'PROFORMA' : 'FACTURE',
+      type: docType,
       number: doc.number,
       clientName: doc.clientName,
       clientPhone: doc.clientPhone,
       total: doc.total,
+      balanceAfter: doc.balanceAfter,
       lines: coerceLines(doc.lines),
       validityDays: doc.validityDays,
       issuedAt: doc.issuedAt instanceof Date ? doc.issuedAt.toISOString() : doc.issuedAt,

@@ -12,6 +12,7 @@ import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { creditStatusConfig, type CreditStatus } from '@/lib/boutique/fixtures';
+import PdfPreviewModal from '@/components/boutique/documents/PdfPreviewModal';
 import RepaymentForm, { type RepayMethod } from './RepaymentForm';
 
 interface ApiCredit {
@@ -60,6 +61,7 @@ export default function CreancesManager() {
   const [search, setSearch] = useState('');
   const [showSettled, setShowSettled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [statementFor, setStatementFor] = useState<ApiDebtor | null>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
   const { data, loading, error, refresh } = useApi<{ debtors: ApiDebtor[] }>('/api/receivables');
@@ -259,14 +261,24 @@ export default function CreancesManager() {
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => amountRef.current?.focus()}
-                  className="bg-primary text-primary-foreground font-body flex shrink-0 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
-                >
-                  <Icon i="circle-check" size={15} />
-                  {t('creances.recordRepayment')}
-                </button>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStatementFor(selected)}
+                    className="border-border bg-surface text-foreground font-body flex items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+                  >
+                    <Icon i="scroll-text" size={15} />
+                    {t('creances.statement')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => amountRef.current?.focus()}
+                    className="bg-primary text-primary-foreground font-body flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
+                  >
+                    <Icon i="circle-check" size={15} />
+                    {t('creances.recordRepayment')}
+                  </button>
+                </div>
               </div>
 
               {/* Synthèse de la dette */}
@@ -398,6 +410,20 @@ export default function CreancesManager() {
           )}
         </div>
       </AsyncState>
+
+      <PdfPreviewModal
+        open={statementFor !== null}
+        path={statementFor ? `/api/receivables/${statementFor.id}/statement/pdf` : null}
+        fileName={statementFor ? `releve-${statementFor.name}.pdf` : ''}
+        title={statementFor ? t('creances.statementTitle', { name: statementFor.name }) : ''}
+        shareText={
+          statementFor
+            ? `${t('creances.statementTitle', { name: statementFor.name })}\n${t('creances.kpi.balance')}: ${formatFCFA(statementFor.debt)} ${t('common.fcfa')}`
+            : ''
+        }
+        phone={statementFor?.phone ?? null}
+        onClose={() => setStatementFor(null)}
+      />
     </>
   );
 }

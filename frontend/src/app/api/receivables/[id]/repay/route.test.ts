@@ -49,17 +49,24 @@ beforeEach(() => {
       ? ((cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>)
       : Promise.resolve(cb),
   );
+  // Reçu de remboursement (Document RECU) créé dans la même transaction.
+  prismaMock.document.count.mockResolvedValue(0 as never);
+  prismaMock.document.create.mockResolvedValue({} as never);
 });
 
 describe('POST /api/receivables/[id]/repay', () => {
   it('répartit le paiement sur les créances ouvertes, met à jour statut + Repayment → 200', async () => {
-    prismaMock.customer.findUnique.mockResolvedValueOnce({ organizationId: 'org1' } as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'HISSEIN',
+      phone: '+235 66 00 00 00',
+    } as never);
     prismaMock.receivable.findMany.mockResolvedValueOnce([
       { id: 'r1', amount: 6000, amountPaid: 0 },
       { id: 'r2', amount: 4000, amountPaid: 0 },
     ] as never);
     prismaMock.receivable.update.mockResolvedValue({} as never);
-    prismaMock.repayment.create.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValue({ id: 'rep-1' } as never);
 
     const res = await POST(makePost({ amount: 7000, method: 'cash' }), { params });
     expect(res.status).toBe(200);
@@ -81,15 +88,32 @@ describe('POST /api/receivables/[id]/repay', () => {
         data: expect.objectContaining({ amount: 7000, method: 'CASH', customerId: 'c1' }),
       }),
     );
+    // Un reçu de remboursement (RECU) est généré, avec le solde restant figé.
+    expect(prismaMock.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'RECU',
+          number: 'R-0001',
+          total: 7000,
+          balanceAfter: 3000,
+          repaymentId: 'rep-1',
+          clientName: 'HISSEIN',
+        }),
+      }),
+    );
   });
 
   it('plafonne au dû total (pas de trop-perçu)', async () => {
-    prismaMock.customer.findUnique.mockResolvedValueOnce({ organizationId: 'org1' } as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'OUMAR',
+      phone: null,
+    } as never);
     prismaMock.receivable.findMany.mockResolvedValueOnce([
       { id: 'r1', amount: 2000, amountPaid: 0 },
     ] as never);
     prismaMock.receivable.update.mockResolvedValue({} as never);
-    prismaMock.repayment.create.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValue({ id: 'rep-2' } as never);
 
     const res = await POST(makePost({ amount: 9999, method: 'mobile' }), { params });
     expect(res.status).toBe(200);

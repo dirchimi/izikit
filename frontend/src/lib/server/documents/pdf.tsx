@@ -7,11 +7,12 @@ import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@
 import { type DocLine } from './helpers';
 
 export interface PdfInput {
-  type: 'FACTURE' | 'PROFORMA';
+  type: 'FACTURE' | 'PROFORMA' | 'RECU';
   number: string;
   clientName: string;
   clientPhone?: string | null;
   total: number;
+  balanceAfter?: number | null; // RECU : solde restant après remboursement
   lines: DocLine[];
   validityDays?: number | null;
   issuedAt: string; // ISO
@@ -38,6 +39,8 @@ const C = {
   muted: '#6b7280',
   line: '#e5e7eb',
   brand: '#0f766e',
+  success: '#15803d',
+  danger: '#b91c1c',
 };
 
 const s = StyleSheet.create({
@@ -94,9 +97,87 @@ const s = StyleSheet.create({
     fontSize: 8,
     color: C.muted,
   },
+  recuBox: {
+    marginTop: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 6,
+    backgroundColor: '#f9fafb',
+  },
+  recuAmount: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.success, marginTop: 4 },
+  recuBalance: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
 });
 
+function buildRecu(input: PdfInput) {
+  const cur = input.org.currency;
+  const method = input.lines[0]?.article ?? 'Remboursement';
+  const balance = input.balanceAfter ?? null;
+
+  return (
+    <Document>
+      <Page size="A4" style={s.page}>
+        {/* En-tête */}
+        <View style={s.between}>
+          <View>
+            {input.org.logo ? <Image src={input.org.logo} style={s.logo} /> : null}
+            <Text style={s.brandName}>{input.org.name}</Text>
+            {input.org.address ? <Text style={s.small}>{input.org.address}</Text> : null}
+            <Text style={s.small}>{input.org.city ?? 'N’Djamena, Tchad'}</Text>
+            {input.org.phone ? <Text style={s.small}>{input.org.phone}</Text> : null}
+          </View>
+          <View>
+            <Text style={s.title}>REÇU</Text>
+            <Text style={[s.small, { textAlign: 'right', marginTop: 4 }]}>{input.number}</Text>
+            <Text style={[s.small, { textAlign: 'right' }]}>{fmtDate(input.issuedAt)}</Text>
+          </View>
+        </View>
+
+        {/* Reçu de */}
+        <View style={s.recipient}>
+          <Text style={s.sectionLabel}>Reçu de</Text>
+          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{input.clientName}</Text>
+          {input.clientPhone ? <Text style={s.small}>{input.clientPhone}</Text> : null}
+        </View>
+
+        {/* Montant reçu */}
+        <View style={s.recuBox}>
+          <Text style={s.muted}>Montant reçu — {method}</Text>
+          <Text style={s.recuAmount}>+ {money(input.total, cur)}</Text>
+        </View>
+
+        {/* Solde restant */}
+        {balance != null ? (
+          <View style={s.recuBalance}>
+            <Text style={{ fontFamily: 'Helvetica-Bold' }}>Solde restant</Text>
+            <Text
+              style={{
+                fontFamily: 'Helvetica-Bold',
+                fontSize: 12,
+                color: balance > 0 ? C.danger : C.success,
+              }}
+            >
+              {money(balance, cur)}
+            </Text>
+          </View>
+        ) : null}
+
+        {input.note ? <Text style={[s.small, { marginTop: 12 }]}>{input.note}</Text> : null}
+        <Text style={s.footer}>{input.org.invoiceNote ?? 'Merci — reçu de remboursement.'}</Text>
+      </Page>
+    </Document>
+  );
+}
+
 function buildElement(input: PdfInput) {
+  if (input.type === 'RECU') return buildRecu(input);
   const isProforma = input.type === 'PROFORMA';
   const cur = input.org.currency;
   const footer = isProforma
@@ -179,4 +260,118 @@ function buildElement(input: PdfInput) {
 /** Rend le document en PDF (Buffer) prêt à streamer dans une Response. */
 export function renderDocumentPdf(input: PdfInput): Promise<Buffer> {
   return renderToBuffer(buildElement(input));
+}
+
+// ── Relevé de compte client (réconcilie créances ↔ remboursements) ──────────
+
+export interface StatementInput {
+  customerName: string;
+  customerPhone?: string | null;
+  credits: { date: string; label: string; amount: number }[];
+  repayments: { date: string; method: string; amount: number }[];
+  totalCredit: number;
+  repaid: number;
+  debt: number;
+  issuedAt: string; // ISO
+  org: PdfInput['org'];
+}
+
+const methodLabelFr = (m: string) => (m.toUpperCase() === 'MOBILE' ? 'Mobile Money' : 'Espèces');
+
+function buildStatement(input: StatementInput) {
+  const cur = input.org.currency;
+  return (
+    <Document>
+      <Page size="A4" style={s.page}>
+        {/* En-tête */}
+        <View style={s.between}>
+          <View>
+            {input.org.logo ? <Image src={input.org.logo} style={s.logo} /> : null}
+            <Text style={s.brandName}>{input.org.name}</Text>
+            {input.org.address ? <Text style={s.small}>{input.org.address}</Text> : null}
+            <Text style={s.small}>{input.org.city ?? 'N’Djamena, Tchad'}</Text>
+            {input.org.phone ? <Text style={s.small}>{input.org.phone}</Text> : null}
+          </View>
+          <View>
+            <Text style={s.title}>RELEVÉ</Text>
+            <Text style={[s.small, { textAlign: 'right', marginTop: 4 }]}>
+              {fmtDate(input.issuedAt)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Client */}
+        <View style={s.recipient}>
+          <Text style={s.sectionLabel}>Client</Text>
+          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{input.customerName}</Text>
+          {input.customerPhone ? <Text style={s.small}>{input.customerPhone}</Text> : null}
+        </View>
+
+        {/* Achats à crédit */}
+        <Text style={[s.sectionLabel, { marginTop: 20 }]}>Achats à crédit</Text>
+        <View style={s.th}>
+          <Text style={[s.cArticle, s.muted]}>Date</Text>
+          <Text style={[{ flex: 2 }, s.muted]}>Article</Text>
+          <Text style={[s.cTotal, s.muted]}>Montant</Text>
+        </View>
+        {input.credits.length === 0 ? (
+          <Text style={[s.small, { marginTop: 8 }]}>Aucun achat à crédit.</Text>
+        ) : (
+          input.credits.map((c, i) => (
+            <View key={`c-${i}`} style={s.tr}>
+              <Text style={s.cArticle}>{fmtDate(c.date)}</Text>
+              <Text style={{ flex: 2 }}>{c.label}</Text>
+              <Text style={s.cTotal}>{money(c.amount, cur)}</Text>
+            </View>
+          ))
+        )}
+
+        {/* Remboursements */}
+        <Text style={[s.sectionLabel, { marginTop: 20 }]}>Remboursements reçus</Text>
+        <View style={s.th}>
+          <Text style={[s.cArticle, s.muted]}>Date</Text>
+          <Text style={[{ flex: 2 }, s.muted]}>Mode</Text>
+          <Text style={[s.cTotal, s.muted]}>Montant</Text>
+        </View>
+        {input.repayments.length === 0 ? (
+          <Text style={[s.small, { marginTop: 8 }]}>Aucun remboursement.</Text>
+        ) : (
+          input.repayments.map((r, i) => (
+            <View key={`r-${i}`} style={s.tr}>
+              <Text style={s.cArticle}>{fmtDate(r.date)}</Text>
+              <Text style={{ flex: 2 }}>{methodLabelFr(r.method)}</Text>
+              <Text style={[s.cTotal, { color: C.success }]}>+ {money(r.amount, cur)}</Text>
+            </View>
+          ))
+        )}
+
+        {/* Synthèse */}
+        <View style={s.totals}>
+          <View style={s.totalRow}>
+            <Text style={s.muted}>Total acheté à crédit</Text>
+            <Text>{money(input.totalCredit, cur)}</Text>
+          </View>
+          <View style={s.totalRow}>
+            <Text style={s.muted}>Déjà remboursé</Text>
+            <Text style={{ color: C.success }}>- {money(input.repaid, cur)}</Text>
+          </View>
+          <View style={s.grand}>
+            <Text style={s.grandLabel}>Solde restant dû</Text>
+            <Text style={[s.grandValue, { color: input.debt > 0 ? C.danger : C.success }]}>
+              {money(input.debt, cur)}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={s.footer}>
+          {input.org.invoiceNote ?? 'Relevé de compte — arrêté à la date d’émission.'}
+        </Text>
+      </Page>
+    </Document>
+  );
+}
+
+/** Rend un relevé de compte client en PDF (Buffer). */
+export function renderStatementPdf(input: StatementInput): Promise<Buffer> {
+  return renderToBuffer(buildStatement(input));
 }

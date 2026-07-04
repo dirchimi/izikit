@@ -1499,6 +1499,12 @@ const messages: Record<string, Msg> = {
     en: 'Repayments received',
     ar: 'الدفعات المستلمة',
   },
+  'creances.statement': { fr: 'Relevé', en: 'Statement', ar: 'كشف حساب' },
+  'creances.statementTitle': {
+    fr: 'Relevé de compte — {name}',
+    en: 'Account statement — {name}',
+    ar: 'كشف حساب — {name}',
+  },
   'creances.showSettled': {
     fr: 'Voir les clients soldés ({n})',
     en: 'Show settled customers ({n})',
@@ -1555,6 +1561,7 @@ const messages: Record<string, Msg> = {
   },
   'documents.tab.factures': { fr: 'Factures', en: 'Invoices', ar: 'الفواتير' },
   'documents.tab.proformas': { fr: 'Proformas', en: 'Quotes', ar: 'عروض الأسعار' },
+  'documents.tab.recus': { fr: 'Remboursements', en: 'Repayments', ar: 'التسديدات' },
   'doc.status.paid': { fr: 'Payée', en: 'Paid', ar: 'مدفوعة' },
   'doc.status.pending': { fr: 'En attente', en: 'Pending', ar: 'قيد الانتظار' },
   'doc.status.credit': { fr: 'Crédit', en: 'Credit', ar: 'آجل' },
@@ -1565,6 +1572,24 @@ const messages: Record<string, Msg> = {
   },
   'documents.kind.facture': { fr: 'Facture', en: 'Invoice', ar: 'فاتورة' },
   'documents.kind.proforma': { fr: 'Proforma', en: 'Quote', ar: 'عرض سعر' },
+  'documents.kind.recu': { fr: 'Reçu', en: 'Receipt', ar: 'إيصال' },
+  'documents.recu.autoHint': {
+    fr: 'Les reçus sont générés automatiquement à chaque remboursement encaissé.',
+    en: 'Receipts are generated automatically for each repayment received.',
+    ar: 'يتم إنشاء الإيصالات تلقائياً عند كل تسديد.',
+  },
+  'documents.recu.received': { fr: 'Montant reçu', en: 'Amount received', ar: 'المبلغ المستلَم' },
+  'documents.recu.receivedFrom': { fr: 'REÇU DE', en: 'RECEIVED FROM', ar: 'مستلَم من' },
+  'documents.recu.balanceAfter': {
+    fr: 'Solde restant après',
+    en: 'Balance after',
+    ar: 'الرصيد بعد التسديد',
+  },
+  'documents.recu.footer': {
+    fr: 'Reçu de remboursement. — Sahilley',
+    en: 'Repayment receipt. — Sahilley',
+    ar: 'إيصال تسديد. — Sahilley',
+  },
   'documents.shareWhatsapp': {
     fr: 'Partager via WhatsApp',
     en: 'Share via WhatsApp',
@@ -1583,6 +1608,7 @@ const messages: Record<string, Msg> = {
   },
   'documents.preview.invoiceTitle': { fr: 'FACTURE', en: 'INVOICE', ar: 'فاتورة' },
   'documents.preview.proformaTitle': { fr: 'PROFORMA', en: 'QUOTE', ar: 'عرض سعر' },
+  'documents.preview.recuTitle': { fr: 'REÇU', en: 'RECEIPT', ar: 'إيصال' },
   'documents.preview.branch': { fr: 'Boutique principale', en: 'Main shop', ar: 'المتجر الرئيسي' },
   'documents.preview.dateLabel': { fr: 'Date :', en: 'Date:', ar: 'التاريخ:' },
   'documents.preview.validityDays': {
@@ -1665,6 +1691,11 @@ const messages: Record<string, Msg> = {
     fr: 'Aucun proforma. Créez votre premier devis.',
     en: 'No quotes yet. Create your first quote.',
     ar: 'لا توجد عروض أسعار. أنشئ أول عرض.',
+  },
+  'documents.emptyRecus': {
+    fr: 'Aucun reçu. Ils apparaîtront ici dès qu’un client remboursera.',
+    en: 'No receipts yet. They appear here once a customer repays.',
+    ar: 'لا توجد إيصالات بعد. ستظهر هنا عند تسديد أحد الزبائن.',
   },
   'common.close': { fr: 'Fermer', en: 'Close', ar: 'إغلاق' },
   'common.phone': { fr: 'Téléphone', en: 'Phone', ar: 'الهاتف' },
@@ -2185,6 +2216,7 @@ const messages: Record<string, Msg> = {
   'cart.decrease': { fr: 'Diminuer', en: 'Decrease', ar: 'إنقاص' },
   'cart.increase': { fr: 'Augmenter', en: 'Increase', ar: 'زيادة' },
   'cart.remove': { fr: 'Retirer', en: 'Remove', ar: 'إزالة' },
+  'cart.quantity': { fr: 'Quantité', en: 'Quantity', ar: 'الكمية' },
   // ── Onboarding (accueil premier lancement) ───────────────────────────────
   'onb.title': {
     fr: 'Bienvenue sur Sahilley !',
