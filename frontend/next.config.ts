@@ -37,6 +37,14 @@ const config: NextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: 'res.cloudinary.com' }],
   },
+  // Embarque les polices Inter (.ttf) dans le bundle des routes PDF. Sans ça, le
+  // file-tracing de `output: 'standalone'` / Vercel ne copie pas les .ttf lus via
+  // fs au runtime (voir src/lib/server/documents/fonts.ts) → tofu de retour en prod.
+  outputFileTracingIncludes: {
+    '/api/documents/[id]/pdf': ['./src/lib/server/documents/fonts/*.ttf'],
+    '/api/receivables/[id]/statement/pdf': ['./src/lib/server/documents/fonts/*.ttf'],
+    '/api/reports/pdf': ['./src/lib/server/documents/fonts/*.ttf'],
+  },
   async headers() {
     return [
       {

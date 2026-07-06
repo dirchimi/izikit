@@ -6,6 +6,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { ReportSummary } from './compute';
 import type { TopProduct } from './helpers';
+import { registerPdfFonts } from '../documents/fonts';
 
 export interface ReportPdfInput {
   periodLabel: string;
@@ -33,12 +34,18 @@ const C = {
 };
 
 const s = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, color: C.ink, fontFamily: 'Helvetica' },
+  page: { padding: 40, fontSize: 10, color: C.ink, fontFamily: 'Inter' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  brandName: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: C.ink },
+  brandName: { fontSize: 16, fontFamily: 'Inter', fontWeight: 700, color: C.ink },
   small: { fontSize: 9, color: C.muted },
-  title: { fontSize: 22, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
-  sectionTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', marginTop: 24, marginBottom: 8 },
+  title: { fontSize: 22, fontFamily: 'Inter', fontWeight: 700, textAlign: 'right' },
+  sectionTitle: {
+    fontSize: 12,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    marginTop: 24,
+    marginBottom: 8,
+  },
   // Cartes KPI
   kpiWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20 },
   kpi: {
@@ -47,7 +54,7 @@ const s = StyleSheet.create({
     paddingRight: 12,
   },
   kpiLabel: { fontSize: 8, color: C.muted, textTransform: 'uppercase', marginBottom: 3 },
-  kpiValue: { fontSize: 14, fontFamily: 'Helvetica-Bold' },
+  kpiValue: { fontSize: 14, fontFamily: 'Inter', fontWeight: 700 },
   // Tables
   th: {
     flexDirection: 'row',
@@ -184,5 +191,6 @@ function buildElement(input: ReportPdfInput) {
 
 /** Rend le rapport en PDF (Buffer) prêt à streamer dans une Response. */
 export function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
+  registerPdfFonts();
   return renderToBuffer(buildElement(input));
 }

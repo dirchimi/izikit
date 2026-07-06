@@ -1,0 +1,6 @@
+# Les polices sont binaires — jamais de normalisation de fins de ligne
+# (sinon le .ttf est corrompu → tofu de retour dans les PDF).
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary

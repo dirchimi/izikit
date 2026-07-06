@@ -5,6 +5,7 @@ import 'server-only';
 import React from 'react';
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import { type DocLine } from './helpers';
+import { registerPdfFonts } from './fonts';
 
 export interface PdfInput {
   type: 'FACTURE' | 'PROFORMA' | 'RECU';
@@ -44,13 +45,13 @@ const C = {
 };
 
 const s = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, color: C.ink, fontFamily: 'Helvetica' },
+  page: { padding: 40, fontSize: 10, color: C.ink, fontFamily: 'Inter' },
   row: { flexDirection: 'row' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   logo: { width: 48, height: 48, marginBottom: 8, objectFit: 'contain' },
-  brandName: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: C.ink },
+  brandName: { fontSize: 16, fontFamily: 'Inter', fontWeight: 700, color: C.ink },
   muted: { color: C.muted },
-  title: { fontSize: 22, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+  title: { fontSize: 22, fontFamily: 'Inter', fontWeight: 700, textAlign: 'right' },
   small: { fontSize: 9, color: C.muted },
   sectionLabel: { fontSize: 8, color: C.muted, marginBottom: 2, textTransform: 'uppercase' },
   recipient: { marginTop: 24, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line },
@@ -87,8 +88,8 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.line,
   },
-  grandLabel: { fontFamily: 'Helvetica-Bold', fontSize: 12 },
-  grandValue: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: C.brand },
+  grandLabel: { fontFamily: 'Inter', fontWeight: 700, fontSize: 12 },
+  grandValue: { fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: C.brand },
   footer: {
     marginTop: 28,
     paddingTop: 12,
@@ -105,7 +106,13 @@ const s = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#f9fafb',
   },
-  recuAmount: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.success, marginTop: 4 },
+  recuAmount: {
+    fontSize: 22,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: C.success,
+    marginTop: 4,
+  },
   recuBalance: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -143,7 +150,7 @@ function buildRecu(input: PdfInput) {
         {/* Reçu de */}
         <View style={s.recipient}>
           <Text style={s.sectionLabel}>Reçu de</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{input.clientName}</Text>
+          <Text style={{ fontFamily: 'Inter', fontWeight: 700 }}>{input.clientName}</Text>
           {input.clientPhone ? <Text style={s.small}>{input.clientPhone}</Text> : null}
         </View>
 
@@ -156,10 +163,11 @@ function buildRecu(input: PdfInput) {
         {/* Solde restant */}
         {balance != null ? (
           <View style={s.recuBalance}>
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>Solde restant</Text>
+            <Text style={{ fontFamily: 'Inter', fontWeight: 700 }}>Solde restant</Text>
             <Text
               style={{
-                fontFamily: 'Helvetica-Bold',
+                fontFamily: 'Inter',
+                fontWeight: 700,
                 fontSize: 12,
                 color: balance > 0 ? C.danger : C.success,
               }}
@@ -206,7 +214,7 @@ function buildElement(input: PdfInput) {
         {/* Destinataire */}
         <View style={s.recipient}>
           <Text style={s.sectionLabel}>{isProforma ? 'Destinataire' : 'Facturé à'}</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{input.clientName}</Text>
+          <Text style={{ fontFamily: 'Inter', fontWeight: 700 }}>{input.clientName}</Text>
           {input.clientPhone ? <Text style={s.small}>{input.clientPhone}</Text> : null}
         </View>
 
@@ -259,6 +267,7 @@ function buildElement(input: PdfInput) {
 
 /** Rend le document en PDF (Buffer) prêt à streamer dans une Response. */
 export function renderDocumentPdf(input: PdfInput): Promise<Buffer> {
+  registerPdfFonts();
   return renderToBuffer(buildElement(input));
 }
 
@@ -303,7 +312,7 @@ function buildStatement(input: StatementInput) {
         {/* Client */}
         <View style={s.recipient}>
           <Text style={s.sectionLabel}>Client</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{input.customerName}</Text>
+          <Text style={{ fontFamily: 'Inter', fontWeight: 700 }}>{input.customerName}</Text>
           {input.customerPhone ? <Text style={s.small}>{input.customerPhone}</Text> : null}
         </View>
 
@@ -373,5 +382,6 @@ function buildStatement(input: StatementInput) {
 
 /** Rend un relevé de compte client en PDF (Buffer). */
 export function renderStatementPdf(input: StatementInput): Promise<Buffer> {
+  registerPdfFonts();
   return renderToBuffer(buildStatement(input));
 }
