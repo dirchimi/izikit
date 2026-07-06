@@ -9,6 +9,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { onSaleChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { type PaymentMethod } from '@/lib/boutique/fixtures';
@@ -255,7 +256,9 @@ export default function VendrePos() {
       setCart([]);
       setClient(null);
       resetPayment();
-      await refresh(); // le stock a changé
+      // Vente enregistrée → resynchronise stock, ventes, dashboard, créances,
+      // documents et rapports sur tous les écrans (plus besoin d'actualiser).
+      onSaleChange();
     } catch (err) {
       toast(checkoutError(err), 'error');
     } finally {
@@ -271,9 +274,10 @@ export default function VendrePos() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-col lg:flex-row">
-        {/* Catalogue produits */}
-        <div className="border-border flex min-w-0 flex-1 flex-col lg:border-e">
+      <div className="flex flex-col lg:flex-row lg:items-start">
+        {/* Catalogue produits — @container : la grille s'adapte à la largeur
+            réelle du catalogue (indépendante de la taille de l'écran). */}
+        <div className="border-border @container flex min-w-0 flex-1 flex-col lg:border-e">
           {/* Recherche + scan code-barres */}
           <div className="flex flex-col gap-2 px-4 pt-5 pb-3 md:px-6">
             <div className="border-border bg-input focus-within:border-primary flex items-center gap-2 rounded-md border px-3 py-2.5">
@@ -353,7 +357,7 @@ export default function VendrePos() {
               emptyIcon="package"
             >
               {visibleProducts.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 @2xl:grid-cols-4 @4xl:grid-cols-5">
                   {visibleProducts.map((p) => (
                     <ProductCard
                       key={p.id}
@@ -378,17 +382,19 @@ export default function VendrePos() {
           </div>
         </div>
 
-        {/* Panier */}
-        <div className="bg-surface flex w-full flex-col lg:w-[340px]">
-          <div className="border-border flex items-center justify-between border-b px-5 py-4">
+        {/* Panier — collant en pleine hauteur sur ≥lg : les totaux + « Valider »
+            restent toujours visibles, seule la liste d'articles défile. */}
+        <div className="bg-surface flex w-full flex-col lg:sticky lg:top-0 lg:max-h-[100dvh] lg:w-[300px] xl:w-[340px]">
+          <div className="border-border flex items-center justify-between border-b px-5 py-4 lg:shrink-0">
             <h2 className="font-headings text-foreground text-base font-bold">{t('pos.cart')}</h2>
             <span className="font-body text-muted-foreground bg-muted rounded-sm px-2 py-0.5 text-xs">
               {t('pos.items', { n: itemCount })}
             </span>
           </div>
 
-          {/* Lignes */}
-          <div className="flex flex-1 flex-col gap-1 px-5 py-3">
+          {/* Lignes — zone de défilement interne sur ≥lg (min-h-0 requis pour
+              que flex-1 puisse rétrécir sous la hauteur de son contenu). */}
+          <div className="flex flex-1 flex-col gap-1 px-5 py-3 lg:min-h-0 lg:overflow-y-auto">
             {cart.length === 0 ? (
               <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
                 <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-full">
@@ -411,8 +417,8 @@ export default function VendrePos() {
             )}
           </div>
 
-          {/* Paiement */}
-          <div className="border-border flex flex-col gap-4 border-t px-5 py-5">
+          {/* Paiement — épinglé en bas du panier (toujours visible). */}
+          <div className="border-border flex flex-col gap-4 border-t px-5 py-5 lg:shrink-0">
             {/* Remise globale (FCFA) — réduit le total encaissé. */}
             <div className="flex items-center justify-between gap-3">
               <label

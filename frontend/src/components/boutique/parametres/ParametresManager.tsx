@@ -8,6 +8,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { onOrgChange } from '@/lib/boutique/realtime';
 import { api } from '@/lib/api';
 import { settingsSections } from '@/lib/boutique/fixtures';
 import BoutiqueInfoForm, { type BoutiqueInfoValues } from './BoutiqueInfoForm';
@@ -84,7 +85,7 @@ export default function ParametresManager() {
         },
       });
       toast(t('parametres.savedToast'), 'success');
-      await refreshBoutique();
+      onOrgChange();
     } catch {
       // Sans ça, un PATCH en échec ne remontait aucun retour → l'utilisateur
       // croyait avoir sauvegardé.
@@ -95,7 +96,7 @@ export default function ParametresManager() {
   async function saveLogo(logoUrl: string) {
     try {
       await api('/api/org/current', { method: 'PATCH', body: { logoUrl } });
-      await refreshBoutique();
+      onOrgChange();
     } catch {
       toast(t('async.error'), 'error');
     }

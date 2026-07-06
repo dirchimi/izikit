@@ -43,7 +43,11 @@ export default function DashboardManager() {
   const t = useT();
   const { locale } = useLocale();
   const bcp = BCP47[locale] ?? 'fr-FR';
-  const { data, loading, error, refresh } = useApi<DashboardData>('/api/dashboard');
+  // Écran « vivant » : rafraîchi toutes les 20 s (onglet visible) → les ventes
+  // des vendeurs tombent en direct sans actualiser.
+  const { data, loading, error, refresh } = useApi<DashboardData>('/api/dashboard', {
+    pollMs: 20_000,
+  });
 
   return (
     <>

@@ -12,6 +12,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { onExpenseChange } from '@/lib/boutique/realtime';
 import { api } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
@@ -132,7 +133,7 @@ export default function DepensesManager() {
         t('depenses.added', { label: input.label, amount: formatFCFA(input.amount) }),
         'success',
       );
-      await refresh();
+      onExpenseChange();
       return true;
     } catch {
       toast(t('async.error'), 'error');

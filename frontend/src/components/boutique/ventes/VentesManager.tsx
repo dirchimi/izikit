@@ -12,6 +12,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
+import { onSaleChange, onDocumentChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
@@ -86,7 +87,9 @@ export default function VentesManager() {
   const [pdfDoc, setPdfDoc] = useState<ApiDocument | null>(null);
   const [invoicing, setInvoicing] = useState<string | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales');
+  const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales', {
+    pollMs: 20_000,
+  });
   const sales = data?.sales ?? [];
 
   // Le bouton « Annuler » n'est visible que pour le Patron (OWNER) et le
@@ -98,9 +101,7 @@ export default function VentesManager() {
   const orgName = org?.organization.name ?? 'Boutique';
 
   // Factures déjà émises → on peut ouvrir le PDF au lieu de re-générer.
-  const { data: docData, refresh: refreshDocs } = useApi<{ documents: ApiDocument[] }>(
-    '/api/documents',
-  );
+  const { data: docData } = useApi<{ documents: ApiDocument[] }>('/api/documents');
   const factureBySaleId = useMemo(() => {
     const map = new Map<string, ApiDocument>();
     for (const d of docData?.documents ?? []) {
@@ -131,13 +132,13 @@ export default function VentesManager() {
         body: { type: 'FACTURE', saleId },
       });
       toast(t('documents.invoiceCreated', { num: document.number }), 'success');
-      await refreshDocs();
+      onDocumentChange();
       setPdfDoc(document);
     } catch (err) {
       const code = err instanceof ApiError ? err.code : '';
       if (code === 'DOC_EXISTS') {
         toast(t('documents.alreadyInvoiced'), 'info');
-        await refreshDocs();
+        onDocumentChange();
       } else {
         toast(t('async.error'), 'error');
       }
@@ -165,7 +166,8 @@ export default function VentesManager() {
       });
       toast(t('ventes.cancel.success', { number: cancelTarget.number }), 'success');
       closeCancel();
-      await refresh();
+      // Annulation → stock rendu, ventes/dashboard/créances/documents/rapports.
+      onSaleChange();
     } catch (err) {
       const code = err instanceof ApiError ? err.code : '';
       toast(

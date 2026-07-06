@@ -8,6 +8,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
 import { useApi, setCache } from '@/lib/useApi';
+import { onOrgChange } from '@/lib/boutique/realtime';
 import { uploadImage } from '@/lib/upload';
 import { formatFCFA } from '@/lib/boutique/format';
 
@@ -73,7 +74,7 @@ export default function FacturationSection() {
       });
       setCache('/api/org/current', updated);
       toast(t('parametres.savedToast'), 'success');
-      await refresh();
+      onOrgChange();
     } catch {
       toast(t('async.error'), 'error');
     } finally {
@@ -100,7 +101,7 @@ export default function FacturationSection() {
       await api('/api/org/current', { method: 'PATCH', body: { logoUrl: url } });
       setLogoUrl(url);
       toast(t('parametres.logo.updated'), 'success');
-      await refresh();
+      onOrgChange();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : t('parametres.logo.uploadFailed'), 'error');
     } finally {

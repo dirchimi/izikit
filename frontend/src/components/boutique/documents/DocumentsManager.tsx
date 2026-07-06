@@ -8,6 +8,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { onDocumentChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { docStatusConfig } from '@/lib/boutique/fixtures';
@@ -99,7 +100,7 @@ export default function DocumentsManager() {
         body: { type: 'FACTURE', saleId },
       });
       toast(t('documents.invoiceCreated', { num: document.number }), 'success');
-      await refresh();
+      onDocumentChange();
       setSelectedId(document.id);
       return true;
     } catch (err) {
@@ -117,7 +118,7 @@ export default function DocumentsManager() {
         body: { type: 'PROFORMA', ...payload },
       });
       toast(t('documents.proformaCreated', { num: document.number }), 'success');
-      await refresh();
+      onDocumentChange();
       setTab('proformas');
       setSelectedId(document.id);
       return true;

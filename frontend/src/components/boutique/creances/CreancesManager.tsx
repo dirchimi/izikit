@@ -9,6 +9,7 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { onRepayment } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { creditStatusConfig, type CreditStatus } from '@/lib/boutique/fixtures';
@@ -117,7 +118,7 @@ export default function CreancesManager() {
         }),
         'success',
       );
-      await refresh();
+      onRepayment();
       return true;
     } catch (err) {
       const code = err instanceof ApiError ? err.code : '';

@@ -10,6 +10,7 @@ import { formatFCFA } from '@/lib/boutique/format';
 import { stockStatusConfig } from '@/lib/boutique/fixtures';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/useApi';
+import { onStockChange } from '@/lib/boutique/realtime';
 import { uploadImage } from '@/lib/upload';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
@@ -174,7 +175,7 @@ export default function StockManager() {
       const { url } = await uploadImage(cropped);
       await api(`/api/products/${productId}`, { method: 'PATCH', body: { imageUrl: url } });
       toast(t('stock.photo.updated'), 'success');
-      await refresh();
+      onStockChange();
     } catch (err) {
       toast(photoUploadError(err, t), 'error');
     } finally {
@@ -225,7 +226,7 @@ export default function StockManager() {
         },
       });
       toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
-      await refresh();
+      onStockChange();
       return true;
     } catch (err) {
       toast(productWriteError(err), 'error');
@@ -248,7 +249,7 @@ export default function StockManager() {
     try {
       await api(`/api/products/${id}`, { method: 'PATCH', body: patch });
       toast(t('stock.updated', { name: patch.name }), 'success');
-      await refresh();
+      onStockChange();
       return true;
     } catch (err) {
       toast(productWriteError(err), 'error');
@@ -259,7 +260,7 @@ export default function StockManager() {
   function afterMovement() {
     setReapproTarget(null);
     setAdjustTarget(null);
-    void refresh();
+    onStockChange();
   }
 
   async function deleteProduct(p: ApiProduct) {
@@ -276,7 +277,7 @@ export default function StockManager() {
     try {
       await api(`/api/products/${p.id}`, { method: 'DELETE' });
       toast(t('stock.deleted', { name: p.name }), 'success');
-      await refresh();
+      onStockChange();
     } catch {
       toast(t('async.error'), 'error');
     } finally {
