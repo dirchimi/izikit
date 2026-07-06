@@ -1025,6 +1025,83 @@ const messages: Record<string, Msg> = {
   'stock.kpi.low': { fr: 'Stock faible', en: 'Low stock', ar: 'مخزون منخفض' },
   'stock.kpi.out': { fr: 'Rupture de stock', en: 'Out of stock', ar: 'نفاد المخزون' },
   'stock.kpi.products': { fr: 'produits', en: 'products', ar: 'منتجات' },
+  'stock.kpi.toPay': { fr: 'À payer', en: 'To pay', ar: 'مستحق الدفع' },
+  'stock.kpi.toPaySub': {
+    fr: '{n} dette(s) fournisseur',
+    en: '{n} supplier debt(s)',
+    ar: '{n} دين مورّد',
+  },
+  // Bloc « payé au fournisseur ? » (ajout produit + réappro)
+  'stock.supplier.question': {
+    fr: 'Payé au fournisseur ?',
+    en: 'Paid the supplier?',
+    ar: 'هل دفعت للمورّد؟',
+  },
+  'stock.supplier.full': { fr: 'Tout payé', en: 'Fully paid', ar: 'دُفع بالكامل' },
+  'stock.supplier.partial': { fr: 'Partiel', en: 'Partial', ar: 'جزئي' },
+  'stock.supplier.none': { fr: 'Rien', en: 'Nothing', ar: 'لا شيء' },
+  'stock.supplier.paidAmount': {
+    fr: 'Montant déjà payé',
+    en: 'Amount already paid',
+    ar: 'المبلغ المدفوع',
+  },
+  'stock.supplier.name': {
+    fr: 'Fournisseur (facultatif)',
+    en: 'Supplier (optional)',
+    ar: 'المورّد (اختياري)',
+  },
+  'stock.supplier.namePlaceholder': {
+    fr: 'Nom du grossiste…',
+    en: 'Wholesaler name…',
+    ar: 'اسم تاجر الجملة…',
+  },
+  'stock.supplier.remaining': {
+    fr: 'Reste à payer au fournisseur',
+    en: 'Left to pay the supplier',
+    ar: 'المتبقّي للمورّد',
+  },
+  // Panneau « dettes fournisseurs »
+  'stock.debts.title': { fr: 'Dettes fournisseurs', en: 'Supplier debts', ar: 'ديون الموردين' },
+  'stock.debts.empty': {
+    fr: 'Aucune dette fournisseur',
+    en: 'No supplier debt',
+    ar: 'لا توجد ديون موردين',
+  },
+  'stock.debts.noSupplier': {
+    fr: 'Fournisseur non précisé',
+    en: 'Supplier not set',
+    ar: 'مورّد غير محدّد',
+  },
+  'stock.debts.partialPaid': {
+    fr: 'déjà {paid} payé',
+    en: '{paid} already paid',
+    ar: 'دُفع {paid}',
+  },
+  'stock.debts.remaining': { fr: 'Reste dû', en: 'Remaining', ar: 'المتبقّي' },
+  'stock.debts.pay': { fr: 'Payer', en: 'Pay', ar: 'دفع' },
+  'stock.debts.payTitle': { fr: 'Payer le fournisseur', en: 'Pay the supplier', ar: 'دفع للمورّد' },
+  'stock.debts.payAmount': {
+    fr: 'Montant à payer',
+    en: 'Amount to pay',
+    ar: 'المبلغ المطلوب دفعه',
+  },
+  'stock.debts.paySubmit': {
+    fr: 'Enregistrer le paiement',
+    en: 'Record payment',
+    ar: 'تسجيل الدفعة',
+  },
+  'stock.debts.paidToast': {
+    fr: 'Paiement enregistré',
+    en: 'Payment recorded',
+    ar: 'تم تسجيل الدفعة',
+  },
+  'stock.debts.amountRequired': {
+    fr: 'Entrez un montant valide',
+    en: 'Enter a valid amount',
+    ar: 'أدخل مبلغًا صحيحًا',
+  },
+  'stock.debts.status.open': { fr: 'À payer', en: 'To pay', ar: 'مستحق' },
+  'stock.debts.status.partial': { fr: 'Partiel', en: 'Partial', ar: 'جزئي' },
   'stock.status.ok': { fr: 'En stock', en: 'In stock', ar: 'متوفّر' },
   'stock.status.low': { fr: 'Stock faible', en: 'Low stock', ar: 'مخزون منخفض' },
   'stock.status.out': { fr: 'Rupture', en: 'Out of stock', ar: 'نفد' },

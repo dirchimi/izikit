@@ -137,6 +137,93 @@ describe('POST /api/products', () => {
     );
   });
 
+  it('stock pris « en prêt » → crée une dette fournisseur du reste dû (borné au coût)', async () => {
+    prismaMock.product.create.mockResolvedValueOnce({
+      id: 'p9',
+      ref: 'P-9',
+      name: 'Sucre',
+      category: 'Alim',
+      buyPrice: 1000,
+      sellPrice: 1400,
+      qty: 10,
+      threshold: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.supplierDebt.create.mockResolvedValueOnce({} as never);
+
+    // Coût = 10 × 1000 = 10000. Payé 4000 → reste dû 6000.
+    const res = await POST(
+      makePost({
+        name: 'Sucre',
+        category: 'Alim',
+        buyPrice: 1000,
+        sellPrice: 1400,
+        qty: 10,
+        threshold: 4,
+        supplierDebt: { amount: 6000, supplierName: 'Grossiste Ali' },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.supplierDebt.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: 'org1',
+          productId: 'p9',
+          label: 'Sucre',
+          amount: 6000,
+          supplierName: 'Grossiste Ali',
+          status: 'OPEN',
+        }),
+      }),
+    );
+  });
+
+  it('borne la dette fournisseur au coût du stock ajouté', async () => {
+    prismaMock.product.create.mockResolvedValueOnce({
+      id: 'p9',
+      ref: 'P-9',
+      name: 'Sucre',
+      category: 'Alim',
+      buyPrice: 500,
+      sellPrice: 700,
+      qty: 4,
+      threshold: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.supplierDebt.create.mockResolvedValueOnce({} as never);
+
+    // Coût = 4 × 500 = 2000. Dette demandée 999999 → bornée à 2000.
+    await POST(
+      makePost({
+        name: 'Sucre',
+        category: 'Alim',
+        buyPrice: 500,
+        sellPrice: 700,
+        qty: 4,
+        supplierDebt: { amount: 999999 },
+      }),
+    );
+    expect(prismaMock.supplierDebt.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 2000 }) }),
+    );
+  });
+
+  it('sans supplierDebt → aucune dette créée', async () => {
+    prismaMock.product.create.mockResolvedValueOnce({
+      id: 'p9',
+      ref: 'P-9',
+      name: 'Sucre',
+      category: 'Alim',
+      buyPrice: 900,
+      sellPrice: 1400,
+      qty: 8,
+      threshold: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    await POST(makePost({ name: 'Sucre', category: 'Alim', buyPrice: 900, qty: 8 }));
+    expect(prismaMock.supplierDebt.create).not.toHaveBeenCalled();
+  });
+
   it('400 si nom manquant', async () => {
     const res = await POST(makePost({ category: 'Alim' }));
     expect(res.status).toBe(400);

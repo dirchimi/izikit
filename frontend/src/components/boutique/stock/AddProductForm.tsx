@@ -8,6 +8,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { ApiError } from '@/lib/api';
 import { uploadImage } from '@/lib/upload';
+import { useSupplierDebt, type SupplierDebtValue } from './useSupplierDebt';
 
 export interface NewProductInput {
   name: string;
@@ -20,6 +21,7 @@ export interface NewProductInput {
   threshold: number;
   imageUrl: string | null;
   barcode: string | null;
+  supplierDebt?: SupplierDebtValue;
 }
 
 /** Unités de vente proposées par défaut (l'utilisateur peut en créer d'autres). */
@@ -77,6 +79,10 @@ export default function AddProductForm({
   const [barcode, setBarcode] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Bloc « payé au fournisseur ? » — le reste dû devient une dette fournisseur.
+  const cost = (Number(qty) || 0) * (Number(buyPrice) || 0);
+  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -121,6 +127,7 @@ export default function AddProductForm({
         threshold: Number(threshold) || 0,
         imageUrl,
         barcode: barcode.trim() || null,
+        ...(supplierDebt ? { supplierDebt } : {}),
       });
       if (ok) {
         setName('');
@@ -313,6 +320,8 @@ export default function AddProductForm({
           />
         </div>
       </div>
+
+      {supplierNode}
 
       <button
         type="submit"

@@ -23,6 +23,7 @@ import EditProductForm, { type EditProductInput } from './EditProductForm';
 import ReapproForm from './ReapproForm';
 import AdjustStockForm from './AdjustStockForm';
 import MovementsHistoryModal from './MovementsHistoryModal';
+import SupplierDebtsPanel, { type SupplierDebtRow } from './SupplierDebtsPanel';
 import { useConfirm } from '@/contexts/ConfirmContext';
 
 interface ApiProduct {
@@ -137,6 +138,16 @@ export default function StockManager() {
   const { data: org } = useApi<{ role: string }>('/api/org/current');
   const canManage = org?.role === 'OWNER' || org?.role === 'ADMIN';
 
+  // Dettes fournisseurs (stock pris « en prêt ») — info financière réservée au
+  // Patron/Manager ; on n'interroge pas l'API côté Vendeur. Poll léger 30s.
+  const { data: debtData, refresh: refreshDebts } = useApi<{
+    debts: SupplierDebtRow[];
+    totalOwed: number;
+  }>('/api/supplier-debts', { skip: !canManage, pollMs: 30_000 });
+  const debts = debtData?.debts ?? [];
+  const totalOwed = debtData?.totalOwed ?? 0;
+  const [showDebts, setShowDebts] = useState(false);
+
   // Catégories propres à la boutique : dérivées des produits déjà saisis
   // (chaque boutique a donc SES catégories, créées au fil de l'ajout).
   const categories = useMemo(
@@ -223,10 +234,12 @@ export default function StockManager() {
           threshold: input.threshold,
           ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
           ...(input.barcode ? { barcode: input.barcode } : {}),
+          ...(input.supplierDebt ? { supplierDebt: input.supplierDebt } : {}),
         },
       });
       toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
       onStockChange();
+      void refreshDebts();
       return true;
     } catch (err) {
       toast(productWriteError(err), 'error');
@@ -261,6 +274,7 @@ export default function StockManager() {
     setReapproTarget(null);
     setAdjustTarget(null);
     onStockChange();
+    void refreshDebts(); // un réappro « en prêt » a pu créer une dette
   }
 
   async function deleteProduct(p: ApiProduct) {
@@ -297,7 +311,11 @@ export default function StockManager() {
         {/* Liste produits */}
         <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
           {/* KPI */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div
+            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+              canManage ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+            }`}
+          >
             <KpiCard
               label={t('stock.kpi.totalProducts')}
               value={String(totalProduits)}
@@ -321,7 +339,46 @@ export default function StockManager() {
               sublabel={t('stock.kpi.products')}
               valueClass="text-danger"
             />
+            {/* À payer (dettes fournisseurs) — cliquable, ouvre le panneau. Patron/
+                Manager uniquement. Mis en avant en rouge quand il reste à payer. */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowDebts((v) => !v)}
+                aria-expanded={showDebts}
+                className={`bg-surface border-border hover:border-primary flex flex-col gap-1 rounded-lg border px-5 py-4 text-start transition-colors ${
+                  showDebts ? 'border-primary' : ''
+                }`}
+              >
+                <span className="text-muted-foreground font-body flex items-center justify-between text-xs">
+                  {t('stock.kpi.toPay')}
+                  <Icon i={showDebts ? 'chevron-up' : 'chevron-down'} size={13} />
+                </span>
+                <span
+                  className={`font-headings text-2xl font-bold ${
+                    totalOwed > 0 ? 'text-danger' : 'text-foreground'
+                  }`}
+                >
+                  {formatFCFA(totalOwed)}
+                </span>
+                <span className="text-muted-foreground font-body text-xs">
+                  {debts.length > 0
+                    ? t('stock.kpi.toPaySub', { n: debts.length })
+                    : t('common.fcfa')}
+                </span>
+              </button>
+            )}
           </div>
+
+          {/* Panneau des dettes fournisseurs (caché par défaut) */}
+          {canManage && showDebts && (
+            <SupplierDebtsPanel
+              debts={debts}
+              totalOwed={totalOwed}
+              onPaid={refreshDebts}
+              onClose={() => setShowDebts(false)}
+            />
+          )}
 
           {/* Filtres */}
           <div className="flex flex-wrap items-center gap-3">

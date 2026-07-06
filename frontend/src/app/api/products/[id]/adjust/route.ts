@@ -28,6 +28,15 @@ const Body = z
     type: z.enum(['IN', 'OUT', 'ADJUST']).optional(),
     // Réapprovisionnement : met à jour le prix d'achat du produit si fourni.
     buyPrice: z.number().int().min(0).optional(),
+    // Réappro pris « en prêt » : reste dû au fournisseur pour cette entrée.
+    // Créé en dette fournisseur si > 0 (entrée IN uniquement). Borné au coût
+    // (delta × prix d'achat) côté serveur.
+    supplierDebt: z
+      .object({
+        amount: z.number().int().positive(),
+        supplierName: z.string().trim().max(120).optional(),
+      })
+      .optional(),
   })
   // Un ajustement (correction) exige un motif — défense en profondeur (le
   // formulaire l'impose déjà côté client).
@@ -81,12 +90,34 @@ export async function POST(
     const result: AdjustResult = await prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({
         where: { id },
-        select: { organizationId: true, qty: true },
+        select: { organizationId: true, qty: true, name: true, buyPrice: true },
       });
       if (!product || product.organizationId !== orgId) return { kind: 'NOT_FOUND' };
 
       const newQty = product.qty + delta;
       if (newQty < 0) return { kind: 'INSUFFICIENT' };
+
+      // Réappro pris « en prêt » → dette fournisseur du reste dû, bornée au coût
+      // de l'entrée (delta × prix d'achat effectif). Seulement pour une entrée.
+      if (parsed.data.supplierDebt && delta > 0) {
+        const effectiveBuyPrice = parsed.data.buyPrice ?? product.buyPrice;
+        const owed = Math.min(parsed.data.supplierDebt.amount, delta * effectiveBuyPrice);
+        if (owed > 0) {
+          await tx.supplierDebt.create({
+            data: {
+              organizationId: orgId,
+              productId: id,
+              label: product.name,
+              amount: owed,
+              status: 'OPEN',
+              createdById: auth.user.sub,
+              ...(parsed.data.supplierDebt.supplierName
+                ? { supplierName: parsed.data.supplierDebt.supplierName }
+                : {}),
+            },
+          });
+        }
+      }
 
       await tx.stockMovement.create({
         data: {

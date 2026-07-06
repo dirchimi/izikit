@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/lib/api';
+import { useSupplierDebt } from './useSupplierDebt';
 
 const fieldClass =
   'border-border bg-input text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none focus:border-primary';
@@ -29,6 +30,12 @@ export default function ReapproForm({
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Coût de l'entrée = quantité × prix d'achat (celui saisi, sinon celui du
+  // produit). Sert au bloc « payé au fournisseur ? » (dette si pris en prêt).
+  const effectiveBuyPrice = buyPrice.trim() !== '' ? Number(buyPrice) || 0 : product.buyPrice;
+  const cost = (Number(qty) || 0) * effectiveBuyPrice;
+  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const q = Number(qty);
@@ -45,6 +52,7 @@ export default function ReapproForm({
           type: 'IN',
           ...(buyPrice.trim() !== '' ? { buyPrice: Number(buyPrice) || 0 } : {}),
           reason: note.trim() || t('stock.reappro.defaultReason'),
+          ...(supplierDebt ? { supplierDebt } : {}),
         },
       });
       toast(t('stock.reappro.success', { qty: q, name: product.name }), 'success');
@@ -111,6 +119,8 @@ export default function ReapproForm({
           className={`${fieldClass} placeholder:text-muted-foreground`}
         />
       </div>
+
+      {supplierNode}
 
       <button
         type="submit"

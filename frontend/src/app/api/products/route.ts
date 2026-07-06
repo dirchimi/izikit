@@ -35,6 +35,14 @@ const PostBody = z.object({
   threshold: z.number().int().min(0).default(0),
   imageUrl: z.string().url().max(500).nullable().optional(),
   barcode: z.string().trim().max(64).nullable().optional(),
+  // Achat à crédit : reste dû au fournisseur pour ce stock initial (« en prêt »).
+  // Créé en dette fournisseur si > 0. Borné au coût (qty × prix d'achat) serveur.
+  supplierDebt: z
+    .object({
+      amount: z.number().int().positive(),
+      supplierName: z.string().trim().max(120).optional(),
+    })
+    .optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -131,6 +139,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               createdById: auth.user.sub,
             },
           });
+        }
+        // Stock pris « en prêt » chez le fournisseur → dette fournisseur du
+        // reste dû, bornée au coût réel du stock ajouté (qty × prix d'achat).
+        if (d.supplierDebt) {
+          const cost = d.qty * d.buyPrice;
+          const owed = Math.min(d.supplierDebt.amount, cost);
+          if (owed > 0) {
+            await tx.supplierDebt.create({
+              data: {
+                organizationId: orgId,
+                productId: p.id,
+                label: d.name,
+                amount: owed,
+                status: 'OPEN',
+                createdById: auth.user.sub,
+                ...(d.supplierDebt.supplierName
+                  ? { supplierName: d.supplierDebt.supplierName }
+                  : {}),
+              },
+            });
+          }
         }
         return p;
       });

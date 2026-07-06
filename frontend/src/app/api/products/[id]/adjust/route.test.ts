@@ -146,6 +146,72 @@ describe('POST /api/products/[id]/adjust', () => {
     );
   });
 
+  it('réappro « en prêt » → crée une dette fournisseur (bornée au coût de l’entrée)', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 2,
+      name: 'Riz',
+      buyPrice: 1000,
+    } as never);
+    prismaMock.supplierDebt.create.mockResolvedValueOnce({} as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 1000,
+      sellPrice: 1400,
+      qty: 12,
+      threshold: 5,
+    } as never);
+
+    // Coût = 10 × 1000 = 10000. Reste dû 6000.
+    const res = await POST(
+      makePost({
+        delta: 10,
+        type: 'IN',
+        buyPrice: 1000,
+        supplierDebt: { amount: 6000, supplierName: 'Grossiste Ali' },
+      }),
+      params('p1'),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.supplierDebt.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          productId: 'p1',
+          label: 'Riz',
+          amount: 6000,
+          supplierName: 'Grossiste Ali',
+          status: 'OPEN',
+        }),
+      }),
+    );
+  });
+
+  it('pas de dette fournisseur sur une sortie (delta < 0)', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 9,
+      name: 'Riz',
+      buyPrice: 1000,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 1000,
+      sellPrice: 1400,
+      qty: 6,
+      threshold: 5,
+    } as never);
+    await POST(makePost({ delta: -3, supplierDebt: { amount: 5000 } }), params('p1'));
+    expect(prismaMock.supplierDebt.create).not.toHaveBeenCalled();
+  });
+
   it('ajustement : type ADJUST avec delta négatif', async () => {
     prismaMock.product.findUnique.mockResolvedValueOnce({
       organizationId: 'org1',
