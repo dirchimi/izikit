@@ -24,6 +24,7 @@ import ReapproForm from './ReapproForm';
 import AdjustStockForm from './AdjustStockForm';
 import MovementsHistoryModal from './MovementsHistoryModal';
 import SupplierDebtsPanel, { type SupplierDebtRow } from './SupplierDebtsPanel';
+import FloatingAddButton from '@/components/boutique/FloatingAddButton';
 import { useConfirm } from '@/contexts/ConfirmContext';
 
 interface ApiProduct {
@@ -753,6 +754,11 @@ export default function StockManager() {
           </AsyncState>
         </div>
       </div>
+
+      {/* Bouton flottant « + » (mobile) — ajoute sans scroller jusqu'en bas. */}
+      {canManage && (
+        <FloatingAddButton onClick={() => setAdding(true)} label={t('stock.form.title')} />
+      )}
 
       {/* Formulaire d'ajout — en modale, ouvert au clic sur « Ajouter un produit » */}
       <Modal open={adding} onClose={() => setAdding(false)} title={t('stock.form.title')} size="md">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
+import { shouldDropUp } from '@/lib/boutique/dropup';
 
 export interface ProductLite {
   id: string;
@@ -33,9 +34,19 @@ export default function ProductLinePicker({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Ouvre vers le haut si la place manque sous l'ancre (lignes de proforma en
+  // bas du formulaire) — sinon la liste des produits serait coupée.
+  function toggleOpen() {
+    setOpen((o) => {
+      if (!o) setDropUp(shouldDropUp(rootRef.current));
+      return !o;
+    });
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +93,7 @@ export default function ProductLinePicker({
     <div ref={rootRef} className="relative min-w-0 flex-1">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={`border-border bg-input focus:border-primary flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm ${
@@ -103,7 +114,15 @@ export default function ProductLinePicker({
       {open && (
         <>
           <div className="fixed inset-0 z-40 bg-black/40 sm:hidden" onClick={close} aria-hidden />
-          <div className="border-border bg-surface animate-scale-in fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-hidden rounded-t-2xl border shadow-xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:mt-1.5 sm:w-full sm:rounded-xl">
+          <div
+            className={`border-border bg-surface animate-scale-in fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-hidden rounded-t-2xl border shadow-xl sm:absolute sm:inset-x-auto sm:w-full sm:max-h-none sm:rounded-xl ${
+              dropUp ? 'sm:bottom-full sm:mb-1.5' : 'sm:top-full sm:bottom-auto sm:mt-1.5'
+            }`}
+          >
+            {/* Poignée de glissement (mobile). */}
+            <div className="flex justify-center pt-2 sm:hidden">
+              <span className="bg-border h-1 w-10 rounded-full" />
+            </div>
             <div className="border-border flex items-center gap-2 border-b px-3 py-2.5">
               <Icon i="search" size={14} className="text-muted-foreground" />
               <input
@@ -122,7 +141,7 @@ export default function ProductLinePicker({
               />
             </div>
 
-            <div className="max-h-[55vh] overflow-y-auto py-1 sm:max-h-56">
+            <div className="max-h-[55vh] overflow-y-auto py-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:max-h-56 sm:pb-1">
               {filtered.map((p) => (
                 <button
                   key={p.id}

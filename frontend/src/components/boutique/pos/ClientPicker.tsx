@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon';
 import { useApi } from '@/lib/useApi';
 import { useT } from '@/contexts/LocaleContext';
 import { countryByCode } from '@/lib/boutique/countries';
+import { shouldDropUp } from '@/lib/boutique/dropup';
 
 interface OrgCurrentLite {
   settings: { country: string };
@@ -46,9 +47,19 @@ export default function ClientPicker({
   const country = countryByCode(org?.settings.country);
 
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Ouvre le menu (desktop) vers le haut quand la place manque sous l'ancre —
+  // ce sélecteur est souvent en bas du panier, sinon la liste serait coupée.
+  function toggleOpen() {
+    setOpen((o) => {
+      if (!o) setDropUp(shouldDropUp(rootRef.current));
+      return !o;
+    });
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +114,7 @@ export default function ClientPicker({
       >
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={toggleOpen}
           aria-haspopup="listbox"
           aria-expanded={open}
           className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-sm ${value ? 'text-foreground' : 'text-muted-foreground'}`}
@@ -163,8 +174,17 @@ export default function ClientPicker({
             aria-hidden
           />
           {/* Panneau : feuille du bas plein écran sur mobile (toujours atteignable,
-              au-dessus du clavier), menu déroulant classique sur desktop (≥ sm). */}
-          <div className="border-border bg-surface animate-scale-in fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-hidden rounded-t-2xl border shadow-xl sm:absolute sm:bottom-auto sm:mt-1.5 sm:max-h-none sm:rounded-xl">
+              au-dessus du clavier), menu déroulant classique sur desktop (≥ sm) —
+              ouvert vers le haut si la place manque en dessous. */}
+          <div
+            className={`border-border bg-surface animate-scale-in fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-hidden rounded-t-2xl border shadow-xl sm:absolute sm:max-h-none sm:rounded-xl ${
+              dropUp ? 'sm:bottom-full sm:mb-1.5' : 'sm:top-full sm:bottom-auto sm:mt-1.5'
+            }`}
+          >
+            {/* Poignée de glissement (mobile) — pour l'affordance de la feuille. */}
+            <div className="flex justify-center pt-2 sm:hidden">
+              <span className="bg-border h-1 w-10 rounded-full" />
+            </div>
             {/* En-tête (mobile) : titre + fermer. */}
             <div className="border-border flex items-center justify-between border-b px-4 py-3 sm:hidden">
               <span className="font-headings text-foreground text-sm font-bold">
@@ -198,7 +218,7 @@ export default function ClientPicker({
               />
             </div>
 
-            <div className="max-h-[55vh] overflow-y-auto py-1 sm:max-h-56">
+            <div className="max-h-[55vh] overflow-y-auto py-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:max-h-56 sm:pb-1">
               {filtered.map((c) => (
                 <button
                   key={c.id}

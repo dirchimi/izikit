@@ -46,7 +46,10 @@ export default function AddExpenseForm({
   }
 
   return (
-    <div className="bg-surface border-border flex w-full flex-col border-t xl:w-[300px] xl:border-t-0 xl:border-s">
+    <div
+      id="add-expense"
+      className="bg-surface border-border flex w-full flex-col border-t xl:w-[300px] xl:border-t-0 xl:border-s"
+    >
       <div className="border-border border-b px-5 py-4">
         <h2 className="font-headings text-foreground text-base font-bold">
           {t('depenses.form.title')}

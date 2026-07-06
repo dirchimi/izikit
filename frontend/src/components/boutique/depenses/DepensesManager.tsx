@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
+import FloatingAddButton from '@/components/boutique/FloatingAddButton';
 
 interface ApiExpense {
   id: string;
@@ -352,6 +353,18 @@ export default function DepensesManager() {
         {/* Formulaire d'ajout */}
         <AddExpenseForm onSubmit={addExpense} disabled={submitting} />
       </div>
+
+      {/* Bouton flottant « + » (mobile) — le formulaire d'ajout étant en bas de
+          page sous la liste, le FAB y amène directement sans scroller. */}
+      <FloatingAddButton
+        onClick={() =>
+          document.getElementById('add-expense')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          })
+        }
+        label={t('depenses.form.title')}
+      />
     </>
   );
 }
