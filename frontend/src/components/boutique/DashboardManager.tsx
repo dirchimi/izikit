@@ -97,7 +97,7 @@ export default function DashboardManager() {
                   </div>
 
                   {/* Graphe + alertes stock */}
-                  <div className="flex flex-col gap-5 lg:flex-row">
+                  <div className="flex flex-col gap-5 xl:flex-row">
                     <div className="bg-surface border-border min-w-0 flex-1 rounded-lg border px-6 py-5">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
@@ -121,7 +121,7 @@ export default function DashboardManager() {
                     </div>
 
                     {/* Alertes stock */}
-                    <div className="bg-surface border-border w-full rounded-lg border lg:w-[280px]">
+                    <div className="bg-surface border-border w-full rounded-lg border xl:w-[280px]">
                       <div className="border-border flex items-center justify-between border-b px-4 py-4">
                         <h2 className="font-headings text-foreground text-base font-bold">
                           {t('dash.stockAlerts')}

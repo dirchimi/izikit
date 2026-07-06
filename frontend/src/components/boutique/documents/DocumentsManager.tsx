@@ -176,9 +176,10 @@ export default function DocumentsManager() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-col lg:flex-row">
-        {/* Liste des documents */}
-        <div className="border-border flex flex-col border-b lg:w-[400px] lg:border-e lg:border-b-0">
+      <div className="flex flex-col xl:flex-row">
+        {/* Liste des documents — 2 colonnes seulement à partir de xl (sinon le
+            détail est écrasé par la sidebar fixe sur écran moyen/zoomé). */}
+        <div className="border-border flex flex-col border-b xl:w-[400px] xl:border-e xl:border-b-0">
           {/* Onglets */}
           <div className="border-border flex border-b">
             <button

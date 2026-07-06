@@ -146,9 +146,11 @@ export default function CreancesManager() {
         emptyLabel={t('creances.emptyAll')}
         emptyIcon="users"
       >
-        <div className="flex flex-col lg:flex-row">
-          {/* Liste des débiteurs */}
-          <div className="border-border flex flex-col border-b lg:w-[380px] lg:border-e lg:border-b-0">
+        <div className="flex flex-col xl:flex-row">
+          {/* Liste des débiteurs — 2 colonnes seulement dès qu'il y a assez de
+              place (xl) ; sinon empilé proprement (évite l'écrasement du détail
+              sur écran moyen/zoomé, à cause de la sidebar fixe de 220px). */}
+          <div className="border-border flex flex-col border-b xl:w-[380px] xl:border-e xl:border-b-0">
             {/* Bandeau total */}
             <div className="bg-primary px-6 py-5">
               <p className="text-primary-foreground font-body text-xs opacity-70">

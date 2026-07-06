@@ -146,9 +146,10 @@ export default function ParametresManager() {
         actions={<ScreenTopActions />}
       />
 
-      <div className="flex flex-col lg:flex-row">
-        {/* Sous-navigation des réglages */}
-        <div className="border-border flex flex-row overflow-x-auto border-b lg:w-[220px] lg:flex-col lg:overflow-visible lg:border-e lg:border-b-0 lg:py-4">
+      <div className="flex flex-col xl:flex-row">
+        {/* Sous-navigation des réglages — verticale à partir de xl, sinon
+            onglets horizontaux scrollables (pas d'écrasement du panneau). */}
+        <div className="border-border flex flex-row overflow-x-auto border-b xl:w-[220px] xl:flex-col xl:overflow-visible xl:border-e xl:border-b-0 xl:py-4">
           {visibleSections.map((s) => {
             const isActive = s.key === active;
             return (
@@ -159,7 +160,7 @@ export default function ParametresManager() {
                 aria-current={isActive ? 'page' : undefined}
                 className={`font-body flex items-center gap-3 px-5 py-3 text-sm whitespace-nowrap ${
                   isActive
-                    ? 'bg-secondary text-secondary-foreground lg:border-primary font-semibold lg:border-e-2'
+                    ? 'bg-secondary text-secondary-foreground xl:border-primary font-semibold xl:border-e-2'
                     : 'text-muted-foreground'
                 }`}
               >
