@@ -40,6 +40,8 @@ const Body = z.discriminatedUnion('type', [
     clientPhone: z.string().trim().max(40).optional(),
     customerId: z.string().min(1).optional(),
     lines: z.array(LINE_SCHEMA).min(1).max(50),
+    // Remise globale (FCFA) sur le devis ; bornée au sous-total côté serveur.
+    discount: z.number().int().nonnegative().optional(),
     validityDays: z.number().int().positive().max(365).optional(),
     note: z.string().trim().max(300).optional(),
   }),
@@ -210,11 +212,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             });
             if (c && c.organizationId === orgId) customerId = input.customerId;
           }
+          // Total NET = sous-total − remise (bornée). Le PDF/aperçu redérive la
+          // remise (sous-total − total) → pas de colonne « discount » à stocker.
+          const gross = linesTotal(input.lines);
+          const discount = Math.min(input.discount ?? 0, gross);
           data = {
             clientName: input.clientName,
             clientPhone: input.clientPhone ?? null,
             status: 'PENDING',
-            total: linesTotal(input.lines),
+            total: gross - discount,
             lines: input.lines,
             saleId: null,
             customerId,

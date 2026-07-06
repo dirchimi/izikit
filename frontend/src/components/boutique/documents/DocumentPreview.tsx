@@ -61,11 +61,15 @@ export default function DocumentPreview({ doc, org }: { doc: ApiDocument; org: B
               {t('documents.preview.validityDays', { n: doc.validityDays ?? 30 })}
             </p>
           )}
-          <span
-            className={`font-body mt-2 inline-block rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
-          >
-            {t(`doc.status.${doc.status}`)}
-          </span>
+          {/* Une proforma est un devis : la validité (au-dessus) suffit, pas de
+              badge « En attente ». Les factures gardent leur statut (Payée/Crédit). */}
+          {!isProforma && (
+            <span
+              className={`font-body mt-2 inline-block rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
+            >
+              {t(`doc.status.${doc.status}`)}
+            </span>
+          )}
         </div>
       </div>
 

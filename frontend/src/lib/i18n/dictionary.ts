@@ -1672,6 +1672,24 @@ const messages: Record<string, Msg> = {
   },
   'documents.lines': { fr: 'Lignes', en: 'Items', ar: 'البنود' },
   'documents.addLine': { fr: 'Ajouter une ligne', en: 'Add a line', ar: 'إضافة بند' },
+  'documents.line.pickProduct': {
+    fr: 'Choisir un produit',
+    en: 'Pick a product',
+    ar: 'اختر منتجًا',
+  },
+  'documents.line.searchProduct': {
+    fr: 'Rechercher un produit…',
+    en: 'Search a product…',
+    ar: 'ابحث عن منتج…',
+  },
+  'documents.line.freeLine': {
+    fr: 'Ligne libre : « {name} »',
+    en: 'Custom line: “{name}”',
+    ar: 'بند حر: «{name}»',
+  },
+  'documents.line.noProduct': { fr: 'Aucun produit', en: 'No product', ar: 'لا يوجد منتج' },
+  'documents.proforma.validFor': { fr: 'Valable {n} j', en: 'Valid {n}d', ar: 'صالح {n} ي' },
+  'documents.proforma.expired': { fr: 'Expiré', en: 'Expired', ar: 'منتهٍ' },
   'documents.invoiceCreated': {
     fr: 'Facture {num} générée.',
     en: 'Invoice {num} generated.',

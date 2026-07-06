@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
+import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
+import ProductLinePicker, { type ProductLite } from './ProductLinePicker';
 
 interface LineDraft {
   article: string;
@@ -14,6 +16,7 @@ export interface ProformaPayload {
   clientName: string;
   clientPhone?: string;
   validityDays?: number;
+  discount?: number;
   lines: { article: string; qty: number; unitPrice: number }[];
 }
 
@@ -22,8 +25,9 @@ const fieldClass =
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 
 const emptyLine = (): LineDraft => ({ article: '', qty: '1', unitPrice: '' });
+const num = (v: string) => Math.max(0, Math.trunc(Number(v) || 0));
 
-/** Devis proforma : destinataire + lignes libres (article / qté / P.U.). */
+/** Devis proforma : destinataire + lignes issues du catalogue (ou libres) + remise. */
 export default function NewProformaForm({
   onClose,
   onCreate,
@@ -32,9 +36,14 @@ export default function NewProformaForm({
   onCreate: (payload: ProformaPayload) => Promise<boolean>;
 }) {
   const t = useT();
+  // Catalogue chargé une fois : les lignes piochent dedans (nom + prix auto).
+  const { data: prodData } = useApi<{ products: ProductLite[] }>('/api/products');
+  const products = prodData?.products ?? [];
+
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [validityDays, setValidityDays] = useState('30');
+  const [discount, setDiscount] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -45,7 +54,9 @@ export default function NewProformaForm({
       unitPrice: Number(l.unitPrice) || 0,
     }))
     .filter((l) => l.article !== '' && l.qty > 0);
-  const total = parsed.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+  const subtotal = parsed.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+  const discountAmount = Math.min(num(discount), subtotal);
+  const total = subtotal - discountAmount;
   const canSubmit = clientName.trim() !== '' && parsed.length > 0 && !submitting;
 
   function updateLine(i: number, patch: Partial<LineDraft>) {
@@ -67,6 +78,7 @@ export default function NewProformaForm({
       clientName: clientName.trim(),
       ...(clientPhone.trim() ? { clientPhone: clientPhone.trim() } : {}),
       ...(Number.isInteger(days) && days > 0 ? { validityDays: days } : {}),
+      ...(discountAmount > 0 ? { discount: discountAmount } : {}),
       lines: parsed,
     });
     setSubmitting(false);
@@ -135,17 +147,21 @@ export default function NewProformaForm({
             </div>
           </div>
 
-          {/* Lignes */}
+          {/* Lignes — chaque article se choisit dans le catalogue (nom + prix
+              auto-remplis) ou en saisie libre. Qté et P.U. restent modifiables. */}
           <div className="mt-4 flex flex-col gap-2">
             <span className={labelClass}>{t('documents.lines')}</span>
             {lines.map((l, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input
+                <ProductLinePicker
                   value={l.article}
-                  onChange={(e) => updateLine(i, { article: e.target.value })}
-                  placeholder={t('common.article')}
-                  aria-label={t('common.article')}
-                  className={`${fieldClass} flex-1`}
+                  products={products}
+                  onPick={(p) =>
+                    updateLine(i, {
+                      article: p.name,
+                      unitPrice: p.unitPrice ? String(p.unitPrice) : '',
+                    })
+                  }
                 />
                 <input
                   type="number"
@@ -186,13 +202,44 @@ export default function NewProformaForm({
           </div>
         </div>
 
-        {/* Pied : total + valider */}
-        <div className="border-border flex items-center justify-between gap-3 border-t px-5 py-4">
-          <div className="font-body text-sm">
-            <span className="text-muted-foreground">{t('common.total')} : </span>
-            <span className="font-headings text-foreground font-bold">
-              {formatFCFA(total)} {t('common.fcfa')}
-            </span>
+        {/* Pied : sous-total, remise, total + valider */}
+        <div className="border-border flex flex-col gap-3 border-t px-5 py-4">
+          <div className="flex flex-col gap-1.5">
+            <div className="font-body text-muted-foreground flex items-center justify-between text-sm">
+              <span>{t('common.subtotal')}</span>
+              <span>
+                {formatFCFA(subtotal)} {t('common.fcfa')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="pf-discount"
+                className="font-body text-muted-foreground flex items-center gap-1.5 text-sm"
+              >
+                <Icon i="badge-percent" size={14} />
+                {t('pos.discount')}
+              </label>
+              <div className="border-border bg-input focus-within:border-primary flex w-32 items-center gap-1 rounded-md border px-2 py-1">
+                <input
+                  id="pf-discount"
+                  type="number"
+                  min="0"
+                  max={subtotal}
+                  inputMode="numeric"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="0"
+                  className="font-body text-foreground placeholder:text-muted-foreground w-full bg-transparent text-end text-sm outline-none"
+                />
+                <span className="text-muted-foreground text-[11px]">{t('common.fcfa')}</span>
+              </div>
+            </div>
+            <div className="font-body text-foreground flex items-center justify-between text-base font-bold">
+              <span>{t('common.total')}</span>
+              <span>
+                {formatFCFA(total)} {t('common.fcfa')}
+              </span>
+            </div>
           </div>
           <button
             type="submit"

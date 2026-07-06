@@ -35,6 +35,28 @@ function fmtShort(iso: string): string {
   });
 }
 
+/**
+ * Badge d'un document dans la liste : une proforma affiche sa VALIDITÉ (Valable
+ * N j / Expiré) plutôt qu'un statut « En attente » trompeur ; facture/reçu
+ * gardent leur statut (Payée / Crédit).
+ */
+function docBadgeDescriptor(d: ApiDocument): { key: string; params?: { n: number }; cls: string } {
+  if (d.type === 'PROFORMA') {
+    const days = d.validityDays ?? 30;
+    const remaining = Math.ceil(
+      (new Date(d.issuedAt).getTime() + days * 86_400_000 - Date.now()) / 86_400_000,
+    );
+    return remaining <= 0
+      ? { key: 'documents.proforma.expired', cls: 'bg-muted text-muted-foreground' }
+      : {
+          key: 'documents.proforma.validFor',
+          params: { n: remaining },
+          cls: 'bg-secondary text-secondary-foreground',
+        };
+  }
+  return { key: `doc.status.${d.status}`, cls: docStatusConfig[d.status].cls };
+}
+
 export default function DocumentsManager() {
   const { toast } = useToast();
   const t = useT();
@@ -288,7 +310,7 @@ export default function DocumentsManager() {
             <div className="flex flex-col">
               {visible.map((d) => {
                 const active = d.id === (selected?.id ?? '');
-                const s = docStatusConfig[d.status];
+                const badge = docBadgeDescriptor(d);
                 return (
                   <button
                     key={d.id}
@@ -305,9 +327,9 @@ export default function DocumentsManager() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-muted-foreground font-mono text-xs">{d.number}</span>
                         <span
-                          className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${s.cls}`}
+                          className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${badge.cls}`}
                         >
-                          {t(`doc.status.${d.status}`)}
+                          {t(badge.key, badge.params)}
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center justify-between gap-2">

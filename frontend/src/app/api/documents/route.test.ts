@@ -215,6 +215,75 @@ describe('POST /api/documents — PROFORMA manuelle', () => {
     );
   });
 
+  it('applique la remise : total = sous-total − remise', async () => {
+    prismaMock.document.count.mockResolvedValueOnce(0);
+    prismaMock.document.create.mockResolvedValueOnce({
+      id: 'd3',
+      type: 'PROFORMA',
+      number: 'PRO-0001',
+      saleId: null,
+      clientName: 'Boutique Al-Nour',
+      clientPhone: null,
+      status: 'PENDING',
+      total: 40000,
+      note: null,
+      lines: [{ article: 'Tissu wax', qty: 3, unitPrice: 9000 }],
+      validityDays: 30,
+      issuedAt: new Date('2026-06-20T10:00:00Z'),
+    } as never);
+
+    const res = await POST(
+      makePost({
+        type: 'PROFORMA',
+        clientName: 'Boutique Al-Nour',
+        lines: [
+          { article: 'Tissu wax', qty: 3, unitPrice: 9000 },
+          { article: 'Savon', qty: 5, unitPrice: 4000 },
+        ], // sous-total 47000
+        discount: 7000,
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ total: 40000 }), // 47000 − 7000
+      }),
+    );
+  });
+
+  it('borne la remise au sous-total (total jamais négatif)', async () => {
+    prismaMock.document.count.mockResolvedValueOnce(0);
+    prismaMock.document.create.mockResolvedValueOnce({
+      id: 'd4',
+      type: 'PROFORMA',
+      number: 'PRO-0001',
+      saleId: null,
+      clientName: 'X',
+      clientPhone: null,
+      status: 'PENDING',
+      total: 0,
+      note: null,
+      lines: [{ article: 'A', qty: 1, unitPrice: 5000 }],
+      validityDays: 30,
+      issuedAt: new Date('2026-06-20T10:00:00Z'),
+    } as never);
+
+    const res = await POST(
+      makePost({
+        type: 'PROFORMA',
+        clientName: 'X',
+        lines: [{ article: 'A', qty: 1, unitPrice: 5000 }], // sous-total 5000
+        discount: 999999,
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ total: 0 }),
+      }),
+    );
+  });
+
   it('400 si proforma sans lignes', async () => {
     const res = await POST(makePost({ type: 'PROFORMA', clientName: 'X', lines: [] }));
     expect(res.status).toBe(400);
