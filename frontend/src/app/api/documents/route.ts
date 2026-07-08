@@ -17,6 +17,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import {
   LINE_SCHEMA,
   coerceLines,
@@ -159,101 +160,103 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const input = parsed.data;
     const orgId = org.orgId;
 
-    const result: PostResult = await prisma.$transaction(
-      async (tx) => {
-        let data: {
-          clientName: string;
-          clientPhone: string | null;
-          status: string;
-          total: number;
-          lines: DocLine[];
-          saleId: string | null;
-          customerId: string | null;
-          validityDays: number | null;
-        };
-
-        if (input.type === 'FACTURE') {
-          const sale = await tx.sale.findUnique({
-            where: { id: input.saleId },
-            select: {
-              organizationId: true,
-              method: true,
-              total: true,
-              customerId: true,
-              customer: { select: { name: true, phone: true } },
-              items: { select: { name: true, qty: true, unitPrice: true } },
-              document: { select: { id: true } },
-            },
-          });
-          if (!sale || sale.organizationId !== orgId) return { kind: 'SALE_NOT_FOUND' };
-          if (sale.document) return { kind: 'DOC_EXISTS' };
-
-          data = {
-            clientName: sale.customer?.name ?? 'Client comptant',
-            clientPhone: sale.customer?.phone ?? null,
-            status: saleMethodToStatus(sale.method),
-            total: sale.total,
-            lines: sale.items.map((it) => ({
-              article: it.name,
-              qty: it.qty,
-              unitPrice: it.unitPrice,
-            })),
-            saleId: input.saleId,
-            customerId: sale.customerId,
-            validityDays: null,
+    const result: PostResult = await withTxRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          let data: {
+            clientName: string;
+            clientPhone: string | null;
+            status: string;
+            total: number;
+            lines: DocLine[];
+            saleId: string | null;
+            customerId: string | null;
+            validityDays: number | null;
           };
-        } else {
-          // PROFORMA : valide le client s'il est fourni
-          let customerId: string | null = null;
-          if (input.customerId) {
-            const c = await tx.customer.findUnique({
-              where: { id: input.customerId },
-              select: { organizationId: true },
+
+          if (input.type === 'FACTURE') {
+            const sale = await tx.sale.findUnique({
+              where: { id: input.saleId },
+              select: {
+                organizationId: true,
+                method: true,
+                total: true,
+                customerId: true,
+                customer: { select: { name: true, phone: true } },
+                items: { select: { name: true, qty: true, unitPrice: true } },
+                document: { select: { id: true } },
+              },
             });
-            if (c && c.organizationId === orgId) customerId = input.customerId;
+            if (!sale || sale.organizationId !== orgId) return { kind: 'SALE_NOT_FOUND' };
+            if (sale.document) return { kind: 'DOC_EXISTS' };
+
+            data = {
+              clientName: sale.customer?.name ?? 'Client comptant',
+              clientPhone: sale.customer?.phone ?? null,
+              status: saleMethodToStatus(sale.method),
+              total: sale.total,
+              lines: sale.items.map((it) => ({
+                article: it.name,
+                qty: it.qty,
+                unitPrice: it.unitPrice,
+              })),
+              saleId: input.saleId,
+              customerId: sale.customerId,
+              validityDays: null,
+            };
+          } else {
+            // PROFORMA : valide le client s'il est fourni
+            let customerId: string | null = null;
+            if (input.customerId) {
+              const c = await tx.customer.findUnique({
+                where: { id: input.customerId },
+                select: { organizationId: true },
+              });
+              if (c && c.organizationId === orgId) customerId = input.customerId;
+            }
+            // Total NET = sous-total − remise (bornée). Le PDF/aperçu redérive la
+            // remise (sous-total − total) → pas de colonne « discount » à stocker.
+            const gross = linesTotal(input.lines);
+            const discount = Math.min(input.discount ?? 0, gross);
+            data = {
+              clientName: input.clientName,
+              clientPhone: input.clientPhone ?? null,
+              status: 'PENDING',
+              total: gross - discount,
+              lines: input.lines,
+              saleId: null,
+              customerId,
+              validityDays: input.validityDays ?? 30,
+            };
           }
-          // Total NET = sous-total − remise (bornée). Le PDF/aperçu redérive la
-          // remise (sous-total − total) → pas de colonne « discount » à stocker.
-          const gross = linesTotal(input.lines);
-          const discount = Math.min(input.discount ?? 0, gross);
-          data = {
-            clientName: input.clientName,
-            clientPhone: input.clientPhone ?? null,
-            status: 'PENDING',
-            total: gross - discount,
-            lines: input.lines,
-            saleId: null,
-            customerId,
-            validityDays: input.validityDays ?? 30,
-          };
-        }
 
-        const count = await tx.document.count({
-          where: { organizationId: orgId, type: input.type },
-        });
-        const number = docNumber(input.type, count);
+          const count = await tx.document.count({
+            where: { organizationId: orgId, type: input.type },
+          });
+          const number = docNumber(input.type, count);
 
-        const doc = await tx.document.create({
-          data: {
-            organizationId: orgId,
-            type: input.type,
-            number,
-            clientName: data.clientName,
-            status: data.status,
-            total: data.total,
-            lines: data.lines,
-            createdById: org.userSub,
-            ...(data.clientPhone ? { clientPhone: data.clientPhone } : {}),
-            ...(data.saleId ? { saleId: data.saleId } : {}),
-            ...(data.customerId ? { customerId: data.customerId } : {}),
-            ...(data.validityDays != null ? { validityDays: data.validityDays } : {}),
-            ...(input.note ? { note: input.note } : {}),
-          },
-          select: DOC_SELECT,
-        });
-        return { kind: 'OK', doc };
-      },
-      { isolationLevel: 'Serializable' },
+          const doc = await tx.document.create({
+            data: {
+              organizationId: orgId,
+              type: input.type,
+              number,
+              clientName: data.clientName,
+              status: data.status,
+              total: data.total,
+              lines: data.lines,
+              createdById: org.userSub,
+              ...(data.clientPhone ? { clientPhone: data.clientPhone } : {}),
+              ...(data.saleId ? { saleId: data.saleId } : {}),
+              ...(data.customerId ? { customerId: data.customerId } : {}),
+              ...(data.validityDays != null ? { validityDays: data.validityDays } : {}),
+              ...(input.note ? { note: input.note } : {}),
+            },
+            select: DOC_SELECT,
+          });
+          return { kind: 'OK', doc };
+        },
+        { isolationLevel: 'Serializable' },
+      ),
     );
 
     if (result.kind === 'SALE_NOT_FOUND') {

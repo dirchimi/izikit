@@ -24,8 +24,15 @@ type Mode = 'full' | 'partial' | 'none';
  * Le bloc ne s'affiche que si `cost > 0`. Renvoie `{ node, debt }` : le parent
  * insère `node` dans son formulaire et lit `debt` au moment de la soumission
  * (null = tout payé, rien à enregistrer).
+ *
+ * `hasQty` = une quantité est saisie mais le coût est nul (prix d'achat vide) :
+ * on affiche alors une invite « renseignez un prix d'achat » plutôt que rien,
+ * pour éviter qu'une dette prise « en prêt » ne soit silencieusement omise.
  */
-export function useSupplierDebt(cost: number): { node: ReactNode; debt: SupplierDebtValue | null } {
+export function useSupplierDebt(
+  cost: number,
+  hasQty = false,
+): { node: ReactNode; debt: SupplierDebtValue | null } {
   const t = useT();
   const [mode, setMode] = useState<Mode>('full');
   const [paid, setPaid] = useState('');
@@ -44,8 +51,16 @@ export function useSupplierDebt(cost: number): { node: ReactNode; debt: Supplier
     { key: 'none', labelKey: 'stock.supplier.none' },
   ];
 
+  // Quantité saisie mais coût nul (prix d'achat vide) → invite discrète.
+  const hint =
+    cost <= 0 && hasQty ? (
+      <p className="text-muted-foreground font-body text-xs">{t('stock.supplier.needBuyPrice')}</p>
+    ) : null;
+
   const node =
-    cost <= 0 ? null : (
+    cost <= 0 ? (
+      hint
+    ) : (
       <div className="border-border bg-muted/30 flex flex-col gap-2.5 rounded-md border p-3">
         <span className={labelClass}>{t('stock.supplier.question')}</span>
         <div className="border-border flex items-center overflow-hidden rounded-md border">

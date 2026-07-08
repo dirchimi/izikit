@@ -17,6 +17,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import { onSaleCommitted } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -177,146 +178,150 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const paymentsInput = parsed.data.payments;
     const legacyMethod = parsed.data.method;
 
-    const result: CheckoutResult = await prisma.$transaction(
-      async (tx) => {
-        const ids = items.map((i) => i.productId);
-        const products = await tx.product.findMany({
-          where: { id: { in: ids }, organizationId: orgId },
-          select: {
-            id: true,
-            name: true,
-            sellPrice: true,
-            prixGros: true,
-            buyPrice: true,
-            qty: true,
-          },
-        });
-        const byId = new Map(products.map((p) => [p.id, p]));
-
-        // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
-        const unitPriceFor = (p: { sellPrice: number; prixGros: number }, wholesale?: boolean) =>
-          wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice;
-
-        for (const item of items) {
-          const p = byId.get(item.productId);
-          if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId: item.productId };
-          if (item.qty > p.qty) return { kind: 'INSUFFICIENT', productId: item.productId };
-        }
-
-        // Résolution du client (création à la volée si nom fourni sans id).
-        let customerId: string | null = null;
-        if (customerInput?.id) {
-          const c = await tx.customer.findUnique({
-            where: { id: customerInput.id },
-            select: { organizationId: true },
+    // Rejoue la tx sur collision transitoire (numéro de vente séquentiel ou
+    // conflit de sérialisation entre deux checkouts simultanés).
+    const result: CheckoutResult = await withTxRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const ids = items.map((i) => i.productId);
+          const products = await tx.product.findMany({
+            where: { id: { in: ids }, organizationId: orgId },
+            select: {
+              id: true,
+              name: true,
+              sellPrice: true,
+              prixGros: true,
+              buyPrice: true,
+              qty: true,
+            },
           });
-          if (c && c.organizationId === orgId) customerId = customerInput.id;
-        } else if (customerInput?.name) {
-          const c = await tx.customer.create({
+          const byId = new Map(products.map((p) => [p.id, p]));
+
+          // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
+          const unitPriceFor = (p: { sellPrice: number; prixGros: number }, wholesale?: boolean) =>
+            wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice;
+
+          for (const item of items) {
+            const p = byId.get(item.productId);
+            if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId: item.productId };
+            if (item.qty > p.qty) return { kind: 'INSUFFICIENT', productId: item.productId };
+          }
+
+          // Résolution du client (création à la volée si nom fourni sans id).
+          let customerId: string | null = null;
+          if (customerInput?.id) {
+            const c = await tx.customer.findUnique({
+              where: { id: customerInput.id },
+              select: { organizationId: true },
+            });
+            if (c && c.organizationId === orgId) customerId = customerInput.id;
+          } else if (customerInput?.name) {
+            const c = await tx.customer.create({
+              data: {
+                organizationId: orgId,
+                name: customerInput.name,
+                phone: customerInput.phone ?? null,
+              },
+              select: { id: true },
+            });
+            customerId = c.id;
+          }
+          // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
+          const gross = items.reduce((sum, item) => {
+            const p = byId.get(item.productId);
+            return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
+          }, 0);
+          const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
+          const total = gross - discount;
+
+          // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
+          // égaler le total NET. Sinon : paiement unique via `method` (compat).
+          const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
+          if (paymentsInput && paymentsInput.length > 0) {
+            for (const p of paymentsInput) {
+              bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+            }
+            if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
+          } else {
+            bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
+          }
+          const creditAmount = bd.CREDIT;
+          const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
+          const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
+
+          // La part crédit exige un client (sélectionné ou créé à la volée).
+          if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
+
+          const count = await tx.sale.count({ where: { organizationId: orgId } });
+          const number = `V-${String(count + 1).padStart(4, '0')}`;
+          // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
+          // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
+          const publicToken = randomBytes(12).toString('base64url');
+
+          const sale = await tx.sale.create({
             data: {
               organizationId: orgId,
-              name: customerInput.name,
-              phone: customerInput.phone ?? null,
+              number,
+              method,
+              total,
+              discount,
+              cashAmount: bd.CASH,
+              mobileAmount: bd.MOBILE,
+              creditAmount,
+              publicToken,
+              createdById: userSub,
+              ...(customerId ? { customerId } : {}),
+              items: {
+                create: items.map((item) => {
+                  const p = byId.get(item.productId);
+                  return {
+                    productId: item.productId,
+                    name: p ? p.name : 'Article',
+                    qty: item.qty,
+                    unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
+                    buyPrice: p ? p.buyPrice : 0,
+                  };
+                }),
+              },
             },
             select: { id: true },
           });
-          customerId = c.id;
-        }
-        // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
-        const gross = items.reduce((sum, item) => {
-          const p = byId.get(item.productId);
-          return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
-        }, 0);
-        const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
-        const total = gross - discount;
 
-        // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
-        // égaler le total NET. Sinon : paiement unique via `method` (compat).
-        const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
-        if (paymentsInput && paymentsInput.length > 0) {
-          for (const p of paymentsInput) {
-            bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+          for (const item of items) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { qty: { decrement: item.qty } },
+            });
+            await tx.stockMovement.create({
+              data: {
+                organizationId: orgId,
+                productId: item.productId,
+                type: 'OUT',
+                delta: -item.qty,
+                reason: 'sale',
+                createdById: userSub,
+              },
+            });
           }
-          if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
-        } else {
-          bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
-        }
-        const creditAmount = bd.CREDIT;
-        const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
-        const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
 
-        // La part crédit exige un client (sélectionné ou créé à la volée).
-        if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
+          // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
+          // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
+          if (creditAmount > 0 && customerId) {
+            await tx.receivable.create({
+              data: {
+                organizationId: orgId,
+                customerId,
+                saleId: sale.id,
+                amount: creditAmount,
+                status: 'OPEN',
+              },
+            });
+          }
 
-        const count = await tx.sale.count({ where: { organizationId: orgId } });
-        const number = `V-${String(count + 1).padStart(4, '0')}`;
-        // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
-        // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
-        const publicToken = randomBytes(12).toString('base64url');
-
-        const sale = await tx.sale.create({
-          data: {
-            organizationId: orgId,
-            number,
-            method,
-            total,
-            discount,
-            cashAmount: bd.CASH,
-            mobileAmount: bd.MOBILE,
-            creditAmount,
-            publicToken,
-            createdById: userSub,
-            ...(customerId ? { customerId } : {}),
-            items: {
-              create: items.map((item) => {
-                const p = byId.get(item.productId);
-                return {
-                  productId: item.productId,
-                  name: p ? p.name : 'Article',
-                  qty: item.qty,
-                  unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
-                  buyPrice: p ? p.buyPrice : 0,
-                };
-              }),
-            },
-          },
-          select: { id: true },
-        });
-
-        for (const item of items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { qty: { decrement: item.qty } },
-          });
-          await tx.stockMovement.create({
-            data: {
-              organizationId: orgId,
-              productId: item.productId,
-              type: 'OUT',
-              delta: -item.qty,
-              reason: 'sale',
-              createdById: userSub,
-            },
-          });
-        }
-
-        // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
-        // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
-        if (creditAmount > 0 && customerId) {
-          await tx.receivable.create({
-            data: {
-              organizationId: orgId,
-              customerId,
-              saleId: sale.id,
-              amount: creditAmount,
-              status: 'OPEN',
-            },
-          });
-        }
-
-        return { kind: 'OK', saleId: sale.id, number, total, publicToken };
-      },
-      { isolationLevel: 'Serializable' },
+          return { kind: 'OK', saleId: sale.id, number, total, publicToken };
+        },
+        { isolationLevel: 'Serializable' },
+      ),
     );
 
     if (result.kind === 'PRODUCT_NOT_FOUND') {

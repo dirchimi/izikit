@@ -87,6 +87,11 @@ export function extendPeriod(
   const base =
     currentPeriodEnd && currentPeriodEnd.getTime() > now.getTime() ? currentPeriodEnd : now;
   const periodEnd = new Date(base.getTime());
+  const day = periodEnd.getDate();
   periodEnd.setMonth(periodEnd.getMonth() + Math.max(1, Math.trunc(months)));
+  // Anti-débordement `setMonth` : si le jour d'origine n'existe pas dans le mois
+  // cible (31 jan +1 → « 31 fév » qui roule au 3 mars), on ramène au dernier
+  // jour du mois voulu (setDate(0) = jour 0 = fin du mois précédent).
+  if (periodEnd.getDate() !== day) periodEnd.setDate(0);
   return { periodStart: base, periodEnd };
 }

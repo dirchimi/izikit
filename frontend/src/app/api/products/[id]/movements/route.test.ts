@@ -45,14 +45,16 @@ describe('GET /api/products/[id]/movements', () => {
       name: 'Riz',
       unite: 'pièce',
     } as never);
+    // La route lit désormais les mouvements du plus récent au plus ancien
+    // (orderBy desc, take borné) → le mock renvoie m3, m2, m1.
     prismaMock.stockMovement.findMany.mockResolvedValueOnce([
       {
-        id: 'm1',
-        type: 'IN',
-        delta: 10,
-        reason: 'initial',
-        createdAt: new Date('2026-06-01'),
-        createdById: 'u1',
+        id: 'm3',
+        type: 'ADJUST',
+        delta: 5,
+        reason: 'Inventaire',
+        createdAt: new Date('2026-06-03'),
+        createdById: null,
       },
       {
         id: 'm2',
@@ -63,14 +65,17 @@ describe('GET /api/products/[id]/movements', () => {
         createdById: 'u2',
       },
       {
-        id: 'm3',
-        type: 'ADJUST',
-        delta: 5,
-        reason: 'Inventaire',
-        createdAt: new Date('2026-06-03'),
-        createdById: null,
+        id: 'm1',
+        type: 'IN',
+        delta: 10,
+        reason: 'initial',
+        createdAt: new Date('2026-06-01'),
+        createdById: 'u1',
       },
     ] as never);
+    // Somme totale des deltas = stock courant (10 − 3 + 5 = 12) : sert à
+    // redérouler le stock résultant sur la fenêtre affichée.
+    prismaMock.stockMovement.aggregate.mockResolvedValueOnce({ _sum: { delta: 12 } } as never);
     prismaMock.user.findMany.mockResolvedValueOnce([
       { id: 'u1', name: 'Patron', email: 'p@x' },
       { id: 'u2', name: null, email: 'emp@x' },

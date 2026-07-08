@@ -34,7 +34,7 @@ export default function ReapproForm({
   // produit). Sert au bloc « payé au fournisseur ? » (dette si pris en prêt).
   const effectiveBuyPrice = buyPrice.trim() !== '' ? Number(buyPrice) || 0 : product.buyPrice;
   const cost = (Number(qty) || 0) * effectiveBuyPrice;
-  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost);
+  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost, (Number(qty) || 0) > 0);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

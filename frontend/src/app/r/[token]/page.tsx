@@ -26,6 +26,7 @@ export default async function PublicReceiptPage({
         select: {
           number: true,
           total: true,
+          discount: true,
           status: true,
           createdAt: true,
           customer: { select: { name: true } },
@@ -47,6 +48,10 @@ export default async function PublicReceiptPage({
     dateStyle: 'long',
     timeStyle: 'short',
   });
+  // Brut des lignes ; si une remise a été accordée, on affiche sous-total +
+  // remise pour que les lignes réconcilient avec le total net.
+  const gross = sale.items.reduce((sum, it) => sum + it.qty * it.unitPrice, 0);
+  const hasDiscount = sale.discount > 0 && gross > sale.total;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-100 p-4">
@@ -93,6 +98,19 @@ export default async function PublicReceiptPage({
           </div>
 
           <div className="my-4 border-t border-neutral-300" />
+
+          {hasDiscount && (
+            <div className="mb-2 flex flex-col gap-1 text-sm">
+              <div className="flex justify-between text-neutral-600">
+                <span>Sous-total</span>
+                <span>{formatFCFA(gross)} FCFA</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span>Remise</span>
+                <span>−{formatFCFA(sale.discount)} FCFA</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between text-base font-bold text-neutral-900">
             <span>Total</span>

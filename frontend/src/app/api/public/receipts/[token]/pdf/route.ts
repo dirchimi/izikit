@@ -93,8 +93,11 @@ export async function GET(
       headers: {
         'content-type': 'application/pdf',
         'content-disposition': `inline; filename="recu-${sale.number}.pdf"`,
-        // Reçu figé → cache public autorisé (allège les rechargements du client).
-        'cache-control': 'public, max-age=3600',
+        // Lien semi-privé (contient nom/téléphone du client) et révocable si la
+        // vente est annulée → jamais mis en cache partagé (CDN/proxy). Sinon le
+        // PDF resterait téléchargeable après annulation et les données client
+        // dormiraient dans des caches intermédiaires.
+        'cache-control': 'private, no-store',
         'x-request-id': reqCtx.requestId,
       },
     });

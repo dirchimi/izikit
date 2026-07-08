@@ -75,13 +75,12 @@ export async function POST(
         months,
       );
 
-      await tx.organization.update({
-        where: { id: payment.organizationId },
-        data: { plan: payment.plan, currentPeriodEnd: periodEnd },
-      });
-
-      await tx.subscriptionPayment.update({
-        where: { id },
+      // Bascule atomique PENDING→CONFIRMED : le prédicat `status: 'PENDING'`
+      // pose un verrou de ligne, donc sur deux confirmations simultanées une
+      // seule voit count=1 ; la perdante obtient count=0 → NOT_PENDING. Évite
+      // les doublons de journal d'audit et l'écrasement de la période.
+      const claimed = await tx.subscriptionPayment.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status: 'CONFIRMED',
           months,
@@ -91,6 +90,12 @@ export async function POST(
           confirmedAt: now,
           ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
         },
+      });
+      if (claimed.count === 0) return { kind: 'NOT_PENDING' as const };
+
+      await tx.organization.update({
+        where: { id: payment.organizationId },
+        data: { plan: payment.plan, currentPeriodEnd: periodEnd },
       });
 
       await logAdminAction(tx, {

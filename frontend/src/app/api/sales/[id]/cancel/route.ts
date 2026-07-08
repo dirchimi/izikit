@@ -18,6 +18,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
 
@@ -70,81 +71,83 @@ export async function POST(
     const orgId = primary.organizationId;
     const userSub = auth.user.sub;
 
-    const result: CancelResult = await prisma.$transaction(
-      async (tx) => {
-        const sale = await tx.sale.findUnique({
-          where: { id },
-          select: {
-            organizationId: true,
-            number: true,
-            status: true,
-            createdAt: true,
-            items: { select: { productId: true, qty: true } },
-            receivable: { select: { id: true } },
-          },
-        });
-        if (!sale || sale.organizationId !== orgId) return { kind: 'NOT_FOUND' };
-        if (sale.status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' };
-        // Au-delà de 24h, l'annulation est refusée (règle métier).
-        if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
-          return { kind: 'TOO_LATE' };
-        }
-
-        // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
-        // (productId null via SetNull) ne peuvent pas être re-créditées : on les
-        // ignore. On ne re-crédite que les produits encore présents dans la boutique.
-        const productIds = sale.items
-          .map((it) => it.productId)
-          .filter((pid): pid is string => pid !== null);
-        const existing =
-          productIds.length > 0
-            ? await tx.product.findMany({
-                where: { id: { in: productIds }, organizationId: orgId },
-                select: { id: true },
-              })
-            : [];
-        const existingIds = new Set(existing.map((p) => p.id));
-
-        for (const it of sale.items) {
-          if (!it.productId || !existingIds.has(it.productId) || it.qty <= 0) continue;
-          await tx.product.update({
-            where: { id: it.productId },
-            data: { qty: { increment: it.qty } },
-          });
-          await tx.stockMovement.create({
-            data: {
-              organizationId: orgId,
-              productId: it.productId,
-              type: 'IN',
-              delta: it.qty,
-              reason: `annulation vente ${sale.number}`,
-              createdById: userSub,
+    const result: CancelResult = await withTxRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const sale = await tx.sale.findUnique({
+            where: { id },
+            select: {
+              organizationId: true,
+              number: true,
+              status: true,
+              createdAt: true,
+              items: { select: { productId: true, qty: true } },
+              receivable: { select: { id: true } },
             },
           });
-        }
+          if (!sale || sale.organizationId !== orgId) return { kind: 'NOT_FOUND' };
+          if (sale.status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' };
+          // Au-delà de 24h, l'annulation est refusée (règle métier).
+          if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
+            return { kind: 'TOO_LATE' };
+          }
 
-        // 2) Créance associée (vente à crédit) → annulée.
-        if (sale.receivable) {
-          await tx.receivable.update({
-            where: { id: sale.receivable.id },
-            data: { status: 'CANCELLED' },
+          // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
+          // (productId null via SetNull) ne peuvent pas être re-créditées : on les
+          // ignore. On ne re-crédite que les produits encore présents dans la boutique.
+          const productIds = sale.items
+            .map((it) => it.productId)
+            .filter((pid): pid is string => pid !== null);
+          const existing =
+            productIds.length > 0
+              ? await tx.product.findMany({
+                  where: { id: { in: productIds }, organizationId: orgId },
+                  select: { id: true },
+                })
+              : [];
+          const existingIds = new Set(existing.map((p) => p.id));
+
+          for (const it of sale.items) {
+            if (!it.productId || !existingIds.has(it.productId) || it.qty <= 0) continue;
+            await tx.product.update({
+              where: { id: it.productId },
+              data: { qty: { increment: it.qty } },
+            });
+            await tx.stockMovement.create({
+              data: {
+                organizationId: orgId,
+                productId: it.productId,
+                type: 'IN',
+                delta: it.qty,
+                reason: `annulation vente ${sale.number}`,
+                createdById: userSub,
+              },
+            });
+          }
+
+          // 2) Créance associée (vente à crédit) → annulée.
+          if (sale.receivable) {
+            await tx.receivable.update({
+              where: { id: sale.receivable.id },
+              data: { status: 'CANCELLED' },
+            });
+          }
+
+          // 3) Trace : la vente devient CANCELLED (jamais supprimée) + motif.
+          await tx.sale.update({
+            where: { id },
+            data: {
+              status: 'CANCELLED',
+              cancelledAt: new Date(),
+              cancelledById: userSub,
+              cancelReason: reason,
+            },
           });
-        }
 
-        // 3) Trace : la vente devient CANCELLED (jamais supprimée) + motif.
-        await tx.sale.update({
-          where: { id },
-          data: {
-            status: 'CANCELLED',
-            cancelledAt: new Date(),
-            cancelledById: userSub,
-            cancelReason: reason,
-          },
-        });
-
-        return { kind: 'OK', number: sale.number };
-      },
-      { isolationLevel: 'Serializable' },
+          return { kind: 'OK', number: sale.number };
+        },
+        { isolationLevel: 'Serializable' },
+      ),
     );
 
     if (result.kind === 'NOT_FOUND') {

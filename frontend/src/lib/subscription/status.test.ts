@@ -63,4 +63,11 @@ describe('extendPeriod', () => {
     expect(periodStart).toEqual(NOW);
     expect(periodEnd.getMonth()).toBe(8); // July (6) + 2 = September (8)
   });
+
+  it('clamps end-of-month instead of overflowing (31 Jan +1 mois → 29 Fév)', () => {
+    // Sans garde, setMonth(0→1) sur le 31 janvier déborde au 2/3 mars.
+    const jan31 = new Date('2028-01-31T00:00:00.000Z'); // 2028 = année bissextile
+    const { periodEnd } = extendPeriod(jan31, new Date('2028-01-01T00:00:00.000Z'), 1);
+    expect(periodEnd).toEqual(new Date('2028-02-29T00:00:00.000Z'));
+  });
 });

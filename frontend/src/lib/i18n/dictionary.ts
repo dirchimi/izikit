@@ -1077,6 +1077,11 @@ const messages: Record<string, Msg> = {
     en: 'Left to pay the supplier',
     ar: 'المتبقّي للمورّد',
   },
+  'stock.supplier.needBuyPrice': {
+    fr: 'Renseignez un prix d’achat pour indiquer un stock pris en prêt.',
+    en: 'Enter a purchase price to record stock taken on credit.',
+    ar: 'أدخل سعر الشراء لتسجيل مخزون مأخوذ بالدين.',
+  },
   // Panneau « dettes fournisseurs »
   'stock.debts.title': { fr: 'Dettes fournisseurs', en: 'Supplier debts', ar: 'ديون الموردين' },
   'stock.debts.empty': {

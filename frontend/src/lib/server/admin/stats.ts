@@ -167,7 +167,8 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       _count: true,
       _sum: { amount: true },
     }) as unknown as Promise<StatusSumGroup>,
-    prisma.sale.aggregate({ _sum: { total: true }, _count: true }),
+    // Volume = ventes réelles : on exclut les ventes annulées (CANCELLED).
+    prisma.sale.aggregate({ where: { status: 'ACTIVE' }, _sum: { total: true }, _count: true }),
     prisma.receivable.aggregate({
       where: { status: { in: ['OPEN', 'PARTIAL'] } },
       _sum: { amount: true, amountPaid: true },
@@ -231,17 +232,23 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
           { AND: [{ trialEndsAt: { gte: now, lte: soonEnd } }, notActive] },
         ],
       },
+      // Trié par fin d'abonnement croissante : la fenêtre `take` contient bien
+      // les plus urgentes (proxy sûr de `daysLeft`, qui n'est pas une colonne).
+      // Les essais purs (currentPeriodEnd = null) remontent en tête via `nulls
+      // first`, puis on affine le tri par daysLeft en mémoire.
+      orderBy: { currentPeriodEnd: { sort: 'asc', nulls: 'first' } },
       take: 30,
       select: { id: true, name: true, plan: true, trialEndsAt: true, currentPeriodEnd: true },
     }),
-    // Usage réel : boutiques distinctes ayant vendu sur 7 j / 30 j.
+    // Usage réel : boutiques distinctes ayant une vente ACTIVE sur 7 j / 30 j
+    // (une vente annulée ne compte pas comme activité).
     prisma.sale.groupBy({
       by: ['organizationId'],
-      where: { createdAt: { gte: since7 } },
+      where: { status: 'ACTIVE', createdAt: { gte: since7 } },
     }) as unknown as Promise<Array<{ organizationId: string }>>,
     prisma.sale.groupBy({
       by: ['organizationId'],
-      where: { createdAt: { gte: since30 } },
+      where: { status: 'ACTIVE', createdAt: { gte: since30 } },
     }) as unknown as Promise<Array<{ organizationId: string }>>,
   ]);
 

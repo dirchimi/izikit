@@ -52,8 +52,10 @@ export async function POST(
       if (!payment) return { kind: 'NOT_FOUND' as const };
       if (payment.status !== 'PENDING') return { kind: 'NOT_PENDING' as const };
 
-      await tx.subscriptionPayment.update({
-        where: { id },
+      // Bascule atomique PENDING→REJECTED (verrou de ligne via le prédicat de
+      // statut) : sur deux refus simultanés, un seul journalise l'action.
+      const claimed = await tx.subscriptionPayment.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status: 'REJECTED',
           confirmedById: auth.admin.id,
@@ -61,6 +63,7 @@ export async function POST(
           ...(parsed.data.reason !== undefined ? { note: parsed.data.reason } : {}),
         },
       });
+      if (claimed.count === 0) return { kind: 'NOT_PENDING' as const };
 
       await logAdminAction(tx, {
         actorId: auth.admin.id,

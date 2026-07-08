@@ -81,7 +81,7 @@ export default function AddProductForm({
 
   // Bloc « payé au fournisseur ? » — le reste dû devient une dette fournisseur.
   const cost = (Number(qty) || 0) * (Number(buyPrice) || 0);
-  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost);
+  const { node: supplierNode, debt: supplierDebt } = useSupplierDebt(cost, (Number(qty) || 0) > 0);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);

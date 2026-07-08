@@ -39,8 +39,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const url = req.nextUrl;
     const limit = clampLimit(url.searchParams.get('limit'));
-    const status = url.searchParams.get('status');
     // Filtres facultatifs, sur liste blanche (ignore toute valeur inattendue).
+    const statusParam = url.searchParams.get('status');
+    const status =
+      statusParam === 'PENDING' || statusParam === 'CONFIRMED' || statusParam === 'REJECTED'
+        ? statusParam
+        : null;
     const planParam = url.searchParams.get('plan');
     const plan = planParam === 'SOLO' || planParam === 'BOUTIQUE' ? planParam : null;
     const methodParam = url.searchParams.get('method');

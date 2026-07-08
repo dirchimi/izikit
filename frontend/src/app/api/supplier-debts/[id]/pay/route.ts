@@ -14,6 +14,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
@@ -59,28 +60,32 @@ export async function POST(
     const orgId = primary.organizationId;
     const amount = parsed.data.amount;
 
-    const result: PayResult = await prisma.$transaction(
-      async (tx) => {
-        const debt = await tx.supplierDebt.findUnique({
-          where: { id },
-          select: { organizationId: true, amount: true, amountPaid: true, status: true },
-        });
-        if (!debt || debt.organizationId !== orgId) return { kind: 'NOT_FOUND' };
-        if (debt.status === 'PAID') return { kind: 'ALREADY_PAID' };
+    // Rejoue la tx si deux paiements simultanés sur la même dette entrent en
+    // conflit de sérialisation (au lieu de renvoyer une 500).
+    const result: PayResult = await withTxRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const debt = await tx.supplierDebt.findUnique({
+            where: { id },
+            select: { organizationId: true, amount: true, amountPaid: true, status: true },
+          });
+          if (!debt || debt.organizationId !== orgId) return { kind: 'NOT_FOUND' };
+          if (debt.status === 'PAID') return { kind: 'ALREADY_PAID' };
 
-        const remainingBefore = debt.amount - debt.amountPaid;
-        const applied = Math.min(amount, remainingBefore);
-        const newPaid = debt.amountPaid + applied;
-        const status = newPaid >= debt.amount ? 'PAID' : 'PARTIAL';
+          const remainingBefore = debt.amount - debt.amountPaid;
+          const applied = Math.min(amount, remainingBefore);
+          const newPaid = debt.amountPaid + applied;
+          const status = newPaid >= debt.amount ? 'PAID' : 'PARTIAL';
 
-        await tx.supplierDebt.update({
-          where: { id },
-          data: { amountPaid: newPaid, status },
-        });
+          await tx.supplierDebt.update({
+            where: { id },
+            data: { amountPaid: newPaid, status },
+          });
 
-        return { kind: 'OK', applied, remaining: debt.amount - newPaid, status };
-      },
-      { isolationLevel: 'Serializable' },
+          return { kind: 'OK', applied, remaining: debt.amount - newPaid, status };
+        },
+        { isolationLevel: 'Serializable' },
+      ),
     );
 
     if (result.kind === 'NOT_FOUND') {

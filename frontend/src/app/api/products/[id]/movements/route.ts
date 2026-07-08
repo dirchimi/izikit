@@ -1,8 +1,10 @@
-// GET /api/products/[id]/movements — historique complet des mouvements de stock
-// d'un produit (traçabilité). Chaque vente, entrée (réappro), sortie et
-// ajustement écrit un StockMovement ; on les liste ici du plus récent au plus
-// ancien, avec le stock résultant calculé (somme cumulée des deltas depuis
-// l'origine), le type, la quantité signée, l'auteur et le motif.
+// GET /api/products/[id]/movements — mouvements de stock d'un produit
+// (traçabilité). Chaque vente, entrée (réappro), sortie et ajustement écrit un
+// StockMovement ; on liste les 200 plus récents (le ledger est append-only), du
+// plus récent au plus ancien, avec le stock résultant calculé, le type, la
+// quantité signée, l'auteur et le motif. Le stock résultant reste exact même
+// au-delà de la fenêtre : il est redéroulé depuis le stock courant (somme totale
+// des deltas côté DB).
 //
 // Rôle min MEMBER : consultation (traçabilité). Produit hors boutique → 404.
 export const runtime = 'nodejs';
@@ -48,19 +50,34 @@ export async function GET(
       );
     }
 
-    // Ordre ascendant pour cumuler les deltas → stock résultant à chaque étape.
-    const movements = await prisma.stockMovement.findMany({
-      where: { productId: id, organizationId: orgId },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        type: true,
-        delta: true,
-        reason: true,
-        createdAt: true,
-        createdById: true,
-      },
-    });
+    // On borne l'affichage aux N mouvements les plus récents (le ledger est
+    // append-only et grossit sans fin). Pour garder le « stock résultant »
+    // correct sans charger tout l'historique, on lit la somme TOTALE des deltas
+    // (= stock courant) via un aggregate DB, puis on redéroule à rebours sur la
+    // fenêtre affichée.
+    const RECENT_LIMIT = 200;
+    const [recent, totalAgg] = await Promise.all([
+      prisma.stockMovement.findMany({
+        where: { productId: id, organizationId: orgId },
+        orderBy: { createdAt: 'desc' },
+        take: RECENT_LIMIT,
+        select: {
+          id: true,
+          type: true,
+          delta: true,
+          reason: true,
+          createdAt: true,
+          createdById: true,
+        },
+      }),
+      prisma.stockMovement.aggregate({
+        where: { productId: id, organizationId: orgId },
+        _sum: { delta: true },
+      }),
+    ]);
+    // Fenêtre en ordre ascendant pour le calcul, la plus récente d'abord vient après.
+    const movements = [...recent].reverse();
+    const currentStock = totalAgg._sum.delta ?? 0;
 
     // Résolution des auteurs (createdById est un String libre, pas une relation).
     const authorIds = [
@@ -75,7 +92,11 @@ export async function GET(
         : [];
     const authorById = new Map(authors.map((u) => [u.id, u.name ?? u.email]));
 
-    let running = 0;
+    // Stock juste avant le 1er mouvement de la fenêtre = stock courant − somme
+    // des deltas de la fenêtre. On redéroule ensuite en avant → « resultingStock »
+    // exact pour chaque ligne affichée, sans dépendre de tout l'historique.
+    const windowSum = movements.reduce((s, m) => s + m.delta, 0);
+    let running = currentStock - windowSum;
     const rows = movements.map((m) => {
       running += m.delta;
       return {

@@ -18,6 +18,7 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import { allocateRepayment } from '@/lib/server/receivables/helpers';
 import { docNumber, repaymentLineLabel } from '@/lib/server/documents/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -87,74 +88,76 @@ export async function POST(
     const note = parsed.data.note;
     const backdated = repaymentDate(parsed.data.date);
 
-    const result: RepayResult = await prisma.$transaction(
-      async (tx) => {
-        const customer = await tx.customer.findUnique({
-          where: { id: customerId },
-          select: { organizationId: true, name: true, phone: true },
-        });
-        if (!customer || customer.organizationId !== orgId) {
-          return { kind: 'CUSTOMER_NOT_FOUND' };
-        }
-
-        const open = await tx.receivable.findMany({
-          where: { customerId, organizationId: orgId, status: { not: 'PAID' } },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true, amount: true, amountPaid: true },
-        });
-
-        const { allocations, applied } = allocateRepayment(open, amount);
-        if (applied <= 0) return { kind: 'NO_DEBT' };
-
-        for (const a of allocations) {
-          await tx.receivable.update({
-            where: { id: a.id },
-            data: { amountPaid: a.newPaid, status: a.status },
+    const result: RepayResult = await withTxRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const customer = await tx.customer.findUnique({
+            where: { id: customerId },
+            select: { organizationId: true, name: true, phone: true },
           });
-        }
+          if (!customer || customer.organizationId !== orgId) {
+            return { kind: 'CUSTOMER_NOT_FOUND' };
+          }
 
-        const repayment = await tx.repayment.create({
-          data: {
-            organizationId: orgId,
-            customerId,
-            amount: applied,
-            method,
-            ...(note ? { note } : {}),
-            ...(backdated ? { createdAt: backdated } : {}),
-            createdById: userSub,
-          },
-        });
+          const open = await tx.receivable.findMany({
+            where: { customerId, organizationId: orgId, status: { not: 'PAID' } },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, amount: true, amountPaid: true },
+          });
 
-        const totalDue = open.reduce((sum, r) => sum + (r.amount - r.amountPaid), 0);
-        const remainingDebt = totalDue - applied;
+          const { allocations, applied } = allocateRepayment(open, amount);
+          if (applied <= 0) return { kind: 'NO_DEBT' };
 
-        // Reçu de remboursement (Document type RECU) — instantané figé, partageable
-        // au même titre qu'une facture. `balanceAfter` fige le solde restant.
-        const recuCount = await tx.document.count({
-          where: { organizationId: orgId, type: 'RECU' },
-        });
-        await tx.document.create({
-          data: {
-            organizationId: orgId,
-            type: 'RECU',
-            number: docNumber('RECU', recuCount),
-            customerId,
-            repaymentId: repayment.id,
-            clientName: customer.name,
-            status: 'PAID',
-            total: applied,
-            balanceAfter: remainingDebt,
-            lines: [{ article: repaymentLineLabel(method), qty: 1, unitPrice: applied }],
-            createdById: userSub,
-            ...(customer.phone ? { clientPhone: customer.phone } : {}),
-            ...(note ? { note } : {}),
-            ...(backdated ? { issuedAt: backdated } : {}),
-          },
-        });
+          for (const a of allocations) {
+            await tx.receivable.update({
+              where: { id: a.id },
+              data: { amountPaid: a.newPaid, status: a.status },
+            });
+          }
 
-        return { kind: 'OK', applied, remainingDebt };
-      },
-      { isolationLevel: 'Serializable' },
+          const repayment = await tx.repayment.create({
+            data: {
+              organizationId: orgId,
+              customerId,
+              amount: applied,
+              method,
+              ...(note ? { note } : {}),
+              ...(backdated ? { createdAt: backdated } : {}),
+              createdById: userSub,
+            },
+          });
+
+          const totalDue = open.reduce((sum, r) => sum + (r.amount - r.amountPaid), 0);
+          const remainingDebt = totalDue - applied;
+
+          // Reçu de remboursement (Document type RECU) — instantané figé, partageable
+          // au même titre qu'une facture. `balanceAfter` fige le solde restant.
+          const recuCount = await tx.document.count({
+            where: { organizationId: orgId, type: 'RECU' },
+          });
+          await tx.document.create({
+            data: {
+              organizationId: orgId,
+              type: 'RECU',
+              number: docNumber('RECU', recuCount),
+              customerId,
+              repaymentId: repayment.id,
+              clientName: customer.name,
+              status: 'PAID',
+              total: applied,
+              balanceAfter: remainingDebt,
+              lines: [{ article: repaymentLineLabel(method), qty: 1, unitPrice: applied }],
+              createdById: userSub,
+              ...(customer.phone ? { clientPhone: customer.phone } : {}),
+              ...(note ? { note } : {}),
+              ...(backdated ? { issuedAt: backdated } : {}),
+            },
+          });
+
+          return { kind: 'OK', applied, remainingDebt };
+        },
+        { isolationLevel: 'Serializable' },
+      ),
     );
 
     if (result.kind === 'CUSTOMER_NOT_FOUND') {
