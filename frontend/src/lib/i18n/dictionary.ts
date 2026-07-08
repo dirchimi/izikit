@@ -33,6 +33,17 @@ const messages: Record<string, Msg> = {
   },
   'pwa.install.cta': { fr: 'Installer', en: 'Install', ar: 'تثبيت' },
   'pwa.install.later': { fr: 'Plus tard', en: 'Later', ar: 'لاحقًا' },
+  // iOS/Safari : pas d'installation automatique possible → consigne manuelle.
+  'pwa.ios.title': {
+    fr: 'Ajouter à l’écran d’accueil',
+    en: 'Add to home screen',
+    ar: 'أضِف إلى الشاشة الرئيسية',
+  },
+  'pwa.ios.body': {
+    fr: 'Appuie sur Partager, puis « Sur l’écran d’accueil ».',
+    en: 'Tap Share, then “Add to Home Screen”.',
+    ar: 'اضغط مشاركة، ثم «أضف إلى الشاشة الرئيسية».',
+  },
   'receipt.title': { fr: 'Reçu', en: 'Receipt', ar: 'إيصال' },
   'receipt.print': { fr: 'Imprimer', en: 'Print', ar: 'طباعة' },
   'receipt.whatsapp': { fr: 'Envoyer (WhatsApp)', en: 'Send (WhatsApp)', ar: 'إرسال (واتساب)' },
