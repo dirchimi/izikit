@@ -220,7 +220,9 @@ export default function VendrePos() {
 
     setSubmitting(true);
     try {
-      const res = await api<{ sale: { id: string; number: string; total: number } }>('/api/sales', {
+      const res = await api<{
+        sale: { id: string; number: string; total: number; publicToken: string };
+      }>('/api/sales', {
         method: 'POST',
         body: {
           ...(split ? { payments } : { method }),
@@ -252,6 +254,7 @@ export default function VendrePos() {
         customerName: client?.name ?? null,
         customerPhone: client?.phone ?? null,
         items: cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
+        publicToken: res.sale.publicToken,
       });
       setCart([]);
       setClient(null);

@@ -10,6 +10,7 @@
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { randomBytes } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
@@ -64,7 +65,7 @@ type CheckoutResult =
   | { kind: 'INSUFFICIENT'; productId: string }
   | { kind: 'CREDIT_NO_CUSTOMER' }
   | { kind: 'PAYMENT_MISMATCH' }
-  | { kind: 'OK'; saleId: string; number: string; total: number };
+  | { kind: 'OK'; saleId: string; number: string; total: number; publicToken: string };
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -249,6 +250,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         const count = await tx.sale.count({ where: { organizationId: orgId } });
         const number = `V-${String(count + 1).padStart(4, '0')}`;
+        // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
+        // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
+        const publicToken = randomBytes(12).toString('base64url');
 
         const sale = await tx.sale.create({
           data: {
@@ -260,6 +264,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             cashAmount: bd.CASH,
             mobileAmount: bd.MOBILE,
             creditAmount,
+            publicToken,
             createdById: userSub,
             ...(customerId ? { customerId } : {}),
             items: {
@@ -309,7 +314,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         }
 
-        return { kind: 'OK', saleId: sale.id, number, total };
+        return { kind: 'OK', saleId: sale.id, number, total, publicToken };
       },
       { isolationLevel: 'Serializable' },
     );
@@ -353,7 +358,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
 
     return NextResponse.json(
-      { sale: { id: result.saleId, number: result.number, total: result.total } },
+      {
+        sale: {
+          id: result.saleId,
+          number: result.number,
+          total: result.total,
+          publicToken: result.publicToken,
+        },
+      },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },
     );
   });

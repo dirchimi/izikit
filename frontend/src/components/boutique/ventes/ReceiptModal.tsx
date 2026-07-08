@@ -36,6 +36,8 @@ export interface ReceiptData {
   customerName: string | null;
   customerPhone: string | null;
   items: { name: string; qty: number; unitPrice: number }[];
+  // Jeton du lien public de reçu (partage WhatsApp avec lien de téléchargement).
+  publicToken?: string | null;
 }
 
 /** Lignes de paiement non nulles à afficher sur le reçu (ventilation ou méthode unique). */
@@ -279,6 +281,35 @@ export default function ReceiptModal({
     );
   }
 
+  /** Message court + lien PUBLIC de téléchargement du reçu (pour l'envoi texte). */
+  function receiptLinkText(): string {
+    if (!receipt) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const link = receipt.publicToken ? `${origin}/r/${receipt.publicToken}` : '';
+    return (
+      `${shopName}\n${t('receipt.title')} ${receipt.number} · ` +
+      `${formatFCFA(receipt.total)} ${t('common.fcfa')}\n` +
+      (link ? `${t('receipt.downloadLine')} ${link}\n` : '') +
+      `${note || t('receipt.thanks')}`
+    );
+  }
+
+  /**
+   * Envoi au client par WhatsApp sous forme de TEXTE + lien de téléchargement du
+   * reçu (PDF). Marche sur téléphone ET PC : un lien wa.me ne peut pas joindre de
+   * fichier, mais il peut porter un lien que le client ouvre pour télécharger.
+   * Ciblé sur son numéro si connu, sinon WhatsApp propose de choisir le contact.
+   */
+  function sendLinkWhatsapp() {
+    if (!receipt) return;
+    const digits = receipt.customerPhone ? toWhatsAppNumber(receipt.customerPhone, dial) : '';
+    window.open(
+      `https://wa.me/${digits}?text=${encodeURIComponent(receiptLinkText())}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  }
+
   /**
    * Bouton WhatsApp unique — envoie le reçu en IMAGE, au client en priorité.
    *  • Téléphone : partage natif (`navigator.share` avec le fichier) → on choisit
@@ -440,30 +471,44 @@ export default function ReceiptModal({
             </p>
           </div>
 
-          {/* Actions — non imprimées. Un seul bouton WhatsApp : envoie l'image du
-              reçu, au client en priorité (voir shareWhatsapp). */}
-          <div className="no-print flex gap-2">
+          {/* Actions — non imprimées. Trois voies d'envoi :
+              1) « Envoyer au client » → WhatsApp texte + lien de téléchargement
+                 (marche partout, même sans enregistrer le numéro en contact) ;
+              2) « Partager le reçu » → partage natif du fichier image (le seul
+                 moyen de joindre réellement le reçu dans la conversation) ;
+              3) « Imprimer ». */}
+          <div className="no-print flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => window.print()}
-              className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+              onClick={sendLinkWhatsapp}
+              className="bg-success text-success-foreground font-body flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold"
             >
-              <Icon i="printer" size={15} />
-              {t('receipt.print')}
+              <Icon i="send" size={15} />
+              {t('receipt.sendToClient')}
             </button>
-            <button
-              type="button"
-              onClick={shareWhatsapp}
-              disabled={busy}
-              className="bg-success text-success-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-60"
-            >
-              <Icon
-                i={busy ? 'loader-2' : 'send'}
-                size={15}
-                className={busy ? 'animate-spin' : ''}
-              />
-              {receipt.customerPhone ? t('receipt.sendToClient') : t('receipt.whatsapp')}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={shareWhatsapp}
+                disabled={busy}
+                className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+              >
+                <Icon
+                  i={busy ? 'loader-2' : 'share-2'}
+                  size={15}
+                  className={busy ? 'animate-spin' : ''}
+                />
+                {t('receipt.shareFile')}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="border-border bg-surface text-foreground font-body flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold"
+              >
+                <Icon i="printer" size={15} />
+                {t('receipt.print')}
+              </button>
+            </div>
           </div>
         </div>
       )}

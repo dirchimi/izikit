@@ -52,6 +52,12 @@ const messages: Record<string, Msg> = {
     en: 'Send to customer (WhatsApp)',
     ar: 'إرسال إلى الزبون (واتساب)',
   },
+  'receipt.shareFile': { fr: 'Partager le reçu', en: 'Share receipt', ar: 'مشاركة الإيصال' },
+  'receipt.downloadLine': {
+    fr: 'Voir / télécharger le reçu :',
+    en: 'View / download the receipt:',
+    ar: 'عرض / تحميل الإيصال:',
+  },
   'receipt.client': { fr: 'Client', en: 'Customer', ar: 'الزبون' },
   'receipt.paidWith': { fr: 'Payé en', en: 'Paid with', ar: 'الدفع' },
   'receipt.thanks': {

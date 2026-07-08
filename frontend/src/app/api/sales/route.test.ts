@@ -77,6 +77,14 @@ describe('POST /api/sales (checkout)', () => {
     const body = await res.json();
     expect(body.sale.number).toBe('V-0006');
     expect(body.sale.total).toBe(13500);
+    // Jeton du lien public de reçu : généré, non vide, et renvoyé au client.
+    expect(typeof body.sale.publicToken).toBe('string');
+    expect(body.sale.publicToken.length).toBeGreaterThan(0);
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ publicToken: expect.any(String) }),
+      }),
+    );
     expect(prismaMock.product.update).toHaveBeenCalledTimes(2);
     expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ type: 'OUT', delta: -2 }) }),

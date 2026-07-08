@@ -213,6 +213,7 @@ model Sale {
   cashAmount     Int          @default(0) // part réglée en espèces
   mobileAmount   Int          @default(0) // part réglée en mobile money
   creditAmount   Int          @default(0) // part à crédit (= montant de la créance)
+  publicToken    String?      @unique // jeton aléatoire du lien public de reçu (partage client, sans login)
   status         String       @default("ACTIVE") // ACTIVE | CANCELLED
   cancelledAt    DateTime? // horodatage de l'annulation (null tant qu'active)
   cancelledById  String? // utilisateur (Patron/Manager) ayant annulé la vente
