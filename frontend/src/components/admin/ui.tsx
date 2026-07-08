@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 
 export function AdminHeader({
@@ -44,64 +45,87 @@ export function Badge({ tone = 'neutral', children }: { tone?: string; children:
   );
 }
 
-/** Carte KPI du tableau de bord admin. `accent` = carte verte mise en avant. */
+/**
+ * Carte KPI du tableau de bord admin.
+ * - `accent` : carte pleine (vert primaire) mise en avant (ex. MRR).
+ * - `warn`   : accent « attention » (ambre) — valeur + icône colorées, ex. file
+ *   de paiements à valider quand elle n'est pas vide.
+ * - `href`   : rend la carte cliquable (drill-down) — anneau au survol + flèche.
+ */
 export function StatCard({
   label,
   value,
   sub,
   icon,
   accent = false,
+  warn = false,
+  href,
 }: {
   label: string;
   value: string;
   sub?: string;
   icon: string;
   accent?: boolean;
+  warn?: boolean;
+  href?: string;
 }) {
-  return (
-    <div
-      className={`flex flex-col gap-3 rounded-lg border px-5 py-5 ${
-        accent ? 'bg-primary border-primary' : 'bg-surface border-border'
-      }`}
-    >
+  const clickable = !!href;
+  const shell = [
+    'group relative flex flex-col gap-3 rounded-lg border px-5 py-5 transition-all',
+    accent
+      ? 'bg-primary border-primary'
+      : warn
+        ? 'bg-amber-50 border-amber-200'
+        : 'bg-surface border-border',
+    clickable ? 'hover:ring-primary/40 hover:-translate-y-0.5 hover:shadow-sm hover:ring-2' : '',
+  ].join(' ');
+
+  const labelCls = accent
+    ? 'text-primary-foreground/80'
+    : warn
+      ? 'text-amber-700'
+      : 'text-muted-foreground';
+  const iconBox = accent ? 'bg-primary-foreground/20' : warn ? 'bg-amber-200/60' : 'bg-muted';
+  const iconCol = accent
+    ? 'text-primary-foreground'
+    : warn
+      ? 'text-amber-700'
+      : 'text-muted-foreground';
+  const valueCls = accent ? 'text-primary-foreground' : warn ? 'text-amber-800' : 'text-foreground';
+  const subCls = accent
+    ? 'text-primary-foreground/70'
+    : warn
+      ? 'text-amber-600'
+      : 'text-muted-foreground';
+
+  const body = (
+    <>
       <div className="flex items-center justify-between">
-        <span
-          className={`font-body text-sm font-medium ${
-            accent ? 'text-primary-foreground/80' : 'text-muted-foreground'
-          }`}
-        >
-          {label}
-        </span>
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-md ${
-            accent ? 'bg-primary-foreground/20' : 'bg-muted'
-          }`}
-        >
-          <Icon
-            i={icon}
-            size={16}
-            className={accent ? 'text-primary-foreground' : 'text-muted-foreground'}
-          />
+        <span className={`font-body text-sm font-medium ${labelCls}`}>{label}</span>
+        <div className={`flex h-8 w-8 items-center justify-center rounded-md ${iconBox}`}>
+          <Icon i={icon} size={16} className={iconCol} />
         </div>
       </div>
-      <span
-        className={`font-headings text-3xl leading-none font-bold ${
-          accent ? 'text-primary-foreground' : 'text-foreground'
-        }`}
-      >
-        {value}
-      </span>
-      {sub ? (
-        <span
-          className={`font-body text-xs ${
-            accent ? 'text-primary-foreground/70' : 'text-muted-foreground'
-          }`}
-        >
-          {sub}
-        </span>
+      <span className={`font-headings text-3xl leading-none font-bold ${valueCls}`}>{value}</span>
+      {sub ? <span className={`font-body text-xs ${subCls}`}>{sub}</span> : null}
+      {clickable ? (
+        <Icon
+          i="arrow-right"
+          size={14}
+          className={`absolute right-4 bottom-4 opacity-0 transition-opacity group-hover:opacity-100 ${iconCol}`}
+        />
       ) : null}
-    </div>
+    </>
   );
+
+  if (clickable) {
+    return (
+      <Link href={href} className={shell}>
+        {body}
+      </Link>
+    );
+  }
+  return <div className={shell}>{body}</div>;
 }
 
 /** Carte/section avec en-tête + contenu. */

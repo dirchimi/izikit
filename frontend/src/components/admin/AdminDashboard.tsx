@@ -14,12 +14,37 @@ interface AdminStats {
     newToday: number;
     byRole: { USER: number; ADMIN: number; SUPERADMIN: number };
   };
-  boutiques: { total: number };
+  boutiques: { total: number; activeWeek: number; dormant: number };
   orders: { total: number; paid: number; pending: number; failed: number; revenuePaid: number };
   withdrawals: { pending: number; pendingAmount: number; completed: number; paidOut: number };
   sales: { volume: number; count: number };
   receivables: { openAmount: number; openCount: number };
   products: { total: number };
+  subscriptions: {
+    active: number;
+    trial: number;
+    expired: number;
+    mrr: number;
+    pendingCount: number;
+    pendingAmount: number;
+    pending: Array<{
+      id: string;
+      org: string;
+      plan: string | null;
+      amount: number;
+      method: string;
+      months: number;
+      createdAt: string;
+    }>;
+    expiringSoon: Array<{
+      id: string;
+      name: string;
+      plan: string | null;
+      status: string;
+      activeUntil: string | null;
+      daysLeft: number;
+    }>;
+  };
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -41,7 +66,6 @@ interface AdminStats {
 }
 
 const fcfa = (n: number) => `${formatFCFA(n)} FCFA`;
-const pct = (part: number, total: number) => (total > 0 ? Math.round((part / total) * 100) : 0);
 
 const ROLE_TONE: Record<string, string> = { SUPERADMIN: 'purple', ADMIN: 'blue', USER: 'neutral' };
 
@@ -51,6 +75,20 @@ const ACTION_LABEL: Record<string, string> = {
   'withdrawal.cancel': 'Annulation retrait',
   BOOTSTRAP_SUPERADMIN: 'Promotion super-admin',
 };
+
+const PLAN_LABEL: Record<string, string> = { SOLO: 'Solo', BOUTIQUE: 'Boutique' };
+const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', MOBILE: 'Mobile money' };
+// Ton du badge selon l'urgence (jours restants avant expiration).
+function urgencyTone(daysLeft: number): string {
+  if (daysLeft <= 1) return 'red';
+  if (daysLeft <= 3) return 'amber';
+  return 'blue';
+}
+function daysLeftLabel(daysLeft: number): string {
+  if (daysLeft <= 0) return "aujourd'hui";
+  if (daysLeft === 1) return 'demain';
+  return `dans ${daysLeft} j`;
+}
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR');
@@ -104,64 +142,145 @@ export default function AdminDashboard() {
         </button>
       </AdminHeader>
 
-      {/* Ligne 1 — KPIs principaux */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Utilisateurs"
-          value={String(s.users.total)}
-          sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
-          icon="users"
-        />
-        <StatCard
-          label="Boutiques"
-          value={String(s.boutiques.total)}
-          sub="comptes boutique"
-          icon="store"
-        />
-        <StatCard
-          label="Volume de ventes"
-          value={fcfa(s.sales.volume)}
-          sub={`${s.sales.count} vente(s) — toutes boutiques`}
-          icon="trending-up"
-          accent
-        />
-        <StatCard
-          label="Retraits en attente"
-          value={String(s.withdrawals.pending)}
-          sub={`${fcfa(s.withdrawals.pendingAmount)} à traiter`}
-          icon="banknote"
-        />
+      {/* Ligne 1 — Revenus & abonnements (cœur du business) */}
+      <div>
+        <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
+          Revenus & abonnements
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Revenu mensuel récurrent"
+            value={fcfa(s.subscriptions.mrr)}
+            sub={`${s.subscriptions.active} abonnement(s) actif(s)`}
+            icon="trending-up"
+            accent
+          />
+          <StatCard
+            label="Abonnements actifs"
+            value={String(s.subscriptions.active)}
+            sub={`${s.subscriptions.trial} en essai · ${s.subscriptions.expired} expiré(s)`}
+            icon="badge-check"
+            href="/admin/subscriptions"
+          />
+          <StatCard
+            label="Paiements à valider"
+            value={String(s.subscriptions.pendingCount)}
+            sub={
+              s.subscriptions.pendingCount > 0
+                ? `${fcfa(s.subscriptions.pendingAmount)} en attente`
+                : 'Rien à traiter'
+            }
+            icon="hourglass"
+            warn={s.subscriptions.pendingCount > 0}
+            href="/admin/subscriptions"
+          />
+          <StatCard
+            label="Boutiques"
+            value={String(s.boutiques.total)}
+            sub={`${s.subscriptions.active + s.subscriptions.trial} actives · ${s.subscriptions.expired} inactives`}
+            icon="store"
+          />
+        </div>
       </div>
 
-      {/* Ligne 2 — stats secondaires */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Revenus paiements"
-          value={fcfa(s.orders.revenuePaid)}
-          sub={`${s.orders.paid} commande(s) payée(s)`}
-          icon="credit-card"
-        />
-        <StatCard
-          label="Créances ouvertes"
-          value={fcfa(s.receivables.openAmount)}
-          sub={`${s.receivables.openCount} créance(s)`}
-          icon="notebook-pen"
-        />
-        <StatCard
-          label="Emails vérifiés"
-          value={`${pct(s.users.verified, totalUsers)}%`}
-          sub={`${s.users.verified}/${totalUsers} comptes`}
-          icon="mail-check"
-        />
-        <StatCard
-          label="Produits"
-          value={String(s.products.total)}
-          sub="au catalogue (toutes boutiques)"
-          icon="package"
-        />
+      {/* Ligne 2 — Files prioritaires : paiements à valider + relances */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Panel
+          title="Paiements à valider"
+          action={
+            <a
+              href="/admin/subscriptions"
+              className="text-primary font-body text-xs font-semibold hover:underline"
+            >
+              Tout voir →
+            </a>
+          }
+        >
+          {s.subscriptions.pending.length === 0 ? (
+            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
+              Aucun paiement en attente. ✅
+            </p>
+          ) : (
+            s.subscriptions.pending.map((p) => (
+              <div
+                key={p.id}
+                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-body text-foreground truncate text-sm font-medium">{p.org}</p>
+                  <p className="text-muted-foreground font-body text-xs">
+                    {(p.plan && PLAN_LABEL[p.plan]) ?? p.plan ?? '—'} · {p.months} mois ·{' '}
+                    {METHOD_LABEL[p.method] ?? p.method} · {fmtDate(p.createdAt)}
+                  </p>
+                </div>
+                <span className="font-headings text-foreground shrink-0 text-sm font-bold">
+                  {fcfa(p.amount)}
+                </span>
+              </div>
+            ))
+          )}
+        </Panel>
+
+        <Panel title="Abonnements qui expirent bientôt">
+          {s.subscriptions.expiringSoon.length === 0 ? (
+            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
+              Aucune expiration dans les 7 jours.
+            </p>
+          ) : (
+            s.subscriptions.expiringSoon.map((o) => (
+              <div
+                key={o.id}
+                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-body text-foreground truncate text-sm font-medium">{o.name}</p>
+                  <p className="text-muted-foreground font-body text-xs">
+                    {(o.plan && PLAN_LABEL[o.plan]) ?? o.plan ?? '—'} ·{' '}
+                    {o.status === 'TRIAL' ? 'Essai' : 'Abonnement'}
+                  </p>
+                </div>
+                <Badge tone={urgencyTone(o.daysLeft)}>{daysLeftLabel(o.daysLeft)}</Badge>
+              </div>
+            ))
+          )}
+        </Panel>
       </div>
 
-      {/* Ligne 3 — graphe inscriptions + répartitions */}
+      {/* Ligne 3 — KPIs opérationnels */}
+      <div>
+        <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
+          Activité plateforme
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Utilisateurs"
+            value={String(s.users.total)}
+            sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
+            icon="users"
+            href="/admin/users"
+          />
+          <StatCard
+            label="Volume de ventes"
+            value={fcfa(s.sales.volume)}
+            sub={`${s.sales.count} vente(s) — toutes boutiques`}
+            icon="receipt"
+          />
+          <StatCard
+            label="Créances ouvertes"
+            value={fcfa(s.receivables.openAmount)}
+            sub={`${s.receivables.openCount} créance(s)`}
+            icon="notebook-pen"
+          />
+          <StatCard
+            label="Produits"
+            value={String(s.products.total)}
+            sub="au catalogue (toutes boutiques)"
+            icon="package"
+          />
+        </div>
+      </div>
+
+      {/* Ligne 4 — graphe inscriptions + répartitions */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Panel title="Inscriptions — 14 derniers jours">
@@ -209,11 +328,28 @@ export default function AdminDashboard() {
               />
               <StatBar label="Suspendus" value={s.users.suspended} total={totalUsers} tone="red" />
             </div>
+            <div className="flex flex-col gap-3">
+              <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
+                Usage boutiques
+              </span>
+              <StatBar
+                label="Actives (vente ≤ 7 j)"
+                value={s.boutiques.activeWeek}
+                total={s.boutiques.total}
+                tone="green"
+              />
+              <StatBar
+                label="Dormantes (aucune vente ≥ 30 j)"
+                value={s.boutiques.dormant}
+                total={s.boutiques.total}
+                tone="amber"
+              />
+            </div>
           </div>
         </Panel>
       </div>
 
-      {/* Ligne 4 — listes */}
+      {/* Ligne 5 — listes */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Panel title="Derniers inscrits">
           {s.recentUsers.length === 0 ? (
@@ -271,7 +407,7 @@ export default function AdminDashboard() {
         </Panel>
       </div>
 
-      {/* Ligne 5 — santé technique */}
+      {/* Ligne 6 — santé technique */}
       <Panel title="Santé technique">
         <div className="divide-border grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <OpsStat label="Outbox en attente" value={s.ops.outboxPending} />

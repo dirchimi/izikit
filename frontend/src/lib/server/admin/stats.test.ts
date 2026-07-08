@@ -17,6 +17,7 @@ beforeEach(() => {
   asMock(prismaMock.order.groupBy).mockResolvedValue([]);
   asMock(prismaMock.withdrawal.groupBy).mockResolvedValue([]);
   prismaMock.sale.aggregate.mockResolvedValue({ _sum: { total: null }, _count: 0 } as never);
+  asMock(prismaMock.sale.groupBy).mockResolvedValue([]); // usage boutiques (7j / 30j)
   prismaMock.receivable.aggregate.mockResolvedValue({
     _sum: { amount: null, amountPaid: null },
     _count: 0,
@@ -27,6 +28,14 @@ beforeEach(() => {
   // findMany is called twice (signups, then recent users) — default both to empty.
   prismaMock.user.findMany.mockResolvedValue([] as never);
   prismaMock.adminAction.findMany.mockResolvedValue([] as never);
+  // Abonnements (statuts dérivés + MRR + file d'attente + expirations).
+  asMock(prismaMock.organization.groupBy).mockResolvedValue([]);
+  prismaMock.organization.findMany.mockResolvedValue([] as never);
+  prismaMock.subscriptionPayment.aggregate.mockResolvedValue({
+    _count: 0,
+    _sum: { amount: null },
+  } as never);
+  prismaMock.subscriptionPayment.findMany.mockResolvedValue([] as never);
 });
 
 describe('computeAdminStats', () => {
@@ -105,6 +114,79 @@ describe('computeAdminStats', () => {
     expect(s.signups[13]).toEqual({ date: '2026-06-24', count: 2 }); // last = today
     expect(s.signups[12]).toEqual({ date: '2026-06-23', count: 1 }); // yesterday
     expect(s.signups[0]!.count).toBe(0); // oldest day, empty
+  });
+
+  it('derives subscription metrics: active/trial/expired, MRR, pending queue, expiring soon', async () => {
+    prismaMock.organization.count
+      .mockResolvedValueOnce(5 as never) // boutiquesTotal
+      .mockResolvedValueOnce(2 as never) // active (currentPeriodEnd >= now)
+      .mockResolvedValueOnce(1 as never); // trial
+    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'BOUTIQUE', _count: 2 }]);
+    prismaMock.subscriptionPayment.aggregate.mockResolvedValue({
+      _count: 3,
+      _sum: { amount: 45000 },
+    } as never);
+    prismaMock.subscriptionPayment.findMany.mockResolvedValue([
+      {
+        id: 'sp1',
+        plan: 'SOLO',
+        amount: 5000,
+        method: 'CASH',
+        months: 1,
+        createdAt: now,
+        organization: { name: 'Chez Ali' },
+      },
+    ] as never);
+    prismaMock.organization.findMany.mockResolvedValue([
+      {
+        id: 'o1',
+        name: 'Boutique Amir',
+        plan: 'BOUTIQUE',
+        trialEndsAt: null,
+        currentPeriodEnd: new Date(now.getTime() + 3 * 86_400_000),
+      },
+    ] as never);
+
+    const s = await computeAdminStats(prismaMock as never, now);
+
+    expect(s.subscriptions.active).toBe(2);
+    expect(s.subscriptions.trial).toBe(1);
+    expect(s.subscriptions.expired).toBe(2); // 5 − 2 − 1
+    expect(s.subscriptions.mrr).toBe(30000); // 2 × 15000 (BOUTIQUE)
+    expect(s.subscriptions.pendingCount).toBe(3);
+    expect(s.subscriptions.pendingAmount).toBe(45000);
+    expect(s.subscriptions.pending[0]).toMatchObject({
+      org: 'Chez Ali',
+      plan: 'SOLO',
+      amount: 5000,
+    });
+    expect(s.subscriptions.expiringSoon).toHaveLength(1);
+    expect(s.subscriptions.expiringSoon[0]).toMatchObject({
+      name: 'Boutique Amir',
+      status: 'ACTIVE',
+    });
+    expect(s.subscriptions.expiringSoon[0]!.daysLeft).toBe(3);
+  });
+
+  it('derives boutique usage: activeWeek (7j) + dormant (total − active 30j)', async () => {
+    prismaMock.organization.count.mockResolvedValue(10 as never); // boutiquesTotal
+    // 1er groupBy = ventes 7j (2 boutiques), 2e = ventes 30j (6 boutiques).
+    asMock(prismaMock.sale.groupBy)
+      .mockResolvedValueOnce([{ organizationId: 'a' }, { organizationId: 'b' }])
+      .mockResolvedValueOnce([
+        { organizationId: 'a' },
+        { organizationId: 'b' },
+        { organizationId: 'c' },
+        { organizationId: 'd' },
+        { organizationId: 'e' },
+        { organizationId: 'f' },
+      ]);
+
+    const s = await computeAdminStats(prismaMock as never, now);
+
+    expect(s.boutiques.total).toBe(10);
+    expect(s.boutiques.activeWeek).toBe(2);
+    expect(s.boutiques.dormant).toBe(4); // 10 − 6 actives sur 30j
   });
 
   it('serializes recent users + actions dates to ISO strings', async () => {

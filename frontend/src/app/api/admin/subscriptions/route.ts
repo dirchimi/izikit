@@ -40,10 +40,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl;
     const limit = clampLimit(url.searchParams.get('limit'));
     const status = url.searchParams.get('status');
+    // Filtres facultatifs, sur liste blanche (ignore toute valeur inattendue).
+    const planParam = url.searchParams.get('plan');
+    const plan = planParam === 'SOLO' || planParam === 'BOUTIQUE' ? planParam : null;
+    const methodParam = url.searchParams.get('method');
+    const method = methodParam === 'CASH' || methodParam === 'MOBILE' ? methodParam : null;
     const cursor = decodeCursor(url.searchParams.get('cursor'));
 
     const where: Prisma.SubscriptionPaymentWhereInput = {
       ...(status ? { status } : {}),
+      ...(plan ? { plan } : {}),
+      ...(method ? { method } : {}),
       ...(cursor
         ? {
             OR: [

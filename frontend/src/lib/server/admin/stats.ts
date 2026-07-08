@@ -8,9 +8,12 @@
  */
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
+import { PLANS } from '@/lib/subscription/plans';
+import { computeSubscription } from '@/lib/subscription/status';
 
 const DAY_MS = 86_400_000;
 const SIGNUP_DAYS = 14;
+const EXPIRING_WINDOW_DAYS = 7;
 
 export interface AdminStats {
   users: {
@@ -22,12 +25,41 @@ export interface AdminStats {
     newToday: number;
     byRole: { USER: number; ADMIN: number; SUPERADMIN: number };
   };
-  boutiques: { total: number };
+  // total = comptes boutique ; activeWeek = ≥1 vente ces 7 derniers jours
+  // (usage réel) ; dormant = aucune vente depuis 30 jours (à relancer).
+  boutiques: { total: number; activeWeek: number; dormant: number };
   orders: { total: number; paid: number; pending: number; failed: number; revenuePaid: number };
   withdrawals: { pending: number; pendingAmount: number; completed: number; paidOut: number };
   sales: { volume: number; count: number };
   receivables: { openAmount: number; openCount: number };
   products: { total: number };
+  // Abonnements (cœur du business SaaS) : statuts dérivés + revenu récurrent +
+  // file des paiements à valider + boutiques qui expirent bientôt (relances).
+  subscriptions: {
+    active: number;
+    trial: number;
+    expired: number;
+    mrr: number; // revenu mensuel récurrent (Σ prix mensuel des abonnements actifs)
+    pendingCount: number;
+    pendingAmount: number;
+    pending: Array<{
+      id: string;
+      org: string;
+      plan: string | null;
+      amount: number;
+      method: string;
+      months: number;
+      createdAt: string;
+    }>;
+    expiringSoon: Array<{
+      id: string;
+      name: string;
+      plan: string | null;
+      status: string;
+      activeUntil: string | null;
+      daysLeft: number;
+    }>;
+  };
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -82,7 +114,12 @@ type StatusSumGroup = Array<{ status: string; _count: number; _sum: { amount: nu
 export async function computeAdminStats(prisma: PrismaClient, now: Date): Promise<AdminStats> {
   const since7 = new Date(now.getTime() - 7 * DAY_MS);
   const since14 = new Date(now.getTime() - SIGNUP_DAYS * DAY_MS);
+  const since30 = new Date(now.getTime() - 30 * DAY_MS);
   const todayStart = startOfUtcDay(now);
+  const soonEnd = new Date(now.getTime() + EXPIRING_WINDOW_DAYS * DAY_MS);
+  // Un abonnement est ACTIF si sa fin d'abonnement est dans le futur ; en ESSAI
+  // si (pas d'abo actif) et l'essai court encore. Réutilisé par plusieurs where.
+  const notActive = { OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { lt: now } }] };
 
   const [
     usersTotal,
@@ -103,6 +140,14 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     signupRows,
     recentUsersRows,
     recentActionRows,
+    subsActive,
+    subsTrial,
+    activePlanGroups,
+    subPendingAgg,
+    subPendingRows,
+    expiringRows,
+    activeWeekGroups,
+    active30Groups,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { emailVerifiedAt: { not: null } } }),
@@ -150,6 +195,54 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       take: 5,
       select: { id: true, actorId: true, action: true, targetType: true, createdAt: true },
     }),
+    // Abonnements actifs / en essai (statuts dérivés → comptés via dates).
+    prisma.organization.count({ where: { currentPeriodEnd: { gte: now } } }),
+    prisma.organization.count({ where: { AND: [{ trialEndsAt: { gte: now } }, notActive] } }),
+    prisma.organization.groupBy({
+      by: ['plan'],
+      where: { currentPeriodEnd: { gte: now } },
+      _count: true,
+    }) as unknown as Promise<Array<{ plan: string | null; _count: number }>>,
+    prisma.subscriptionPayment.aggregate({
+      where: { status: 'PENDING' },
+      _count: true,
+      _sum: { amount: true },
+    }),
+    // File des paiements à valider — les plus anciens d'abord (FIFO).
+    prisma.subscriptionPayment.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take: 6,
+      select: {
+        id: true,
+        plan: true,
+        amount: true,
+        method: true,
+        months: true,
+        createdAt: true,
+        organization: { select: { name: true } },
+      },
+    }),
+    // Boutiques dont l'accès expire dans les 7 jours (abo OU essai) → relances.
+    prisma.organization.findMany({
+      where: {
+        OR: [
+          { currentPeriodEnd: { gte: now, lte: soonEnd } },
+          { AND: [{ trialEndsAt: { gte: now, lte: soonEnd } }, notActive] },
+        ],
+      },
+      take: 30,
+      select: { id: true, name: true, plan: true, trialEndsAt: true, currentPeriodEnd: true },
+    }),
+    // Usage réel : boutiques distinctes ayant vendu sur 7 j / 30 j.
+    prisma.sale.groupBy({
+      by: ['organizationId'],
+      where: { createdAt: { gte: since7 } },
+    }) as unknown as Promise<Array<{ organizationId: string }>>,
+    prisma.sale.groupBy({
+      by: ['organizationId'],
+      where: { createdAt: { gte: since30 } },
+    }) as unknown as Promise<Array<{ organizationId: string }>>,
   ]);
 
   const byRole = { USER: 0, ADMIN: 0, SUPERADMIN: 0 };
@@ -165,6 +258,38 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
 
   const openAmount = (receivablesAgg._sum.amount ?? 0) - (receivablesAgg._sum.amountPaid ?? 0);
 
+  // MRR = somme du prix mensuel des plans effectivement actifs.
+  const mrr = activePlanGroups.reduce((sum, g) => {
+    const price = g.plan && g.plan in PLANS ? PLANS[g.plan as keyof typeof PLANS].priceMonthly : 0;
+    return sum + price * g._count;
+  }, 0);
+  const expired = Math.max(0, boutiquesTotal - subsActive - subsTrial);
+
+  // Usage : boutiques actives (vente ≤7 j) vs dormantes (aucune vente ≤30 j).
+  const activeWeek = activeWeekGroups.length;
+  const dormant = Math.max(0, boutiquesTotal - active30Groups.length);
+
+  // Boutiques qui expirent bientôt : statut dérivé + jours restants, du plus
+  // urgent au moins urgent (pour la liste de relance).
+  const expiringSoon = expiringRows
+    .map((o) => {
+      const view = computeSubscription(
+        { plan: o.plan, trialEndsAt: o.trialEndsAt, currentPeriodEnd: o.currentPeriodEnd },
+        now,
+      );
+      return {
+        id: o.id,
+        name: o.name,
+        plan: view.plan,
+        status: view.status,
+        activeUntil: view.activeUntil,
+        daysLeft: view.daysLeft,
+      };
+    })
+    .filter((o) => o.status !== 'EXPIRED')
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 8);
+
   return {
     users: {
       total: usersTotal,
@@ -175,7 +300,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       newToday: usersNewToday,
       byRole,
     },
-    boutiques: { total: boutiquesTotal },
+    boutiques: { total: boutiquesTotal, activeWeek, dormant },
     orders: {
       total: ordersTotal,
       paid: paid?._count ?? 0,
@@ -192,6 +317,24 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     sales: { volume: salesAgg._sum.total ?? 0, count: salesAgg._count },
     receivables: { openAmount, openCount: receivablesAgg._count },
     products: { total: productsTotal },
+    subscriptions: {
+      active: subsActive,
+      trial: subsTrial,
+      expired,
+      mrr,
+      pendingCount: subPendingAgg._count,
+      pendingAmount: subPendingAgg._sum.amount ?? 0,
+      pending: subPendingRows.map((p) => ({
+        id: p.id,
+        org: p.organization?.name ?? '—',
+        plan: p.plan,
+        amount: p.amount,
+        method: p.method,
+        months: p.months,
+        createdAt: p.createdAt.toISOString(),
+      })),
+      expiringSoon,
+    },
     ops: { outboxPending, emailPending },
     signups: bucketSignups(
       signupRows.map((r) => r.createdAt),
