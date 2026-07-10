@@ -60,6 +60,16 @@ export interface AdminStats {
       daysLeft: number;
     }>;
   };
+  // Répartition des abonnements ACTIFS par plan (qui paie quoi).
+  planSplit: { solo: number; boutique: number };
+  // Classements par boutique : chiffre d'affaires (ventes) et encaissé
+  // (abonnements confirmés). value = FCFA. Top 5 chacun.
+  topBoutiques: {
+    byRevenue: Array<{ id: string; name: string; value: number }>;
+    byCollected: Array<{ id: string; name: string; value: number }>;
+  };
+  // Villes les plus rentables (Σ CA des boutiques de la ville). Top 5.
+  topCities: Array<{ city: string; revenue: number; boutiques: number }>;
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -148,6 +158,9 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     expiringRows,
     activeWeekGroups,
     active30Groups,
+    revenueByOrgGroups,
+    collectedByOrgGroups,
+    citySettingsRows,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { emailVerifiedAt: { not: null } } }),
@@ -250,6 +263,27 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       by: ['organizationId'],
       where: { status: 'ACTIVE', createdAt: { gte: since30 } },
     }) as unknown as Promise<Array<{ organizationId: string }>>,
+    // CA total par boutique (ventes ACTIVE, tout l'historique), trié décroissant.
+    // Sert à la fois au top-5 CA et à l'agrégation du CA par ville.
+    prisma.sale.groupBy({
+      by: ['organizationId'],
+      where: { status: 'ACTIVE' },
+      _sum: { total: true },
+      orderBy: { _sum: { total: 'desc' } },
+    }) as unknown as Promise<Array<{ organizationId: string; _sum: { total: number | null } }>>,
+    // Encaissé par boutique (abonnements CONFIRMED) — top 5.
+    prisma.subscriptionPayment.groupBy({
+      by: ['organizationId'],
+      where: { status: 'CONFIRMED' },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: 'desc' } },
+      take: 5,
+    }) as unknown as Promise<Array<{ organizationId: string; _sum: { amount: number | null } }>>,
+    // Ville de chaque boutique (pour agréger le CA par ville en mémoire).
+    prisma.boutiqueSettings.findMany({
+      where: { city: { not: null } },
+      select: { organizationId: true, city: true },
+    }),
   ]);
 
   const byRole = { USER: 0, ADMIN: 0, SUPERADMIN: 0 };
@@ -297,6 +331,58 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     .sort((a, b) => a.daysLeft - b.daysLeft)
     .slice(0, 8);
 
+  // Répartition des abonnements actifs par plan (reprend le groupBy du MRR).
+  let solo = 0;
+  let boutique = 0;
+  for (const g of activePlanGroups) {
+    if (g.plan === 'SOLO') solo = g._count;
+    else if (g.plan === 'BOUTIQUE') boutique = g._count;
+  }
+
+  // CA par ville : on croise le CA par boutique avec la ville de chaque boutique.
+  const cityByOrg = new Map(citySettingsRows.map((r) => [r.organizationId, r.city]));
+  const cityAgg = new Map<string, { revenue: number; boutiques: number }>();
+  for (const g of revenueByOrgGroups) {
+    const city = cityByOrg.get(g.organizationId);
+    if (!city) continue;
+    const cur = cityAgg.get(city) ?? { revenue: 0, boutiques: 0 };
+    cur.revenue += g._sum.total ?? 0;
+    cur.boutiques += 1;
+    cityAgg.set(city, cur);
+  }
+  const topCities = [...cityAgg.entries()]
+    .map(([city, v]) => ({ city, revenue: v.revenue, boutiques: v.boutiques }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+
+  // Top boutiques : on résout les noms des ids concernés en une seule requête.
+  const topRevenue = revenueByOrgGroups.slice(0, 5);
+  const nameIds = [
+    ...new Set([
+      ...topRevenue.map((g) => g.organizationId),
+      ...collectedByOrgGroups.map((g) => g.organizationId),
+    ]),
+  ];
+  const nameRows = nameIds.length
+    ? await prisma.organization.findMany({
+        where: { id: { in: nameIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map(nameRows.map((o) => [o.id, o.name]));
+  const topBoutiques = {
+    byRevenue: topRevenue.map((g) => ({
+      id: g.organizationId,
+      name: nameById.get(g.organizationId) ?? '—',
+      value: g._sum.total ?? 0,
+    })),
+    byCollected: collectedByOrgGroups.map((g) => ({
+      id: g.organizationId,
+      name: nameById.get(g.organizationId) ?? '—',
+      value: g._sum.amount ?? 0,
+    })),
+  };
+
   return {
     users: {
       total: usersTotal,
@@ -342,6 +428,9 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       })),
       expiringSoon,
     },
+    planSplit: { solo, boutique },
+    topBoutiques,
+    topCities,
     ops: { outboxPending, emailPending },
     signups: bucketSignups(
       signupRows.map((r) => r.createdAt),

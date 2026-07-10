@@ -36,6 +36,9 @@ beforeEach(() => {
     _sum: { amount: null },
   } as never);
   prismaMock.subscriptionPayment.findMany.mockResolvedValue([] as never);
+  // Phase B — classements par boutique / ville (top CA, top encaissé, villes).
+  asMock(prismaMock.subscriptionPayment.groupBy).mockResolvedValue([]);
+  prismaMock.boutiqueSettings.findMany.mockResolvedValue([] as never);
 });
 
 describe('computeAdminStats', () => {
@@ -187,6 +190,47 @@ describe('computeAdminStats', () => {
     expect(s.boutiques.total).toBe(10);
     expect(s.boutiques.activeWeek).toBe(2);
     expect(s.boutiques.dormant).toBe(4); // 10 − 6 actives sur 30j
+  });
+
+  it('derives Phase B leaderboards: plan split, top boutiques (CA + encaissé), top cities', async () => {
+    // Plans actifs → répartition Solo / Boutique (réutilise le groupBy du MRR).
+    asMock(prismaMock.organization.groupBy).mockResolvedValue([
+      { plan: 'SOLO', _count: 3 },
+      { plan: 'BOUTIQUE', _count: 2 },
+    ]);
+    // sale.groupBy est appelé 3 fois, dans l'ordre : 7j, 30j, puis CA/boutique.
+    asMock(prismaMock.sale.groupBy)
+      .mockResolvedValueOnce([]) // activeWeek (7j)
+      .mockResolvedValueOnce([]) // active30 (30j)
+      .mockResolvedValueOnce([
+        { organizationId: 'o1', _sum: { total: 100000 } },
+        { organizationId: 'o2', _sum: { total: 40000 } },
+      ]);
+    asMock(prismaMock.subscriptionPayment.groupBy).mockResolvedValue([
+      { organizationId: 'o1', _sum: { amount: 30000 } },
+    ]);
+    prismaMock.boutiqueSettings.findMany.mockResolvedValue([
+      { organizationId: 'o1', city: "N'Djamena" },
+      { organizationId: 'o2', city: 'Moundou' },
+    ] as never);
+    // Résolution des noms (2e appel org.findMany) + expiringRows (1er, ignoré).
+    prismaMock.organization.findMany.mockResolvedValue([
+      { id: 'o1', name: 'Chez Ali' },
+      { id: 'o2', name: 'Boutique Amir' },
+    ] as never);
+
+    const s = await computeAdminStats(prismaMock as never, now);
+
+    expect(s.planSplit).toEqual({ solo: 3, boutique: 2 });
+    expect(s.topBoutiques.byRevenue).toEqual([
+      { id: 'o1', name: 'Chez Ali', value: 100000 },
+      { id: 'o2', name: 'Boutique Amir', value: 40000 },
+    ]);
+    expect(s.topBoutiques.byCollected).toEqual([{ id: 'o1', name: 'Chez Ali', value: 30000 }]);
+    expect(s.topCities).toEqual([
+      { city: "N'Djamena", revenue: 100000, boutiques: 1 },
+      { city: 'Moundou', revenue: 40000, boutiques: 1 },
+    ]);
   });
 
   it('serializes recent users + actions dates to ISO strings', async () => {

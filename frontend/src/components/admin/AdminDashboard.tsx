@@ -45,6 +45,12 @@ interface AdminStats {
       daysLeft: number;
     }>;
   };
+  planSplit: { solo: number; boutique: number };
+  topBoutiques: {
+    byRevenue: Array<{ id: string; name: string; value: number }>;
+    byCollected: Array<{ id: string; name: string; value: number }>;
+  };
+  topCities: Array<{ city: string; revenue: number; boutiques: number }>;
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -280,6 +286,52 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Ligne 3b — Classements par boutique / ville */}
+      <div>
+        <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
+          Classements
+        </h2>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <Panel title="Top boutiques — chiffre d'affaires">
+            <RankedList items={s.topBoutiques.byRevenue} empty="Aucune vente." />
+          </Panel>
+          <Panel title="Top boutiques — encaissé">
+            <RankedList items={s.topBoutiques.byCollected} empty="Aucun encaissement." />
+          </Panel>
+          <Panel title="Villes les plus actives">
+            {s.topCities.length === 0 ? (
+              <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
+                Aucune ville renseignée.
+              </p>
+            ) : (
+              s.topCities.map((c, i) => (
+                <div
+                  key={c.city}
+                  className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-muted-foreground font-headings w-5 shrink-0 text-sm font-bold">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-body text-foreground truncate text-sm font-medium">
+                        {c.city}
+                      </p>
+                      <p className="text-muted-foreground font-body text-xs">
+                        {c.boutiques} boutique(s)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-headings text-foreground shrink-0 text-sm font-bold">
+                    {fcfa(c.revenue)}
+                  </span>
+                </div>
+              ))
+            )}
+          </Panel>
+        </div>
+      </div>
+
       {/* Ligne 4 — graphe inscriptions + répartitions */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -343,6 +395,23 @@ export default function AdminDashboard() {
                 value={s.boutiques.dormant}
                 total={s.boutiques.total}
                 tone="amber"
+              />
+            </div>
+            <div className="flex flex-col gap-3">
+              <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
+                Plans actifs
+              </span>
+              <StatBar
+                label="Solo"
+                value={s.planSplit.solo}
+                total={s.planSplit.solo + s.planSplit.boutique}
+                tone="blue"
+              />
+              <StatBar
+                label="Boutique"
+                value={s.planSplit.boutique}
+                total={s.planSplit.solo + s.planSplit.boutique}
+                tone="purple"
               />
             </div>
           </div>
@@ -416,6 +485,39 @@ export default function AdminDashboard() {
         </div>
       </Panel>
     </div>
+  );
+}
+
+// Liste classée (top boutiques) : rang + nom + montant FCFA.
+function RankedList({
+  items,
+  empty,
+}: {
+  items: Array<{ id: string; name: string; value: number }>;
+  empty: string;
+}) {
+  if (items.length === 0) {
+    return <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">{empty}</p>;
+  }
+  return (
+    <>
+      {items.map((it, i) => (
+        <div
+          key={it.id}
+          className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="text-muted-foreground font-headings w-5 shrink-0 text-sm font-bold">
+              {i + 1}
+            </span>
+            <p className="font-body text-foreground truncate text-sm font-medium">{it.name}</p>
+          </div>
+          <span className="font-headings text-foreground shrink-0 text-sm font-bold">
+            {fcfa(it.value)}
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
 

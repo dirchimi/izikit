@@ -14,6 +14,7 @@ interface AdminMeResponse {
 
 const NAV = [
   { href: '/admin', label: 'Tableau de bord', icon: 'layout-dashboard', exact: true },
+  { href: '/admin/boutiques', label: 'Boutiques', icon: 'store' },
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/orders', label: 'Commandes', icon: 'shopping-bag' },
   { href: '/admin/withdrawals', label: 'Retraits', icon: 'banknote' },
