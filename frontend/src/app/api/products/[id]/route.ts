@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { productView, uniqueViolationField, PRODUCT_SELECT } from '@/lib/server/products/helpers';
@@ -45,6 +46,10 @@ async function resolveOrg(
   // réservés au Patron (OWNER) et au Manager (ADMIN).
   const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
   if (gate instanceof NextResponse) return gate;
+  // « Appli douce » : abonnement expiré (hors grâce) → édition/suppression
+  // refusée (resolveOrg ne sert qu'à PATCH/DELETE, tous deux des écritures).
+  const locked = await requireActiveSubscription(primary.organizationId);
+  if (locked) return locked;
   return { orgId: primary.organizationId, userSub: auth.user.sub };
 }
 

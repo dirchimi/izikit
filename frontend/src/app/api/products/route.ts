@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import {
@@ -96,6 +97,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Manager (ADMIN). Le Vendeur (MEMBER) ne peut pas créer de produit.
     const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
+
+    // « Appli douce » : abonnement expiré (hors grâce) → écriture refusée.
+    const locked = await requireActiveSubscription(primary.organizationId);
+    if (locked) return locked;
 
     const parsed = PostBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {

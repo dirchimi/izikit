@@ -12,7 +12,7 @@
 // expiré). Fonction PURE — `now` est injecté pour la testabilité.
 
 import type { PlanId, SubStatus } from './plans';
-import { isPlanId } from './plans';
+import { isPlanId, GRACE_DAYS } from './plans';
 
 export interface SubInput {
   plan: string | null;
@@ -29,6 +29,14 @@ export interface SubView {
   activeUntil: string | null;
   /** Jours pleins restants avant `activeUntil` (0 si expiré ou passé). */
   daysLeft: number;
+  /** Fin de la période de grâce (ISO) = activeUntil + GRACE_DAYS ; null si pas expiré. */
+  graceEndsAt: string | null;
+  /**
+   * `true` quand les écritures métier doivent être bloquées (« appli douce ») :
+   * abonnement EXPIRED ET période de grâce dépassée. Lecture + paiement de
+   * l'abonnement restent toujours autorisés côté routes.
+   */
+  writeBlocked: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,6 +72,17 @@ export function computeSubscription(input: SubInput, now: Date): SubView {
       ? 0
       : Math.max(0, Math.ceil((activeUntil.getTime() - now.getTime()) / DAY_MS));
 
+  // Grâce : après expiration, on tolère GRACE_DAYS jours avant de bloquer les
+  // écritures. Si aucune borne d'accès n'est connue (donnée legacy incomplète,
+  // activeUntil null), on NE bloque PAS — fail-open, pour ne jamais verrouiller
+  // une boutique par simple absence de date.
+  let graceEndsAt: Date | null = null;
+  let writeBlocked = false;
+  if (status === 'EXPIRED' && activeUntil) {
+    graceEndsAt = new Date(activeUntil.getTime() + GRACE_DAYS * DAY_MS);
+    writeBlocked = now.getTime() >= graceEndsAt.getTime();
+  }
+
   return {
     status,
     plan,
@@ -71,6 +90,8 @@ export function computeSubscription(input: SubInput, now: Date): SubView {
     currentPeriodEnd: periodEnd ? periodEnd.toISOString() : null,
     activeUntil: activeUntil ? activeUntil.toISOString() : null,
     daysLeft,
+    graceEndsAt: graceEndsAt ? graceEndsAt.toISOString() : null,
+    writeBlocked,
   };
 }
 

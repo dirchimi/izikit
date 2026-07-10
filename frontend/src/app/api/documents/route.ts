@@ -15,6 +15,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { withTxRetry } from '@/lib/server/db/retry-transaction';
@@ -159,6 +160,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     const input = parsed.data;
     const orgId = org.orgId;
+
+    // « Appli douce » : abonnement expiré (hors grâce) → écriture refusée.
+    const locked = await requireActiveSubscription(orgId);
+    if (locked) return locked;
 
     const result: PostResult = await withTxRetry(() =>
       prisma.$transaction(

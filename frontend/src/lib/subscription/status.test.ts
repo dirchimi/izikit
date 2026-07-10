@@ -48,6 +48,55 @@ describe('computeSubscription', () => {
     );
     expect(v.plan).toBeNull();
   });
+
+  // ── Grâce / blocage des écritures (« appli douce ») ──────────────────────
+  it('TRIAL/ACTIVE ne bloque jamais les écritures', () => {
+    expect(
+      computeSubscription({ plan: null, trialEndsAt: inDays(2), currentPeriodEnd: null }, NOW)
+        .writeBlocked,
+    ).toBe(false);
+    expect(
+      computeSubscription({ plan: 'SOLO', trialEndsAt: null, currentPeriodEnd: inDays(5) }, NOW)
+        .writeBlocked,
+    ).toBe(false);
+  });
+
+  it('EXPIRED mais DANS la grâce (≤ 3 jours) : pas encore bloqué', () => {
+    // Essai fini il y a 2 jours → grâce jusqu'à J+3 → encore ouvert.
+    const v = computeSubscription(
+      { plan: 'SOLO', trialEndsAt: inDays(-2), currentPeriodEnd: null },
+      NOW,
+    );
+    expect(v.status).toBe('EXPIRED');
+    expect(v.writeBlocked).toBe(false);
+    expect(v.graceEndsAt).toBe(inDays(1).toISOString()); // -2 + 3 = +1
+  });
+
+  it('EXPIRED au-delà de la grâce (> 3 jours) : écritures bloquées', () => {
+    const v = computeSubscription(
+      { plan: 'SOLO', trialEndsAt: inDays(-4), currentPeriodEnd: null },
+      NOW,
+    );
+    expect(v.status).toBe('EXPIRED');
+    expect(v.writeBlocked).toBe(true);
+  });
+
+  it('bord exact : blocage à l’instant précis où la grâce se termine', () => {
+    // trial fini il y a exactement 3 jours → graceEndsAt == NOW → bloqué (>=).
+    const v = computeSubscription(
+      { plan: 'SOLO', trialEndsAt: inDays(-3), currentPeriodEnd: null },
+      NOW,
+    );
+    expect(v.graceEndsAt).toBe(NOW.toISOString());
+    expect(v.writeBlocked).toBe(true);
+  });
+
+  it('EXPIRED sans aucune date connue : fail-open (jamais bloqué)', () => {
+    const v = computeSubscription({ plan: null, trialEndsAt: null, currentPeriodEnd: null }, NOW);
+    expect(v.status).toBe('EXPIRED');
+    expect(v.writeBlocked).toBe(false);
+    expect(v.graceEndsAt).toBeNull();
+  });
 });
 
 describe('extendPeriod', () => {

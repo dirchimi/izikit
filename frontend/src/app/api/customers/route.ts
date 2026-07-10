@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -64,6 +65,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const org = await resolveOrg(req, ctx);
     if (org instanceof NextResponse) return org;
+
+    // « Appli douce » : abonnement expiré (hors grâce) → écriture refusée.
+    const locked = await requireActiveSubscription(org.orgId);
+    if (locked) return locked;
 
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {

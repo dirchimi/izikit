@@ -12,6 +12,10 @@
 
 export const TRIAL_DAYS = 15;
 
+// Jours de tolérance après l'expiration avant le blocage effectif des écritures
+// (« appli douce ») : un client qui paie avec un léger retard n'est pas coupé.
+export const GRACE_DAYS = 3;
+
 export type PlanId = 'SOLO' | 'BOUTIQUE';
 export type PaymentMethod = 'CASH' | 'MOBILE';
 export type SubStatus = 'TRIAL' | 'ACTIVE' | 'EXPIRED';

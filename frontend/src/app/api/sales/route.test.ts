@@ -290,6 +290,19 @@ describe('POST /api/sales (checkout)', () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it('403 SUBSCRIPTION_EXPIRED quand l’abonnement de la boutique est expiré (hors grâce)', async () => {
+    // Essai fini en 2020 → largement au-delà de la grâce → écriture bloquée.
+    prismaMock.organization.findUnique.mockResolvedValueOnce({
+      plan: 'SOLO',
+      trialEndsAt: new Date('2020-01-01T00:00:00.000Z'),
+      currentPeriodEnd: null,
+    } as never);
+    const res = await POST(makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }] }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe('SUBSCRIPTION_EXPIRED');
+    expect(prismaMock.sale.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/sales', () => {

@@ -11,6 +11,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { productView, PRODUCT_SELECT } from '@/lib/server/products/helpers';
@@ -74,6 +75,10 @@ export async function POST(
     // Patron (OWNER) et au Manager (ADMIN). Le Vendeur ne modifie pas le stock.
     const gate = await requireOrgRole(primary.organizationId, 'ADMIN');
     if (gate instanceof NextResponse) return gate;
+
+    // « Appli douce » : abonnement expiré (hors grâce) → écriture refusée.
+    const locked = await requireActiveSubscription(primary.organizationId);
+    if (locked) return locked;
 
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success || parsed.data.delta === 0) {
