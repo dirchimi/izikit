@@ -20,6 +20,7 @@ import Modal from '@/components/ui/Modal';
 import ImageCropModal from '@/components/boutique/ImageCropModal';
 import AddProductForm, { type NewProductInput } from './AddProductForm';
 import EditProductForm, { type EditProductInput } from './EditProductForm';
+import ExpiryBadge from './ExpiryBadge';
 import ReapproForm from './ReapproForm';
 import AdjustStockForm from './AdjustStockForm';
 import MovementsHistoryModal from './MovementsHistoryModal';
@@ -41,6 +42,7 @@ interface ApiProduct {
   status: 'ok' | 'low' | 'out';
   imageUrl: string | null;
   barcode: string | null;
+  expiryDate: string | null;
 }
 
 type StatusFilter = 'all' | 'low' | 'out';
@@ -130,8 +132,12 @@ export default function StockManager() {
   const [historyTarget, setHistoryTarget] = useState<ApiProduct | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
+  const { data, loading, error, refresh } = useApi<{
+    products: ApiProduct[];
+    expiryAlertDays: number;
+  }>('/api/products');
   const products = data?.products ?? [];
+  const expiryAlertDays = data?.expiryAlertDays ?? 30;
 
   // Gestion du catalogue/stock (créer/éditer/supprimer, réappro, ajuster, photo)
   // réservée au Manager (ADMIN) et au Patron (OWNER) — le serveur applique la
@@ -235,6 +241,7 @@ export default function StockManager() {
           threshold: input.threshold,
           ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
           ...(input.barcode ? { barcode: input.barcode } : {}),
+          ...(input.expiryDate ? { expiryDate: input.expiryDate } : {}),
           ...(input.supplierDebt ? { supplierDebt: input.supplierDebt } : {}),
         },
       });
@@ -505,9 +512,16 @@ export default function StockManager() {
                             onPick={() => openPhotoPicker(p.id)}
                             label={t('stock.photo.change')}
                           />
-                          <span className="font-body text-foreground text-sm font-medium">
-                            {p.name}
-                          </span>
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <span className="font-body text-foreground text-sm font-medium">
+                              {p.name}
+                            </span>
+                            <ExpiryBadge
+                              expiryDate={p.expiryDate}
+                              alertDays={expiryAlertDays}
+                              className="w-fit"
+                            />
+                          </div>
                         </div>
                         <span className="font-body text-muted-foreground w-24 text-xs">
                           {p.category}
@@ -648,6 +662,11 @@ export default function StockManager() {
                         <span className="font-body text-muted-foreground font-mono text-xs">
                           {p.ref} · {p.category}
                         </span>
+                        <ExpiryBadge
+                          expiryDate={p.expiryDate}
+                          alertDays={expiryAlertDays}
+                          className="mt-1"
+                        />
                       </div>
                     </div>
 

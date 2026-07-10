@@ -29,6 +29,7 @@ interface DashboardData {
   weekMaxRevenue: number;
   weekTodayIndex: number;
   stockAlerts: { name: string; remaining: number; critical: boolean }[];
+  expiryAlerts: { name: string; daysLeft: number; expired: boolean }[];
   recentSales: {
     id: string;
     at: string;
@@ -224,6 +225,52 @@ export default function DashboardManager() {
                         </Link>
                       </div>
                     </div>
+
+                    {/* Alertes de péremption */}
+                    {data.expiryAlerts.length > 0 && (
+                      <div className="bg-surface border-border w-full rounded-lg border xl:w-[280px]">
+                        <div className="border-border flex items-center justify-between border-b px-4 py-4">
+                          <h2 className="font-headings text-foreground text-base font-bold">
+                            {t('dash.expiryAlerts')}
+                          </h2>
+                          <span className="bg-warning text-warning-foreground font-body rounded-sm px-2 py-0.5 text-xs font-bold">
+                            {data.expiryAlerts.length}
+                          </span>
+                        </div>
+                        {data.expiryAlerts.map((a) => (
+                          <div
+                            key={a.name}
+                            className="border-border flex items-center justify-between gap-2 border-b px-4 py-3 last:border-b-0"
+                          >
+                            <span className="font-body text-foreground truncate text-sm">
+                              {a.name}
+                            </span>
+                            <span
+                              className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${
+                                a.expired
+                                  ? 'bg-danger/10 text-danger'
+                                  : 'bg-warning/10 text-warning'
+                              }`}
+                            >
+                              {a.expired
+                                ? t('expiry.badge.expired')
+                                : a.daysLeft === 0
+                                  ? t('expiry.badge.today')
+                                  : t('expiry.badge.inDays', { n: a.daysLeft })}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="px-4 py-3">
+                          <Link
+                            href="/stock"
+                            className="text-primary font-body flex items-center gap-1 text-xs font-semibold"
+                          >
+                            {t('dash.seeAllStock')}{' '}
+                            <Icon i="arrow-right" size={12} className="rtl:rotate-180" />
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ventes récentes */}

@@ -27,6 +27,7 @@ const SETTINGS_SELECT = {
   businessType: true,
   overdueDays: true,
   bigExpenseThreshold: true,
+  expiryAlertDays: true,
 } as const;
 
 const PatchBody = z.object({
@@ -49,6 +50,7 @@ const PatchBody = z.object({
   // Seuils de notifications (réglés dans Paramètres).
   overdueDays: z.number().int().min(1).max(365).optional(),
   bigExpenseThreshold: z.number().int().min(0).max(1_000_000_000).optional(),
+  expiryAlertDays: z.number().int().min(1).max(365).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -126,6 +128,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(d.bigExpenseThreshold !== undefined
           ? { bigExpenseThreshold: d.bigExpenseThreshold }
           : {}),
+        ...(d.expiryAlertDays !== undefined ? { expiryAlertDays: d.expiryAlertDays } : {}),
       },
       update: {
         ...(d.currency !== undefined ? { currency: d.currency } : {}),
@@ -140,6 +143,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(d.bigExpenseThreshold !== undefined
           ? { bigExpenseThreshold: d.bigExpenseThreshold }
           : {}),
+        ...(d.expiryAlertDays !== undefined ? { expiryAlertDays: d.expiryAlertDays } : {}),
       },
       select: SETTINGS_SELECT,
     });

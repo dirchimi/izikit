@@ -13,7 +13,12 @@ import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
-import { productView, uniqueViolationField, PRODUCT_SELECT } from '@/lib/server/products/helpers';
+import {
+  productView,
+  uniqueViolationField,
+  parseExpiryInput,
+  PRODUCT_SELECT,
+} from '@/lib/server/products/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const PatchBody = z.object({
@@ -27,6 +32,12 @@ const PatchBody = z.object({
   threshold: z.number().int().min(0).optional(),
   imageUrl: z.string().url().max(500).nullable().optional(),
   barcode: z.string().trim().max(64).nullable().optional(),
+  // 'YYYY-MM-DD' pour (re)définir, null pour effacer, absent = inchangé.
+  expiryDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 });
 
 async function resolveOrg(
@@ -99,6 +110,7 @@ export async function PATCH(
       ...(d.barcode !== undefined
         ? { barcode: d.barcode && d.barcode.length > 0 ? d.barcode : null }
         : {}),
+      ...(d.expiryDate !== undefined ? { expiryDate: parseExpiryInput(d.expiryDate) ?? null } : {}),
     };
 
     try {

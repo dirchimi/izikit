@@ -31,6 +31,7 @@ export type OwnerNotification = Omit<CreateNotificationInput, 'userId'>;
 /** Types d'alertes boutique (clés stables — réutilisées par la cloche + les réglages). */
 export const BOUTIQUE_NOTIFICATION_TYPES = [
   'LOW_STOCK',
+  'EXPIRY_SOON',
   'RECEIVABLE_OVERDUE',
   'SALE_MADE',
   'BIG_EXPENSE',
@@ -60,6 +61,29 @@ export function lowStockNotification(
         : `${productName} : il ne reste que ${qty} en stock.`,
     data: { productId, qty },
     dedupeKey: `low-stock:${productId}:${dateKey}`,
+  };
+}
+
+/** Produit périmé ou proche de la péremption. dedupeKey = produit + date de
+ * péremption → une seule alerte par produit pour une date donnée (pas de spam
+ * si le produit reste dans la fenêtre plusieurs jours). */
+export function expirySoonNotification(
+  productId: string,
+  productName: string,
+  expiryKey: string, // YYYY-MM-DD de la date de péremption
+  expired: boolean,
+  daysLeft: number,
+): OwnerNotification {
+  return {
+    type: 'EXPIRY_SOON',
+    title: expired ? 'Produit périmé' : 'Péremption proche',
+    body: expired
+      ? `${productName} est périmé.`
+      : daysLeft <= 0
+        ? `${productName} périme aujourd'hui.`
+        : `${productName} périme dans ${daysLeft} jour(s).`,
+    data: { productId, expiry: expiryKey, daysLeft },
+    dedupeKey: `expiry-soon:${productId}:${expiryKey}`,
   };
 }
 

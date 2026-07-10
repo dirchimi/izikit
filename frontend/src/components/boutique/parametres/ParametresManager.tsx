@@ -31,6 +31,7 @@ interface BoutiqueCurrent {
     logoUrl: string | null;
     overdueDays: number;
     bigExpenseThreshold: number;
+    expiryAlertDays: number;
   };
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
@@ -195,6 +196,7 @@ export default function ParametresManager() {
               <NotificationSettings
                 initialOverdueDays={boutique.settings.overdueDays}
                 initialBigExpense={boutique.settings.bigExpenseThreshold}
+                initialExpiryAlertDays={boutique.settings.expiryAlertDays}
                 onSavedThresholds={refreshBoutique}
               />
             ) : (

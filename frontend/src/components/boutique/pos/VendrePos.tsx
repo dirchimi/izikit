@@ -7,8 +7,10 @@ import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { computeExpiryStatus } from '@/lib/boutique/expiry';
 import { onSaleChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
@@ -37,6 +39,7 @@ interface ApiProduct {
   status: 'ok' | 'low' | 'out';
   imageUrl: string | null;
   barcode: string | null;
+  expiryDate: string | null;
 }
 
 const METHODS: PaymentMethod[] = ['cash', 'mobile', 'credit'];
@@ -56,6 +59,7 @@ const num = (v: string) => Math.max(0, Math.trunc(Number(v) || 0));
 
 export default function VendrePos() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const t = useT();
 
   const [query, setQuery] = useState('');
@@ -73,8 +77,12 @@ export default function VendrePos() {
   // Produit en attente de choix « Détail / Gros » (ouvert à chaque ajout).
   const [choosing, setChoosing] = useState<ApiProduct | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{ products: ApiProduct[] }>('/api/products');
+  const { data, loading, error, refresh } = useApi<{
+    products: ApiProduct[];
+    expiryAlertDays: number;
+  }>('/api/products');
   const products = data?.products ?? [];
+  const expiryAlertDays = data?.expiryAlertDays ?? 30;
 
   // Chips catégories : « Tous » + les catégories réelles de la boutique.
   const categories = useMemo(
@@ -102,8 +110,21 @@ export default function VendrePos() {
   const remaining = netTotal - splitSum;
   const creditPortion = split ? num(amounts.credit) : method === 'credit' ? netTotal : 0;
 
-  /** Ajoute un produit au panier au tarif choisi (détail ou gros). */
-  function addToCart(product: ApiProduct, wholesale: boolean) {
+  /** Ajoute un produit au panier au tarif choisi (détail ou gros). Un produit
+   *  périmé déclenche une confirmation (« vendre quand même ? ») — jamais bloqué. */
+  async function addToCart(product: ApiProduct, wholesale: boolean) {
+    const exp = computeExpiryStatus(product.expiryDate, expiryAlertDays, new Date());
+    if (exp?.status === 'expired') {
+      const ok = await confirm({
+        title: t('pos.expired.title'),
+        message: t('pos.expired.message', { name: product.name, n: Math.abs(exp.daysLeft) }),
+        confirmLabel: t('pos.expired.confirm'),
+        cancelLabel: t('common.cancel'),
+        variant: 'danger',
+        icon: 'calendar-clock',
+      });
+      if (!ok) return;
+    }
     const useWholesale = wholesale && product.prixGros > 0;
     const unitPrice = useWholesale ? product.prixGros : product.sellPrice;
     setCart((prev) => {
@@ -168,7 +189,7 @@ export default function VendrePos() {
       return;
     }
     // Scan → ajout direct au détail (le choix gros/détail reste sur la ligne).
-    addToCart(p, false);
+    void addToCart(p, false);
     // Rupture : on avertit mais on laisse le choix (la ligne est ajoutée).
     if (p.qty <= 0) toast(t('pos.scan.outOfStock', { name: p.name }), 'info');
     else toast(t('pos.scan.added', { name: p.name }), 'success');
@@ -607,7 +628,7 @@ export default function VendrePos() {
               <button
                 type="button"
                 onClick={() => {
-                  addToCart(choosing, false);
+                  void addToCart(choosing, false);
                   setChoosing(null);
                 }}
                 className="border-border hover:border-primary flex flex-col items-center gap-1 rounded-lg border px-4 py-4 transition-colors"
@@ -624,7 +645,7 @@ export default function VendrePos() {
                 type="button"
                 disabled={choosing.prixGros <= 0}
                 onClick={() => {
-                  addToCart(choosing, true);
+                  void addToCart(choosing, true);
                   setChoosing(null);
                 }}
                 className="border-primary bg-primary/5 hover:bg-primary/10 flex flex-col items-center gap-1 rounded-lg border px-4 py-4 transition-colors disabled:cursor-not-allowed disabled:opacity-40"

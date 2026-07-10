@@ -6,6 +6,7 @@
     { "path": "/api/cron/order-expiration", "schedule": "0 4 * * *" },
     { "path": "/api/cron/webhook-log-purge", "schedule": "0 0 * * *" },
     { "path": "/api/cron/email-job-purge", "schedule": "30 0 * * *" },
-    { "path": "/api/cron/receivable-overdue", "schedule": "0 5 * * *" }
+    { "path": "/api/cron/receivable-overdue", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/product-expiry", "schedule": "30 5 * * *" }
   ]
 }

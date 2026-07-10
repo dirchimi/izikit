@@ -14,6 +14,7 @@ import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { prisma } from '@/lib/server/prisma';
 import { computeReport } from '@/lib/server/reports/compute';
+import { computeExpiryStatus } from '@/lib/boutique/expiry';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const now = new Date();
     const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0);
 
-    const [todayR, yestR, weekR, receivAgg, products, recent] = await Promise.all([
+    const [todayR, yestR, weekR, receivAgg, products, recent, settings] = await Promise.all([
       computeReport(orgId, 'today', now),
       computeReport(orgId, 'today', yesterday),
       computeReport(orgId, 'week', now),
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }),
       prisma.product.findMany({
         where: { organizationId: orgId },
-        select: { name: true, qty: true, threshold: true },
+        select: { name: true, qty: true, threshold: true, expiryDate: true },
       }),
       prisma.sale.findMany({
         where: { organizationId: orgId },
@@ -63,6 +64,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           items: { select: { name: true, qty: true } },
         },
       }),
+      prisma.boutiqueSettings.findUnique({
+        where: { organizationId: orgId },
+        select: { expiryAlertDays: true },
+      }),
     ]);
 
     const receivablesOpen = (receivAgg._sum.amount ?? 0) - (receivAgg._sum.amountPaid ?? 0);
@@ -72,6 +77,23 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .sort((a, b) => a.qty - b.qty)
       .slice(0, 5)
       .map((p) => ({ name: p.name, remaining: p.qty, critical: p.qty === 0 }));
+
+    // Alertes de péremption : produits périmés ou entrant dans la fenêtre d'alerte
+    // (seuil global de la boutique), les plus urgents d'abord.
+    const alertDays = settings?.expiryAlertDays ?? 30;
+    const expiryAlerts = products
+      .map((p) => ({ name: p.name, view: computeExpiryStatus(p.expiryDate, alertDays, now) }))
+      .filter(
+        (x): x is { name: string; view: { status: 'expired' | 'expiring'; daysLeft: number } } =>
+          x.view !== null && x.view.status !== 'ok',
+      )
+      .sort((a, b) => a.view.daysLeft - b.view.daysLeft)
+      .slice(0, 5)
+      .map((x) => ({
+        name: x.name,
+        daysLeft: x.view.daysLeft,
+        expired: x.view.status === 'expired',
+      }));
 
     const weekMax = Math.max(0, ...weekR.series.map((s) => s.value));
     const weekly = weekR.series.map((s) => ({
@@ -116,6 +138,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         weekMaxRevenue: weekMax,
         weekTodayIndex: weekR.series.length - 1,
         stockAlerts,
+        expiryAlerts,
         recentSales,
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

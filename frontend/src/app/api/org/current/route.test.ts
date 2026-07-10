@@ -40,6 +40,7 @@ const boutiqueCtx = {
     businessType: null,
     overdueDays: 30,
     bigExpenseThreshold: 50000,
+    expiryAlertDays: 30,
   },
   role: 'OWNER' as const,
 };

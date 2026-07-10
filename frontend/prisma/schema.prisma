@@ -146,6 +146,7 @@ model Product {
   threshold      Int             @default(0) // seuil d'alerte stock faible
   imageUrl       String? // URL Cloudinary publique de la photo du produit
   barcode        String? // code-barres (EAN/UPC…) saisi ou scanné ; null = aucun. Unique par boutique
+  expiryDate     DateTime? // date de péremption (optionnelle ; null = produit non périssable)
   movements      StockMovement[]
   saleItems      SaleItem[]
   createdAt      DateTime        @default(now())
@@ -390,6 +391,7 @@ model BoutiqueSettings {
   // Seuils de notifications, réglables par le patron dans Paramètres.
   overdueDays         Int @default(30) // créance « en retard » après N jours
   bigExpenseThreshold Int @default(50000) // « grosse » dépense ≥ ce montant (FCFA)
+  expiryAlertDays     Int @default(30) // alerte péremption : N jours avant la date
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }

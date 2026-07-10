@@ -20,6 +20,7 @@ import {
   generateRef,
   productView,
   uniqueViolationField,
+  parseExpiryInput,
   PRODUCT_SELECT,
 } from '@/lib/server/products/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -36,6 +37,12 @@ const PostBody = z.object({
   threshold: z.number().int().min(0).default(0),
   imageUrl: z.string().url().max(500).nullable().optional(),
   barcode: z.string().trim().max(64).nullable().optional(),
+  // Date de péremption optionnelle (YYYY-MM-DD). Vide/absente = non périssable.
+  expiryDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   // Achat à crédit : reste dû au fournisseur pour ce stock initial (« en prêt »).
   // Créé en dette fournisseur si > 0. Borné au coût (qty × prix d'achat) serveur.
   supplierDebt: z
@@ -63,14 +70,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const gate = await requireOrgRole(primary.organizationId, 'MEMBER');
     if (gate instanceof NextResponse) return gate;
 
-    const rows = await prisma.product.findMany({
-      where: { organizationId: primary.organizationId },
-      orderBy: [{ name: 'asc' }],
-      select: PRODUCT_SELECT,
-    });
+    const [rows, settings] = await Promise.all([
+      prisma.product.findMany({
+        where: { organizationId: primary.organizationId },
+        orderBy: [{ name: 'asc' }],
+        select: PRODUCT_SELECT,
+      }),
+      prisma.boutiqueSettings.findUnique({
+        where: { organizationId: primary.organizationId },
+        select: { expiryAlertDays: true },
+      }),
+    ]);
 
     return NextResponse.json(
-      { products: rows.map(productView) },
+      // `expiryAlertDays` accompagne la liste → le client dérive le statut de
+      // péremption (badge « périmé » / « périme dans X j ») via computeExpiryStatus.
+      { products: rows.map(productView), expiryAlertDays: settings?.expiryAlertDays ?? 30 },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });
@@ -130,6 +145,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             threshold: d.threshold,
             imageUrl: d.imageUrl ?? null,
             barcode: d.barcode && d.barcode.length > 0 ? d.barcode : null,
+            expiryDate: parseExpiryInput(d.expiryDate) ?? null,
           },
           select: PRODUCT_SELECT,
         });

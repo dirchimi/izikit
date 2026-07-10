@@ -31,6 +31,7 @@ export interface BoutiqueSettingsView {
   businessType: string | null;
   overdueDays: number;
   bigExpenseThreshold: number;
+  expiryAlertDays: number;
 }
 
 export interface BoutiqueContext {
@@ -50,6 +51,7 @@ const SETTINGS_SELECT = {
   businessType: true,
   overdueDays: true,
   bigExpenseThreshold: true,
+  expiryAlertDays: true,
 } as const;
 
 /** Nom de boutique par défaut dérivé de l'email (partie locale capitalisée). */
@@ -71,6 +73,7 @@ function viewSettings(s: BoutiqueSettingsView): BoutiqueSettingsView {
     businessType: s.businessType,
     overdueDays: s.overdueDays,
     bigExpenseThreshold: s.bigExpenseThreshold,
+    expiryAlertDays: s.expiryAlertDays,
   };
 }
 
@@ -187,6 +190,7 @@ export async function ensureBoutique(userId: string, email: string): Promise<Bou
       businessType: null,
       overdueDays: 30,
       bigExpenseThreshold: 50000,
+      expiryAlertDays: 30,
     },
     role: 'OWNER',
   };

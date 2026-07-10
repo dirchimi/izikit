@@ -5,6 +5,7 @@ import {
   onExpenseCreated,
   onProductAdjusted,
   notifyOverdueReceivables,
+  notifyExpiringProducts,
 } from './boutique-events';
 
 beforeEach(() => {
@@ -180,6 +181,44 @@ describe('notifyOverdueReceivables', () => {
     prismaMock.receivable.findMany.mockResolvedValue([] as never);
 
     const res = await notifyOverdueReceivables(prismaMock as never, { now });
+    expect(res.notified).toBe(0);
+    expect(prismaMock.notification.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyExpiringProducts', () => {
+  const now = new Date('2026-07-10T00:00:00.000Z');
+
+  it('notifie EXPIRY_SOON pour chaque produit périmé ou proche, et compte', async () => {
+    prismaMock.boutiqueSettings.findMany.mockResolvedValue([
+      { organizationId: 'org-1', expiryAlertDays: 30 },
+    ] as never);
+    prismaMock.product.findMany.mockResolvedValue([
+      { id: 'p1', name: 'Lait', expiryDate: new Date('2026-07-20T12:00:00.000Z') }, // dans 10 j
+      { id: 'p2', name: 'Yaourt', expiryDate: new Date('2026-07-05T12:00:00.000Z') }, // périmé
+    ] as never);
+
+    const res = await notifyExpiringProducts(prismaMock as never, { now });
+    expect(res.notified).toBe(2);
+    expect(createdTypes()).toEqual(['EXPIRY_SOON', 'EXPIRY_SOON']);
+    // La requête borne la péremption à aujourd'hui + seuil (30 j).
+    const whereArg = prismaMock.product.findMany.mock.calls[0]![0] as {
+      where: { expiryDate: { lte: Date } };
+    };
+    expect(whereArg.where.expiryDate.lte.getTime()).toBe(now.getTime() + 30 * 86_400_000);
+  });
+
+  it('ne notifie pas un produit qui périme au-delà du seuil', async () => {
+    prismaMock.boutiqueSettings.findMany.mockResolvedValue([
+      { organizationId: 'org-1', expiryAlertDays: 30 },
+    ] as never);
+    // La requête DB filtre déjà par cutoff, mais le garde computeExpiryStatus
+    // reconfirme (ceinture + bretelles) : un produit hors fenêtre est ignoré.
+    prismaMock.product.findMany.mockResolvedValue([
+      { id: 'p3', name: 'Conserve', expiryDate: new Date('2027-01-01T12:00:00.000Z') },
+    ] as never);
+
+    const res = await notifyExpiringProducts(prismaMock as never, { now });
     expect(res.notified).toBe(0);
     expect(prismaMock.notification.create).not.toHaveBeenCalled();
   });

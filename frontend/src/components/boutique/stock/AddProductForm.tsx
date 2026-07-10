@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
+import DatePicker from '@/components/ui/DatePicker';
 import ImageCropModal from '@/components/boutique/ImageCropModal';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -21,6 +22,7 @@ export interface NewProductInput {
   threshold: number;
   imageUrl: string | null;
   barcode: string | null;
+  expiryDate: string | null; // YYYY-MM-DD ou null (non périssable)
   supplierDebt?: SupplierDebtValue;
 }
 
@@ -77,6 +79,7 @@ export default function AddProductForm({
   const [qty, setQty] = useState('');
   const [threshold, setThreshold] = useState('5');
   const [barcode, setBarcode] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Bloc « payé au fournisseur ? » — le reste dû devient une dette fournisseur.
@@ -127,6 +130,7 @@ export default function AddProductForm({
         threshold: Number(threshold) || 0,
         imageUrl,
         barcode: barcode.trim() || null,
+        expiryDate: expiryDate || null,
         ...(supplierDebt ? { supplierDebt } : {}),
       });
       if (ok) {
@@ -139,6 +143,7 @@ export default function AddProductForm({
         setQty('');
         setThreshold('5');
         setBarcode('');
+        setExpiryDate('');
         setImageUrl(null);
         onDone?.();
       }
@@ -231,6 +236,12 @@ export default function AddProductForm({
             className="text-foreground placeholder:text-muted-foreground w-full bg-transparent outline-none"
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className={labelClass}>{t('stock.form.expiry')}</label>
+        <DatePicker value={expiryDate} onChange={setExpiryDate} />
+        <p className="text-muted-foreground font-body text-[11px]">{t('stock.form.expiryHint')}</p>
       </div>
 
       <div className="flex gap-3">

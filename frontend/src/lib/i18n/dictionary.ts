@@ -1245,6 +1245,23 @@ const messages: Record<string, Msg> = {
   },
   'stock.form.qtyField': { fr: 'Quantité', en: 'Quantity', ar: 'الكمية' },
   'stock.form.thresholdField': { fr: 'Seuil alerte', en: 'Alert threshold', ar: 'حد التنبيه' },
+  'stock.form.expiry': {
+    fr: 'Date de péremption (optionnel)',
+    en: 'Expiry date (optional)',
+    ar: 'تاريخ انتهاء الصلاحية (اختياري)',
+  },
+  'stock.form.expiryHint': {
+    fr: 'Laisser vide si le produit ne périme pas.',
+    en: 'Leave empty for non-perishable products.',
+    ar: 'اتركه فارغًا للمنتجات غير القابلة للتلف.',
+  },
+  'expiry.badge.expired': { fr: 'Périmé', en: 'Expired', ar: 'منتهي الصلاحية' },
+  'expiry.badge.today': { fr: 'Périme aujourd’hui', en: 'Expires today', ar: 'ينتهي اليوم' },
+  'expiry.badge.inDays': {
+    fr: 'Périme dans {n} j',
+    en: 'Expires in {n}d',
+    ar: 'ينتهي خلال {n} ي',
+  },
   'stock.form.submit': { fr: 'Enregistrer le produit', en: 'Save product', ar: 'حفظ المنتج' },
   'stock.form.wholesalePrice': { fr: 'Prix de gros', en: 'Wholesale price', ar: 'سعر الجملة' },
   'stock.form.unit': { fr: 'Unité', en: 'Unit', ar: 'الوحدة' },
@@ -2144,8 +2161,18 @@ const messages: Record<string, Msg> = {
     en: '"Big" expense from (FCFA)',
     ar: 'مصروف «كبير» ابتداءً من (فرنك)',
   },
+  'parametres.notif.expiryDays': {
+    fr: 'Alerter avant péremption (jours)',
+    en: 'Alert before expiry (days)',
+    ar: 'التنبيه قبل انتهاء الصلاحية (أيام)',
+  },
   'parametres.notif.types': { fr: "Types d'alertes", en: 'Alert types', ar: 'أنواع التنبيهات' },
   'parametres.notif.type.LOW_STOCK': { fr: 'Stock bas', en: 'Low stock', ar: 'مخزون منخفض' },
+  'parametres.notif.type.EXPIRY_SOON': {
+    fr: 'Péremption proche',
+    en: 'Expiring soon',
+    ar: 'قرب انتهاء الصلاحية',
+  },
   'parametres.notif.type.RECEIVABLE_OVERDUE': {
     fr: 'Créance en retard',
     en: 'Overdue receivable',
@@ -2617,6 +2644,13 @@ const messages: Record<string, Msg> = {
     en: '{name} is out of stock — added anyway.',
     ar: '{name} نفد من المخزون — تمت إضافته على أي حال.',
   },
+  'pos.expired.title': { fr: 'Produit périmé', en: 'Expired product', ar: 'منتج منتهي الصلاحية' },
+  'pos.expired.message': {
+    fr: '{name} est périmé depuis {n} jour(s). Vendre quand même ?',
+    en: '{name} expired {n} day(s) ago. Sell anyway?',
+    ar: 'انتهت صلاحية {name} منذ {n} يوم. البيع على أي حال؟',
+  },
+  'pos.expired.confirm': { fr: 'Vendre quand même', en: 'Sell anyway', ar: 'البيع رغم ذلك' },
   'pos.scan.added': {
     fr: '{name} ajouté au panier',
     en: '{name} added to cart',
@@ -2767,6 +2801,7 @@ const messages: Record<string, Msg> = {
     ar: 'بالفرنك — آخر 7 أيام',
   },
   'dash.stockAlerts': { fr: 'Alertes stock', en: 'Stock alerts', ar: 'تنبيهات المخزون' },
+  'dash.expiryAlerts': { fr: 'Péremptions', en: 'Expiries', ar: 'انتهاء الصلاحية' },
   'dash.seeAllStock': { fr: 'Voir tout le stock', en: 'See all inventory', ar: 'عرض كل المخزون' },
   'dash.recentSales': { fr: 'Ventes récentes', en: 'Recent sales', ar: 'المبيعات الأخيرة' },
   'dash.pendingSync': {

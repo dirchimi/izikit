@@ -28,6 +28,7 @@ export const PRODUCT_SELECT = {
   threshold: true,
   imageUrl: true,
   barcode: true,
+  expiryDate: true,
 } as const;
 
 export interface ProductRow {
@@ -43,11 +44,33 @@ export interface ProductRow {
   threshold: number;
   imageUrl: string | null;
   barcode: string | null;
+  expiryDate: Date | string | null;
 }
 
-/** Vue API d'un produit : colonnes + statut stock dérivé. */
-export function productView(p: ProductRow): ProductRow & { status: StockStatus } {
-  return { ...p, status: deriveStockStatus(p.qty, p.threshold) };
+/** Vue API d'un produit : colonnes + statut stock dérivé. `expiryDate` en ISO
+ *  (le statut de péremption est dérivé côté client via computeExpiryStatus,
+ *  qui a besoin du seuil `expiryAlertDays` de la boutique). */
+export function productView(
+  p: ProductRow,
+): Omit<ProductRow, 'expiryDate'> & { expiryDate: string | null; status: StockStatus } {
+  return {
+    ...p,
+    expiryDate: p.expiryDate
+      ? p.expiryDate instanceof Date
+        ? p.expiryDate.toISOString()
+        : p.expiryDate
+      : null,
+    status: deriveStockStatus(p.qty, p.threshold),
+  };
+}
+
+/** Convertit un 'YYYY-MM-DD' (saisie UI) en Date UTC midi, ou null. Renvoie
+ *  `undefined` si l'entrée est undefined (→ ne pas modifier en PATCH). */
+export function parseExpiryInput(v: string | null | undefined): Date | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const d = new Date(`${v}T12:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** True si l'erreur Prisma est une violation de contrainte unique (P2002). */

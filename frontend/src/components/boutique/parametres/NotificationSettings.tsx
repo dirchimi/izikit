@@ -11,7 +11,13 @@ const fieldClass =
   'border-border bg-input text-foreground font-body focus:border-primary rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-60';
 
 /** Types d'alertes proposés à l'activation/désactivation. */
-const ALERT_TYPES = ['LOW_STOCK', 'RECEIVABLE_OVERDUE', 'SALE_MADE', 'BIG_EXPENSE'] as const;
+const ALERT_TYPES = [
+  'LOW_STOCK',
+  'EXPIRY_SOON',
+  'RECEIVABLE_OVERDUE',
+  'SALE_MADE',
+  'BIG_EXPENSE',
+] as const;
 type AlertType = (typeof ALERT_TYPES)[number];
 
 interface ChannelPref {
@@ -28,10 +34,12 @@ type PrefsMap = Record<string, ChannelPref>;
 export default function NotificationSettings({
   initialOverdueDays,
   initialBigExpense,
+  initialExpiryAlertDays,
   onSavedThresholds,
 }: {
   initialOverdueDays: number;
   initialBigExpense: number;
+  initialExpiryAlertDays: number;
   onSavedThresholds: () => Promise<void> | void;
 }) {
   const t = useT();
@@ -39,9 +47,11 @@ export default function NotificationSettings({
 
   const [overdueDays, setOverdueDays] = useState(String(initialOverdueDays));
   const [bigExpense, setBigExpense] = useState(String(initialBigExpense));
+  const [expiryDays, setExpiryDays] = useState(String(initialExpiryAlertDays));
   // Activé par défaut (opt-out) : true tant que la préférence n'a pas été coupée.
   const [enabled, setEnabled] = useState<Record<AlertType, boolean>>({
     LOW_STOCK: true,
+    EXPIRY_SOON: true,
     RECEIVABLE_OVERDUE: true,
     SALE_MADE: true,
     BIG_EXPENSE: true,
@@ -76,10 +86,11 @@ export default function NotificationSettings({
     try {
       const days = Math.max(1, Math.min(365, Number.parseInt(overdueDays, 10) || 30));
       const big = Math.max(0, Number.parseInt(bigExpense, 10) || 0);
+      const expiry = Math.max(1, Math.min(365, Number.parseInt(expiryDays, 10) || 30));
 
       await api('/api/org/current', {
         method: 'PATCH',
-        body: { overdueDays: days, bigExpenseThreshold: big },
+        body: { overdueDays: days, bigExpenseThreshold: big, expiryAlertDays: expiry },
       });
 
       const prefs: PrefsMap = {};
@@ -88,6 +99,7 @@ export default function NotificationSettings({
 
       setOverdueDays(String(days));
       setBigExpense(String(big));
+      setExpiryDays(String(expiry));
       await onSavedThresholds();
       toast(t('parametres.notif.saved'), 'success');
     } catch {
@@ -136,6 +148,20 @@ export default function NotificationSettings({
               step={1000}
               value={bigExpense}
               onChange={(e) => setBigExpense(e.target.value)}
+              className={fieldClass}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className={labelClass} htmlFor="notif-expiry">
+              {t('parametres.notif.expiryDays')}
+            </label>
+            <input
+              id="notif-expiry"
+              type="number"
+              min={1}
+              max={365}
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(e.target.value)}
               className={fieldClass}
             />
           </div>

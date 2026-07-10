@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import ComboBox from '@/components/ui/ComboBox';
+import DatePicker from '@/components/ui/DatePicker';
 import { useT } from '@/contexts/LocaleContext';
 import { UNIT_OPTIONS } from './AddProductForm';
 
@@ -15,6 +16,7 @@ export interface EditProductInput {
   unite: string;
   threshold: number;
   barcode: string | null;
+  expiryDate: string | null; // YYYY-MM-DD ou null (efface la date)
 }
 
 export interface EditableProduct {
@@ -28,6 +30,7 @@ export interface EditableProduct {
   threshold: number;
   qty: number;
   barcode: string | null;
+  expiryDate: string | null; // ISO ou null
 }
 
 const fieldClass =
@@ -59,6 +62,8 @@ export default function EditProductForm({
   const [unite, setUnite] = useState(product.unite || 'pièce');
   const [threshold, setThreshold] = useState(String(product.threshold));
   const [barcode, setBarcode] = useState(product.barcode ?? '');
+  // ISO complet → YYYY-MM-DD attendu par le DatePicker (chaîne vide = aucune).
+  const [expiryDate, setExpiryDate] = useState(product.expiryDate?.slice(0, 10) ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -74,6 +79,7 @@ export default function EditProductForm({
         unite: unite.trim() || 'pièce',
         threshold: Number(threshold) || 0,
         barcode: barcode.trim() || null,
+        expiryDate: expiryDate || null,
       });
       if (ok) onDone?.();
     } finally {
@@ -121,6 +127,12 @@ export default function EditProductForm({
             className="text-foreground placeholder:text-muted-foreground w-full bg-transparent outline-none"
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className={labelClass}>{t('stock.form.expiry')}</label>
+        <DatePicker value={expiryDate} onChange={setExpiryDate} />
+        <p className="text-muted-foreground font-body text-[11px]">{t('stock.form.expiryHint')}</p>
       </div>
 
       <div className="flex gap-3">

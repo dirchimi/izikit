@@ -12,8 +12,10 @@
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 import { notifyUser, resolveOwnerId } from './notify-owner';
+import { computeExpiryStatus } from '@/lib/boutique/expiry';
 import {
   bigExpenseNotification,
+  expirySoonNotification,
   lowStockNotification,
   receivableOverdueNotification,
   saleMadeNotification,
@@ -151,6 +153,56 @@ export async function notifyOverdueReceivables(
         prisma,
         ownerId,
         receivableOverdueNotification(r.id, r.customer?.name ?? 'Client', remaining, s.currency),
+      );
+      if (res) notified++;
+    }
+  }
+  return { notified };
+}
+
+/**
+ * Balaye les produits datés qui sont périmés ou entrent dans la fenêtre d'alerte
+ * (`expiryAlertDays` par boutique) et notifie chaque propriétaire. Une alerte
+ * par produit et par date de péremption (dédup) → pas de spam quotidien. Appelé
+ * par le cron quotidien. Renvoie le nombre d'alertes émises.
+ */
+export async function notifyExpiringProducts(
+  prisma: PrismaClient,
+  args: { now: Date },
+): Promise<{ notified: number }> {
+  const settingsRows = await prisma.boutiqueSettings.findMany({
+    select: { organizationId: true, expiryAlertDays: true },
+  });
+
+  let notified = 0;
+  for (const s of settingsRows) {
+    const alertDays = s.expiryAlertDays ?? 30;
+    const cutoff = new Date(args.now.getTime() + alertDays * DAY_MS);
+    // Produits datés dont la péremption est ≤ (aujourd'hui + seuil) : couvre à la
+    // fois « périme bientôt » et « déjà périmé » (date passée ≤ cutoff).
+    const products = await prisma.product.findMany({
+      where: {
+        organizationId: s.organizationId,
+        expiryDate: { not: null, lte: cutoff },
+      },
+      select: { id: true, name: true, expiryDate: true },
+    });
+    if (products.length === 0) continue;
+
+    const ownerId = await resolveOwnerId(prisma, s.organizationId);
+    if (!ownerId) continue;
+
+    for (const p of products) {
+      const view = computeExpiryStatus(p.expiryDate, alertDays, args.now);
+      if (!view || view.status === 'ok') continue;
+      const expiryKey =
+        p.expiryDate instanceof Date
+          ? p.expiryDate.toISOString().slice(0, 10)
+          : String(p.expiryDate).slice(0, 10);
+      const res = await notifyUser(
+        prisma,
+        ownerId,
+        expirySoonNotification(p.id, p.name, expiryKey, view.status === 'expired', view.daysLeft),
       );
       if (res) notified++;
     }
