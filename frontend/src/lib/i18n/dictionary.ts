@@ -1013,6 +1013,7 @@ const messages: Record<string, Msg> = {
   'common.ca': { fr: 'CA', en: 'Revenue', ar: 'الإيراد' },
   'common.amount': { fr: 'Montant', en: 'Amount', ar: 'المبلغ' },
   'common.date': { fr: 'Date', en: 'Date', ar: 'التاريخ' },
+  'common.client': { fr: 'Client', en: 'Customer', ar: 'الزبون' },
   'common.category': { fr: 'Catégorie', en: 'Category', ar: 'الفئة' },
   'common.note': { fr: 'Note', en: 'Note', ar: 'ملاحظة' },
   'common.status': { fr: 'Statut', en: 'Status', ar: 'الحالة' },
@@ -1475,6 +1476,33 @@ const messages: Record<string, Msg> = {
     fr: 'gagné, pas forcément encaissé',
     en: 'earned, not necessarily collected',
     ar: 'مكتسب، وليس بالضرورة محصَّلًا',
+  },
+  'cash.repaidTitle': {
+    fr: 'Remboursements de créances reçus',
+    en: 'Debt repayments received',
+    ar: 'تسديدات الديون المستلمة',
+  },
+  'cash.repaidHint': {
+    fr: '(compris dans l’encaissé)',
+    en: '(included in money collected)',
+    ar: '(مشمولة في المحصَّل)',
+  },
+  // Onglets + vue « remboursements reçus » (page Créances)
+  'creances.tab.debtors': { fr: 'Clients débiteurs', en: 'Debtors', ar: 'الزبائن المدينون' },
+  'creances.tab.repayments': {
+    fr: 'Remboursements reçus',
+    en: 'Repayments received',
+    ar: 'التسديدات المستلمة',
+  },
+  'repayments.count': {
+    fr: '{n} remboursement(s)',
+    en: '{n} repayment(s)',
+    ar: '{n} تسديد',
+  },
+  'repayments.empty': {
+    fr: 'Aucun remboursement sur cette période.',
+    en: 'No repayments in this period.',
+    ar: 'لا توجد تسديدات في هذه الفترة.',
   },
   'rapports.chartTitle': { fr: 'Évolution des ventes', en: 'Sales trend', ar: 'تطوّر المبيعات' },
   'rapports.chartSub': {

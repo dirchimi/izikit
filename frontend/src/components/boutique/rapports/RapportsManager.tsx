@@ -28,6 +28,8 @@ interface ReportData {
     collectedCash: number;
     collectedMobile: number;
     creditGranted: number;
+    repaidCash: number;
+    repaidMobile: number;
   };
   series: { label: string; value: number }[];
   topProducts: { rank: number; name: string; qty: number; ca: number }[];
@@ -118,6 +120,7 @@ export default function RapportsManager() {
       [],
       [`${t('cash.title')} — ${t('cash.cash')}`, summary.collectedCash],
       [`${t('cash.title')} — ${t('cash.mobile')}`, summary.collectedMobile],
+      [t('cash.repaidTitle'), summary.repaidCash + summary.repaidMobile],
       [t('cash.creditGranted'), summary.creditGranted],
       [],
       [t('rapports.topProducts')],
@@ -308,6 +311,19 @@ export default function RapportsManager() {
                     unit={t('common.fcfa')}
                     tone="text-warning"
                   />
+                </div>
+                {/* Remboursements de créances (sous-ensemble de l'encaissé). */}
+                <div className="border-border mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  <span className="text-muted-foreground font-body flex items-center gap-2 text-sm">
+                    <Icon i="hand-coins" size={15} className="text-success" />
+                    {t('cash.repaidTitle')}
+                  </span>
+                  <span className="font-body text-foreground text-sm font-bold">
+                    {formatFCFA(summary.repaidCash + summary.repaidMobile)} {t('common.fcfa')}
+                    <span className="text-muted-foreground ms-1 text-xs font-normal">
+                      {t('cash.repaidHint')}
+                    </span>
+                  </span>
                 </div>
               </div>
 

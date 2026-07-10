@@ -15,6 +15,7 @@ export interface ReportPdfInput {
   summary: ReportSummary;
   series: { label: string; value: number }[];
   topProducts: TopProduct[];
+  expensesByCategory: { category: string; amount: number }[];
   org: {
     name: string;
     city?: string | null;
@@ -55,6 +56,19 @@ const s = StyleSheet.create({
   },
   kpiLabel: { fontSize: 8, color: C.muted, textTransform: 'uppercase', marginBottom: 3 },
   kpiValue: { fontSize: 14, fontFamily: 'Inter', fontWeight: 700 },
+  kpiHint: { fontSize: 7, color: C.muted, marginTop: 2 },
+  // Lignes « légende → valeur » (encaissement)
+  lineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: C.line,
+  },
+  lineLabel: { flex: 1, color: C.ink },
+  lineSub: { fontSize: 8, color: C.muted },
+  lineVal: { fontFamily: 'Inter', fontWeight: 700 },
+  intro: { fontSize: 9, color: C.muted, marginTop: 4, lineHeight: 1.4 },
   // Tables
   th: {
     flexDirection: 'row',
@@ -113,33 +127,90 @@ function buildElement(input: ReportPdfInput) {
           </View>
         </View>
 
-        {/* KPI */}
+        <Text style={s.intro}>
+          Ce rapport résume l&apos;activité de la période. Le chiffre d&apos;affaires compte tout ce
+          qui a été vendu (crédit inclus) ; la section « Encaissement » montre l&apos;argent
+          réellement entré en caisse.
+        </Text>
+
+        {/* Résumé */}
+        <Text style={s.sectionTitle}>Résumé</Text>
         <View style={s.kpiWrap}>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Chiffre d&apos;affaires</Text>
             <Text style={[s.kpiValue, { color: C.brand }]}>{money(sm.revenue, cur)}</Text>
+            <Text style={s.kpiHint}>valeur vendue, crédit inclus</Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Ventes</Text>
             <Text style={s.kpiValue}>{String(sm.sales)}</Text>
+            <Text style={s.kpiHint}>nombre de transactions</Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Marge brute</Text>
             <Text style={s.kpiValue}>
               {money(sm.grossMargin, cur)} ({sm.marginPct} %)
             </Text>
+            <Text style={s.kpiHint}>CA − coût d&apos;achat des articles vendus</Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Dépenses</Text>
             <Text style={s.kpiValue}>{money(sm.expenses, cur)}</Text>
+            <Text style={s.kpiHint}>charges de la période</Text>
           </View>
           <View style={s.kpi}>
-            <Text style={s.kpiLabel}>Bénéfice net</Text>
+            <Text style={s.kpiLabel}>Bénéfice net estimé</Text>
             <Text style={[s.kpiValue, { color: sm.netProfit < 0 ? C.danger : C.brand }]}>
               {money(sm.netProfit, cur)}
             </Text>
+            <Text style={s.kpiHint}>gagné, pas forcément encaissé</Text>
           </View>
         </View>
+
+        {/* Encaissement (caisse) */}
+        <Text style={s.sectionTitle}>Encaissement (argent réellement entré)</Text>
+        <View style={s.lineRow}>
+          <View style={s.lineLabel}>
+            <Text>Espèces</Text>
+            <Text style={s.lineSub}>
+              dont remboursements de créances : {money(sm.repaidCash, cur)}
+            </Text>
+          </View>
+          <Text style={[s.lineVal, { color: C.brand }]}>{money(sm.collectedCash, cur)}</Text>
+        </View>
+        <View style={s.lineRow}>
+          <View style={s.lineLabel}>
+            <Text>Mobile money</Text>
+            <Text style={s.lineSub}>
+              dont remboursements de créances : {money(sm.repaidMobile, cur)}
+            </Text>
+          </View>
+          <Text style={s.lineVal}>{money(sm.collectedMobile, cur)}</Text>
+        </View>
+        <View style={s.lineRow}>
+          <View style={s.lineLabel}>
+            <Text>Vendu à crédit</Text>
+            <Text style={s.lineSub}>non encaissé — devient une créance</Text>
+          </View>
+          <Text style={[s.lineVal, { color: C.danger }]}>{money(sm.creditGranted, cur)}</Text>
+        </View>
+
+        {/* Dépenses par catégorie */}
+        {input.expensesByCategory.length > 0 ? (
+          <View>
+            <Text style={s.sectionTitle}>Dépenses par catégorie</Text>
+            <View style={s.th}>
+              <Text style={[s.cLabel, s.muted]}>Catégorie</Text>
+              <Text style={[s.cVal, s.muted]}>Montant</Text>
+            </View>
+            {input.expensesByCategory.map((e, i) => (
+              <View key={`${e.category}-${i}`} style={s.tr}>
+                <Text style={s.cLabel}>{e.category}</Text>
+                <Text style={s.cVal}>{money(e.amount, cur)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* Top produits */}
         <Text style={s.sectionTitle}>Top produits</Text>

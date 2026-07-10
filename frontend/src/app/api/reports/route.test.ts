@@ -77,6 +77,9 @@ describe('GET /api/reports', () => {
     expect(body.summary.collectedCash).toBe(9000);
     expect(body.summary.collectedMobile).toBe(2500);
     expect(body.summary.creditGranted).toBe(3000);
+    // Remboursements isolés (compris dans collectedCash).
+    expect(body.summary.repaidCash).toBe(1000);
+    expect(body.summary.repaidMobile).toBe(0);
     expect(body.topProducts[0].name).toBe('Riz'); // CA 12000 > Eau 1500
     expect(body.topProducts[0].ca).toBe(12000);
     expect(Array.isArray(body.series)).toBe(true);

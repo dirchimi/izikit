@@ -30,6 +30,11 @@ export interface ReportSummary {
   collectedCash: number;
   collectedMobile: number;
   creditGranted: number;
+  // Sous-ensemble de l'encaissé : remboursements de créances reçus sur la
+  // période (anciennes dettes réglées), par méthode. `repaidCash`/`repaidMobile`
+  // sont DÉJÀ compris dans `collectedCash`/`collectedMobile`.
+  repaidCash: number;
+  repaidMobile: number;
 }
 
 export interface ReportResult {
@@ -123,10 +128,15 @@ async function computeForWindow(
   }
 
   // Les remboursements de créances sont de l'argent qui entre AUSSI en caisse.
+  // On les garde isolés (repaid*) tout en les ajoutant à l'encaissé (collected*).
+  let repaidCash = 0;
+  let repaidMobile = 0;
   for (const g of repayGroups) {
-    if (g.method === 'CASH') collectedCash += g._sum.amount ?? 0;
-    else if (g.method === 'MOBILE') collectedMobile += g._sum.amount ?? 0;
+    if (g.method === 'CASH') repaidCash += g._sum.amount ?? 0;
+    else if (g.method === 'MOBILE') repaidMobile += g._sum.amount ?? 0;
   }
+  collectedCash += repaidCash;
+  collectedMobile += repaidMobile;
 
   const grossMargin = revenue - cogs;
   const expenses = expenseAgg._sum.amount ?? 0;
@@ -144,6 +154,8 @@ async function computeForWindow(
       collectedCash,
       collectedMobile,
       creditGranted,
+      repaidCash,
+      repaidMobile,
     },
     series,
     topProducts: rankTopProducts(allItems),

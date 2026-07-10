@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
+import { prisma } from '@/lib/server/prisma';
 import { ensureBoutique, getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { parsePeriod, parseDateRange, type Period } from '@/lib/server/reports/helpers';
 import { computeReport, computeReportRange } from '@/lib/server/reports/compute';
@@ -71,6 +72,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       fileTag = period;
     }
 
+    // Détail des dépenses par catégorie (même fenêtre que le rapport).
+    const expenseGroups = (await prisma.expense.groupBy({
+      by: ['category'],
+      where: {
+        organizationId: primary.organizationId,
+        occurredAt: { gte: new Date(report.range.from), lt: new Date(report.range.to) },
+      },
+      _sum: { amount: true },
+    })) as unknown as Array<{ category: string | null; _sum: { amount: number | null } }>;
+    const expensesByCategory = expenseGroups
+      .map((g) => ({ category: g.category || 'Autre', amount: g._sum.amount ?? 0 }))
+      .filter((e) => e.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+
     const buffer = await renderReportPdf({
       periodLabel,
       rangeLabel: rangeLabel(report.range.from, report.range.to),
@@ -78,6 +93,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       summary: report.summary,
       series: report.series,
       topProducts: report.topProducts,
+      expensesByCategory,
       org: {
         name: boutique.organization.name,
         city: boutique.settings.city,
