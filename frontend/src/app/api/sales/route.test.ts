@@ -153,6 +153,49 @@ describe('POST /api/sales (checkout)', () => {
     expect(prismaMock.sale.create).not.toHaveBeenCalled();
   });
 
+  it('409 si deux lignes du MÊME produit dépassent le stock une fois cumulées (double scan)', async () => {
+    // Stock = 5. Deux lignes de 3 → 3 ≤ 5 ligne par ligne, mais 6 > 5 cumulé.
+    // Sans agrégation, la vente passait et le stock tombait à −1.
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 5 },
+    ] as never);
+    const res = await POST(
+      makePost({
+        method: 'cash',
+        items: [
+          { productId: 'p1', qty: 3 },
+          { productId: 'p1', qty: 3 },
+        ],
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('INSUFFICIENT_STOCK');
+    expect(prismaMock.sale.create).not.toHaveBeenCalled();
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+  });
+
+  it('accepte deux lignes du même produit si le cumul tient dans le stock', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 5 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({
+        method: 'cash',
+        items: [
+          { productId: 'p1', qty: 2 },
+          { productId: 'p1', qty: 3 },
+        ],
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect((await res.json()).sale.total).toBe(30000); // 5 × 6000
+  });
+
   it('404 PRODUCT_NOT_FOUND si un produit n’est pas de la boutique', async () => {
     prismaMock.product.findMany.mockResolvedValueOnce([] as never);
     const res = await POST(makePost({ method: 'cash', items: [{ productId: 'pX', qty: 1 }] }));

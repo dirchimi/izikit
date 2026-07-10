@@ -1,7 +1,7 @@
 // Phase 8 (post-v1) — GET /api/reports/pdf?period=today|week|month|year.
 // Rend le rapport d'activité en PDF (téléchargeable / partageable). Réutilise
 // computeReport (même données que GET /api/reports) + renderReportPdf.
-// Org-scopé, rôle min MEMBER.
+// Org-scopé, rôle min ADMIN (données financières réservées Patron/Manager).
 export const runtime = 'nodejs';
 
 import 'server-only';

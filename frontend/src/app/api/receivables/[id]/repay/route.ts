@@ -99,8 +99,12 @@ export async function POST(
             return { kind: 'CUSTOMER_NOT_FOUND' };
           }
 
+          // Seules les créances RÉELLEMENT dues reçoivent le remboursement. On
+          // liste explicitement OPEN/PARTIAL : `status: { not: 'PAID' }` incluait
+          // à tort les créances CANCELLED (vente annulée), qui absorbaient alors
+          // le paiement — et pouvaient même être « ressuscitées » en PARTIAL.
           const open = await tx.receivable.findMany({
-            where: { customerId, organizationId: orgId, status: { not: 'PAID' } },
+            where: { customerId, organizationId: orgId, status: { in: ['OPEN', 'PARTIAL'] } },
             orderBy: { createdAt: 'asc' },
             select: { id: true, amount: true, amountPaid: true },
           });

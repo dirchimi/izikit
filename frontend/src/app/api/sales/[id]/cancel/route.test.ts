@@ -83,7 +83,7 @@ describe('POST /api/sales/[id]/cancel', () => {
         { productId: 'p1', qty: 2 },
         { productId: 'p2', qty: 3 },
       ],
-      receivable: { id: 'r1' },
+      receivable: { id: 'r1', amountPaid: 0 },
     } as never);
     prismaMock.product.findMany.mockResolvedValueOnce([{ id: 'p1' }, { id: 'p2' }] as never);
     prismaMock.product.update.mockResolvedValue({} as never);
@@ -121,6 +121,25 @@ describe('POST /api/sales/[id]/cancel', () => {
       }),
     );
     expect(prismaMock.sale.delete).not.toHaveBeenCalled();
+  });
+
+  it('409 si la vente à crédit a déjà reçu un remboursement (pas d’orphelins)', async () => {
+    prismaMock.sale.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      number: 'V-0010',
+      status: 'ACTIVE',
+      createdAt: new Date(),
+      items: [{ productId: 'p1', qty: 1 }],
+      receivable: { id: 'r1', amountPaid: 4000 }, // déjà partiellement remboursée
+    } as never);
+
+    const res = await POST(makeReq(), params('s1'));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('CREDIT_ALREADY_REPAID');
+    // Rien n'est modifié : ni stock, ni créance, ni vente.
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+    expect(prismaMock.receivable.update).not.toHaveBeenCalled();
+    expect(prismaMock.sale.update).not.toHaveBeenCalled();
   });
 
   it('vente au comptant (sans créance) : ne touche aucune créance', async () => {

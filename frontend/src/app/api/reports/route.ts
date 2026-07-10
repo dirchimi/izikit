@@ -9,7 +9,7 @@
 //   netProfit   = grossMargin − expenses
 //   series[]    = CA par compartiment (jour/mois) pour le graphe
 //   topProducts = top 5 produits par CA
-// Org-scopé, rôle min MEMBER.
+// Org-scopé, rôle min ADMIN (données financières réservées Patron/Manager).
 export const runtime = 'nodejs';
 
 import 'server-only';

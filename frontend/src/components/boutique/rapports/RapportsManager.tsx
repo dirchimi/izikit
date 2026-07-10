@@ -122,6 +122,7 @@ export default function RapportsManager() {
       [`${t('cash.title')} — ${t('cash.mobile')}`, summary.collectedMobile],
       [t('cash.repaidTitle'), summary.repaidCash + summary.repaidMobile],
       [t('cash.creditGranted'), summary.creditGranted],
+      [t('cash.netCash'), summary.collectedCash - summary.expenses],
       [],
       [t('rapports.topProducts')],
       ['#', t('common.product'), t('common.qty'), t('common.ca')],
@@ -323,6 +324,24 @@ export default function RapportsManager() {
                     <span className="text-muted-foreground ms-1 text-xs font-normal">
                       {t('cash.repaidHint')}
                     </span>
+                  </span>
+                </div>
+                {/* Solde net : ce qui reste réellement en caisse (espèces) une fois
+                    les dépenses payées. = espèces encaissées − dépenses. */}
+                <div className="border-border mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  <span className="text-foreground font-body flex items-center gap-2 text-sm font-semibold">
+                    <Icon i="wallet" size={16} className="text-primary" />
+                    {t('cash.netCash')}
+                    <span className="text-muted-foreground text-xs font-normal">
+                      {t('cash.netCashHint')}
+                    </span>
+                  </span>
+                  <span
+                    className={`font-body text-base font-bold ${
+                      summary.collectedCash - summary.expenses < 0 ? 'text-danger' : 'text-primary'
+                    }`}
+                  >
+                    {formatFCFA(summary.collectedCash - summary.expenses)} {t('common.fcfa')}
                   </span>
                 </div>
               </div>

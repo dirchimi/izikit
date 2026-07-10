@@ -5,7 +5,7 @@
 //   weekly          : CA des 7 derniers jours, normalisé 0–100 pour le mini-graphe
 //   stockAlerts     : produits sous le seuil (rupture d'abord)
 //   recentSales     : 6 dernières ventes
-// Org-scopé, rôle min MEMBER.
+// Org-scopé, rôle min ADMIN (données financières réservées Patron/Manager).
 export const runtime = 'nodejs';
 
 import 'server-only';

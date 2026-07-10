@@ -137,6 +137,26 @@ export default function DashboardManager() {
                         tone="text-warning"
                       />
                     </div>
+                    {/* Solde net : espèces réellement en caisse après dépenses du jour. */}
+                    <div className="border-border mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+                      <span className="text-foreground font-body flex items-center gap-2 text-sm font-semibold">
+                        <Icon i="wallet" size={16} className="text-primary" />
+                        {t('cash.netCash')}
+                        <span className="text-muted-foreground text-xs font-normal">
+                          {t('cash.netCashHint')}
+                        </span>
+                      </span>
+                      <span
+                        className={`font-body text-lg font-bold ${
+                          data.today.collectedCash - data.today.expenses < 0
+                            ? 'text-danger'
+                            : 'text-primary'
+                        }`}
+                      >
+                        {formatFCFA(data.today.collectedCash - data.today.expenses)}{' '}
+                        {t('common.fcfa')}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Graphe + alertes stock */}

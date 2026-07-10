@@ -31,6 +31,7 @@ type CancelResult =
   | { kind: 'NOT_FOUND' }
   | { kind: 'ALREADY_CANCELLED' }
   | { kind: 'TOO_LATE' }
+  | { kind: 'CREDIT_REPAID' }
   | { kind: 'OK'; number: string };
 
 export async function POST(
@@ -82,7 +83,7 @@ export async function POST(
               status: true,
               createdAt: true,
               items: { select: { productId: true, qty: true } },
-              receivable: { select: { id: true } },
+              receivable: { select: { id: true, amountPaid: true } },
             },
           });
           if (!sale || sale.organizationId !== orgId) return { kind: 'NOT_FOUND' };
@@ -90,6 +91,13 @@ export async function POST(
           // Au-delà de 24h, l'annulation est refusée (règle métier).
           if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
             return { kind: 'TOO_LATE' };
+          }
+          // Une vente à crédit déjà (partiellement) remboursée ne peut pas être
+          // annulée : annuler créerait des remboursements « orphelins » (argent
+          // reçu, mais plus aucune vente en face → écart de caisse). Le Patron
+          // doit d'abord traiter le remboursement/avoir avec le client.
+          if (sale.receivable && sale.receivable.amountPaid > 0) {
+            return { kind: 'CREDIT_REPAID' };
           }
 
           // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
@@ -165,6 +173,16 @@ export async function POST(
     if (result.kind === 'TOO_LATE') {
       return NextResponse.json(
         { error: 'CANCEL_WINDOW_EXPIRED', message: 'Annulation possible seulement dans les 24h' },
+        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+    if (result.kind === 'CREDIT_REPAID') {
+      return NextResponse.json(
+        {
+          error: 'CREDIT_ALREADY_REPAID',
+          message:
+            'Cette vente à crédit a déjà reçu un remboursement. Gérez d’abord le remboursement avec le client avant d’annuler.',
+        },
         { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }

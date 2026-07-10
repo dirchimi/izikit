@@ -194,6 +194,17 @@ function buildElement(input: ReportPdfInput) {
           </View>
           <Text style={[s.lineVal, { color: C.danger }]}>{money(sm.creditGranted, cur)}</Text>
         </View>
+        <View style={[s.lineRow, { borderBottomWidth: 0 }]}>
+          <View style={s.lineLabel}>
+            <Text>Reste en caisse (espèces)</Text>
+            <Text style={s.lineSub}>espèces encaissées − dépenses de la période</Text>
+          </View>
+          <Text
+            style={[s.lineVal, { color: sm.collectedCash - sm.expenses < 0 ? C.danger : C.brand }]}
+          >
+            {money(sm.collectedCash - sm.expenses, cur)}
+          </Text>
+        </View>
 
         {/* Dépenses par catégorie */}
         {input.expensesByCategory.length > 0 ? (

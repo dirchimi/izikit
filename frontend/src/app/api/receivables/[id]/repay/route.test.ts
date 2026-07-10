@@ -122,6 +122,33 @@ describe('POST /api/receivables/[id]/repay', () => {
     expect(body.remainingDebt).toBe(0);
   });
 
+  it('n’impute QUE les créances OPEN/PARTIAL (exclut les créances annulées)', async () => {
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'BECHIR',
+      phone: null,
+    } as never);
+    prismaMock.receivable.findMany.mockResolvedValueOnce([
+      { id: 'r-open', amount: 5000, amountPaid: 0 },
+    ] as never);
+    prismaMock.receivable.update.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValue({ id: 'rep-x' } as never);
+
+    await POST(makePost({ amount: 5000, method: 'cash' }), { params });
+
+    // Le paiement ne doit jamais tomber dans une créance CANCELLED : la requête
+    // liste explicitement les statuts dus, elle n'utilise plus `not: 'PAID'`.
+    expect(prismaMock.receivable.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          customerId: 'c1',
+          organizationId: 'org1',
+          status: { in: ['OPEN', 'PARTIAL'] },
+        }),
+      }),
+    );
+  });
+
   it('409 NO_DEBT si aucune créance ouverte', async () => {
     prismaMock.customer.findUnique.mockResolvedValueOnce({ organizationId: 'org1' } as never);
     prismaMock.receivable.findMany.mockResolvedValueOnce([] as never);

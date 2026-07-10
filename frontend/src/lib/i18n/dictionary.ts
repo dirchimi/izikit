@@ -1487,6 +1487,12 @@ const messages: Record<string, Msg> = {
     en: '(included in money collected)',
     ar: '(مشمولة في المحصَّل)',
   },
+  'cash.netCash': { fr: 'Reste en caisse', en: 'Cash on hand', ar: 'الرصيد في الصندوق' },
+  'cash.netCashHint': {
+    fr: '(espèces − dépenses)',
+    en: '(cash − expenses)',
+    ar: '(النقد − المصاريف)',
+  },
   // Onglets + vue « remboursements reçus » (page Créances)
   'creances.tab.debtors': { fr: 'Clients débiteurs', en: 'Debtors', ar: 'الزبائن المدينون' },
   'creances.tab.repayments': {

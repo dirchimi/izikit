@@ -201,10 +201,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           const unitPriceFor = (p: { sellPrice: number; prixGros: number }, wholesale?: boolean) =>
             wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice;
 
+          // Agrège les quantités par produit AVANT de contrôler le stock. Deux
+          // lignes du même article (ex. double scan) doivent être vérifiées
+          // ENSEMBLE : sinon chacune passe le contrôle isolément (qty ligne ≤ stock)
+          // alors que le décrément cumulé ferait passer le stock négatif.
+          const neededByProduct = new Map<string, number>();
           for (const item of items) {
-            const p = byId.get(item.productId);
-            if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId: item.productId };
-            if (item.qty > p.qty) return { kind: 'INSUFFICIENT', productId: item.productId };
+            neededByProduct.set(
+              item.productId,
+              (neededByProduct.get(item.productId) ?? 0) + item.qty,
+            );
+          }
+          for (const [productId, needed] of neededByProduct) {
+            const p = byId.get(productId);
+            if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId };
+            if (needed > p.qty) return { kind: 'INSUFFICIENT', productId };
           }
 
           // Résolution du client (création à la volée si nom fourni sans id).
