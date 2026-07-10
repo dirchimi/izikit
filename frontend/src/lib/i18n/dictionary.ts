@@ -1459,6 +1459,23 @@ const messages: Record<string, Msg> = {
     en: 'Est. net profit',
     ar: 'صافي الربح المقدّر',
   },
+  // Caisse miroir (argent réellement encaissé)
+  'cash.title': { fr: 'Argent encaissé', en: 'Money collected', ar: 'المبلغ المحصَّل' },
+  'cash.today': { fr: 'Encaissé aujourd’hui', en: 'Collected today', ar: 'المحصَّل اليوم' },
+  'cash.cash': { fr: 'Espèces', en: 'Cash', ar: 'نقدًا' },
+  'cash.mobile': { fr: 'Mobile money', en: 'Mobile money', ar: 'أموال الهاتف' },
+  'cash.pending': { fr: 'En attente (crédit)', en: 'Pending (credit)', ar: 'قيد الانتظار (دين)' },
+  'cash.creditGranted': { fr: 'Vendu à crédit', en: 'Sold on credit', ar: 'مبيع بالدين' },
+  'cash.revenueHint': {
+    fr: 'valeur vendue, crédit inclus',
+    en: 'value sold, credit included',
+    ar: 'قيمة المبيعات، بما فيها الدين',
+  },
+  'cash.profitHint': {
+    fr: 'gagné, pas forcément encaissé',
+    en: 'earned, not necessarily collected',
+    ar: 'مكتسب، وليس بالضرورة محصَّلًا',
+  },
   'rapports.chartTitle': { fr: 'Évolution des ventes', en: 'Sales trend', ar: 'تطوّر المبيعات' },
   'rapports.chartSub': {
     fr: 'Cette semaine · en milliers FCFA',

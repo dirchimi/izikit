@@ -6,6 +6,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import TopBar from '@/components/boutique/TopBar';
 import ScreenTopActions from '@/components/boutique/ScreenTopActions';
 import KpiCard from '@/components/boutique/KpiCard';
+import CashTile from '@/components/boutique/CashTile';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
@@ -24,6 +25,9 @@ interface ReportData {
     marginPct: number;
     expenses: number;
     netProfit: number;
+    collectedCash: number;
+    collectedMobile: number;
+    creditGranted: number;
   };
   series: { label: string; value: number }[];
   topProducts: { rank: number; name: string; qty: number; ca: number }[];
@@ -111,6 +115,10 @@ export default function RapportsManager() {
       ['%', summary.marginPct],
       [t('nav.depenses'), summary.expenses],
       [t('rapports.kpi.netProfit'), summary.netProfit],
+      [],
+      [`${t('cash.title')} — ${t('cash.cash')}`, summary.collectedCash],
+      [`${t('cash.title')} — ${t('cash.mobile')}`, summary.collectedMobile],
+      [t('cash.creditGranted'), summary.creditGranted],
       [],
       [t('rapports.topProducts')],
       ['#', t('common.product'), t('common.qty'), t('common.ca')],
@@ -242,7 +250,7 @@ export default function RapportsManager() {
                   accent
                   label={t('rapports.kpi.revenue')}
                   value={formatFCFA(summary.revenue)}
-                  sublabel={t('common.fcfa')}
+                  sublabel={`${t('common.fcfa')} · ${t('cash.revenueHint')}`}
                 />
                 <KpiCard
                   label={t('rapports.kpi.sales')}
@@ -268,9 +276,39 @@ export default function RapportsManager() {
                 <KpiCard
                   label={t('rapports.kpi.netProfit')}
                   value={formatFCFA(summary.netProfit)}
-                  sublabel={t('common.fcfa')}
+                  sublabel={`${t('common.fcfa')} · ${t('cash.profitHint')}`}
                   valueClass={summary.netProfit < 0 ? 'text-danger' : 'text-primary'}
                 />
+              </div>
+
+              {/* Argent réellement encaissé (caisse miroir) */}
+              <div className="bg-surface border-border rounded-lg border px-5 py-5 md:px-6">
+                <h2 className="font-headings text-foreground mb-4 text-base font-bold">
+                  {t('cash.title')}
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <CashTile
+                    icon="banknote"
+                    label={t('cash.cash')}
+                    value={formatFCFA(summary.collectedCash)}
+                    unit={t('common.fcfa')}
+                    tone="text-primary"
+                  />
+                  <CashTile
+                    icon="smartphone"
+                    label={t('cash.mobile')}
+                    value={formatFCFA(summary.collectedMobile)}
+                    unit={t('common.fcfa')}
+                    tone="text-blue-600"
+                  />
+                  <CashTile
+                    icon="hourglass"
+                    label={t('cash.creditGranted')}
+                    value={formatFCFA(summary.creditGranted)}
+                    unit={t('common.fcfa')}
+                    tone="text-warning"
+                  />
+                </div>
               </div>
 
               {/* Graphe + Top produits */}

@@ -23,6 +23,13 @@ export interface ReportSummary {
   marginPct: number;
   expenses: number;
   netProfit: number;
+  // « Caisse miroir » : argent RÉELLEMENT encaissé sur la période (≠ CA, qui
+  // compte aussi le crédit). = parts espèces/mobile des ventes + remboursements
+  // de créances reçus dans la même méthode. `creditGranted` = vendu à crédit
+  // (donc pas encore encaissé) sur la période.
+  collectedCash: number;
+  collectedMobile: number;
+  creditGranted: number;
 }
 
 export interface ReportResult {
@@ -59,12 +66,16 @@ async function computeForWindow(
 ): Promise<ReportResult> {
   const { from, to } = window;
 
-  const [sales, expenseAgg] = await Promise.all([
+  const [sales, expenseAgg, repayGroups] = await Promise.all([
     prisma.sale.findMany({
       // Les ventes annulées ne comptent ni dans le CA ni dans la marge.
       where: { organizationId: orgId, status: 'ACTIVE', createdAt: { gte: from, lt: to } },
       select: {
         total: true,
+        // Parts par mode de paiement → argent réellement encaissé vs crédit.
+        cashAmount: true,
+        mobileAmount: true,
+        creditAmount: true,
         createdAt: true,
         items: {
           select: { name: true, qty: true, unitPrice: true, buyPrice: true, productId: true },
@@ -75,15 +86,27 @@ async function computeForWindow(
       where: { organizationId: orgId, occurredAt: { gte: from, lt: to } },
       _sum: { amount: true },
     }),
+    // Remboursements de créances reçus sur la période, par méthode (CASH/MOBILE).
+    prisma.repayment.groupBy({
+      by: ['method'],
+      where: { organizationId: orgId, createdAt: { gte: from, lt: to } },
+      _sum: { amount: true },
+    }) as unknown as Promise<Array<{ method: string; _sum: { amount: number | null } }>>,
   ]);
 
   let revenue = 0;
   let cogs = 0;
+  let collectedCash = 0;
+  let collectedMobile = 0;
+  let creditGranted = 0;
   const series = buckets.map((b) => ({ label: b.label, value: 0 }));
   const allItems: AggItem[] = [];
 
   for (const sale of sales) {
     revenue += sale.total;
+    collectedCash += sale.cashAmount ?? 0;
+    collectedMobile += sale.mobileAmount ?? 0;
+    creditGranted += sale.creditAmount ?? 0;
     const createdAt = sale.createdAt instanceof Date ? sale.createdAt : new Date(sale.createdAt);
     const idx = bucketIndexFor(buckets, createdAt);
     const slot = idx >= 0 ? series[idx] : undefined;
@@ -99,6 +122,12 @@ async function computeForWindow(
     }
   }
 
+  // Les remboursements de créances sont de l'argent qui entre AUSSI en caisse.
+  for (const g of repayGroups) {
+    if (g.method === 'CASH') collectedCash += g._sum.amount ?? 0;
+    else if (g.method === 'MOBILE') collectedMobile += g._sum.amount ?? 0;
+  }
+
   const grossMargin = revenue - cogs;
   const expenses = expenseAgg._sum.amount ?? 0;
 
@@ -112,6 +141,9 @@ async function computeForWindow(
       marginPct: marginPct(grossMargin, revenue),
       expenses,
       netProfit: grossMargin - expenses,
+      collectedCash,
+      collectedMobile,
+      creditGranted,
     },
     series,
     topProducts: rankTopProducts(allItems),

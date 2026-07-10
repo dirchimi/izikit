@@ -1,5 +1,6 @@
 // GET /api/dashboard — agrégat du tableau de bord (vraies données, lecture seule).
 //   today/yesterday : CA, nb ventes, dépenses (via computeReport) pour la tendance
+//   today.collected*: argent réellement encaissé aujourd'hui (espèces / mobile)
 //   receivablesOpen : Σ (amount - amountPaid) des créances
 //   weekly          : CA des 7 derniers jours, normalisé 0–100 pour le mini-graphe
 //   stockAlerts     : produits sous le seuil (rupture d'abord)
@@ -99,6 +100,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           revenue: todayR.summary.revenue,
           sales: todayR.summary.sales,
           expenses: todayR.summary.expenses,
+          // Caisse miroir : argent réellement encaissé aujourd'hui (≠ CA) +
+          // part vendue à crédit (non encaissée).
+          collectedCash: todayR.summary.collectedCash,
+          collectedMobile: todayR.summary.collectedMobile,
+          creditGranted: todayR.summary.creditGranted,
         },
         yesterday: {
           revenue: yestR.summary.revenue,

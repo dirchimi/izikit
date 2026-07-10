@@ -27,12 +27,16 @@ function makeGet(period = 'month'): NextRequest {
   return new NextRequest(`http://test/api/reports?period=${period}`, { method: 'GET' });
 }
 
+const asMock = (fn: unknown) => fn as unknown as { mockResolvedValue: (v: unknown) => void };
+
 beforeEach(() => {
   vi.clearAllMocks();
   __cookieStore.clear();
   mockRequireAuth.mockResolvedValue(authedCtx);
   mockPrimary.mockResolvedValue({ organizationId: 'org1', role: 'OWNER' });
   mockRequireOrgRole.mockResolvedValue(orgCtx);
+  // Remboursements de créances (caisse miroir) — vide par défaut.
+  asMock(prismaMock.repayment.groupBy).mockResolvedValue([]);
 });
 
 describe('GET /api/reports', () => {
@@ -41,6 +45,10 @@ describe('GET /api/reports', () => {
     prismaMock.sale.findMany.mockResolvedValueOnce([
       {
         total: 13500,
+        // Vente mixte : 8000 espèces + 2500 mobile + 3000 crédit = 13500.
+        cashAmount: 8000,
+        mobileAmount: 2500,
+        creditAmount: 3000,
         createdAt: now,
         items: [
           { name: 'Riz', qty: 2, unitPrice: 6000, buyPrice: 4500, productId: 'p1' },
@@ -49,6 +57,10 @@ describe('GET /api/reports', () => {
       },
     ] as never);
     prismaMock.expense.aggregate.mockResolvedValueOnce({ _sum: { amount: 4000 } } as never);
+    // Un remboursement de créance : 1000 en espèces → entre aussi dans l'encaissé.
+    asMock(prismaMock.repayment.groupBy).mockResolvedValue([
+      { method: 'CASH', _sum: { amount: 1000 } },
+    ]);
 
     const res = await GET(makeGet('month'));
     expect(res.status).toBe(200);
@@ -60,6 +72,11 @@ describe('GET /api/reports', () => {
     expect(body.summary.marginPct).toBe(27); // round(3600/13500*100)
     expect(body.summary.expenses).toBe(4000);
     expect(body.summary.netProfit).toBe(-400); // 3600 − 4000
+    // Caisse miroir : espèces = 8000 (vente) + 1000 (remboursement) = 9000 ;
+    // mobile = 2500 ; crédit accordé = 3000 (non encaissé).
+    expect(body.summary.collectedCash).toBe(9000);
+    expect(body.summary.collectedMobile).toBe(2500);
+    expect(body.summary.creditGranted).toBe(3000);
     expect(body.topProducts[0].name).toBe('Riz'); // CA 12000 > Eau 1500
     expect(body.topProducts[0].ca).toBe(12000);
     expect(Array.isArray(body.series)).toBe(true);

@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
 import LiveDateTime from '@/components/boutique/LiveDateTime';
 import StatCard from '@/components/boutique/StatCard';
+import CashTile from '@/components/boutique/CashTile';
 import MiniBarChart from '@/components/boutique/MiniBarChart';
 import StockAlertRow from '@/components/boutique/StockAlertRow';
 import RecentSaleRow from '@/components/boutique/RecentSaleRow';
@@ -14,7 +15,14 @@ import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
 
 interface DashboardData {
-  today: { revenue: number; sales: number; expenses: number };
+  today: {
+    revenue: number;
+    sales: number;
+    expenses: number;
+    collectedCash: number;
+    collectedMobile: number;
+    creditGranted: number;
+  };
   yesterday: { revenue: number; sales: number; expenses: number };
   receivablesOpen: number;
   weekly: { label: string; value: number }[];
@@ -94,6 +102,41 @@ export default function DashboardManager() {
                       unit={t('common.fcfa')}
                       icon="wallet"
                     />
+                  </div>
+
+                  {/* Argent réellement encaissé aujourd'hui (caisse miroir) */}
+                  <div className="bg-surface border-border rounded-lg border px-6 py-5">
+                    <div className="mb-4">
+                      <h2 className="font-headings text-foreground text-base font-bold">
+                        {t('cash.today')}
+                      </h2>
+                      <p className="text-muted-foreground mt-0.5 text-xs">
+                        {t('cash.revenueHint')}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <CashTile
+                        icon="banknote"
+                        label={t('cash.cash')}
+                        value={formatFCFA(data.today.collectedCash)}
+                        unit={t('common.fcfa')}
+                        tone="text-primary"
+                      />
+                      <CashTile
+                        icon="smartphone"
+                        label={t('cash.mobile')}
+                        value={formatFCFA(data.today.collectedMobile)}
+                        unit={t('common.fcfa')}
+                        tone="text-blue-600"
+                      />
+                      <CashTile
+                        icon="hourglass"
+                        label={t('cash.creditGranted')}
+                        value={formatFCFA(data.today.creditGranted)}
+                        unit={t('common.fcfa')}
+                        tone="text-warning"
+                      />
+                    </div>
                   </div>
 
                   {/* Graphe + alertes stock */}
