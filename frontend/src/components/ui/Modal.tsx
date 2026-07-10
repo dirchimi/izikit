@@ -34,6 +34,14 @@ export default function Modal({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
+  // `onClose` est souvent une fonction recréée à chaque rendu du parent. Si
+  // l'effet en dépendait, il se relancerait à CHAQUE frappe dans un champ de la
+  // modale et rappellerait `panelRef.focus()` → le focus quitterait l'input à
+  // chaque lettre. On garde la dernière version dans une ref et l'effet ne
+  // dépend plus que de `open`.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     // Restaure le focus sur l'élément déclencheur à la fermeture.
@@ -41,7 +49,7 @@ export default function Modal({
 
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       // Piège de focus : Tab boucle à l'intérieur du panneau (a11y clavier).
@@ -74,7 +82,7 @@ export default function Modal({
       document.body.style.overflow = prevOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === 'undefined') return null;
 
