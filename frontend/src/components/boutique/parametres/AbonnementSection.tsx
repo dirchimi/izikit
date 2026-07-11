@@ -43,6 +43,8 @@ interface SubResp {
   daysLeft: number;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   payments: Payment[];
+  /** Compte interne / offert : accès gratuit permanent (aucun paiement requis). */
+  internal?: boolean;
 }
 
 const STATUS_TONE: Record<SubStatus, string> = {
@@ -160,7 +162,21 @@ export default function AbonnementSection() {
 
   return (
     <AsyncState loading={loading} error={error} onRetry={refresh} isEmpty={!data}>
-      {data && (
+      {data && data.internal && (
+        <div className="bg-surface border-border flex flex-col gap-3 rounded-lg border p-5">
+          <div className="flex items-center gap-2">
+            <Icon i="gift" size={18} className="text-success" />
+            <h3 className="font-headings text-foreground text-base font-bold">
+              {t('sub.internal.title')}
+            </h3>
+            <span className="bg-success/15 text-success font-body ml-auto rounded-full px-3 py-1 text-xs font-bold">
+              {t('sub.status.active')}
+            </span>
+          </div>
+          <p className="text-muted-foreground font-body text-sm">{t('sub.internal.body')}</p>
+        </div>
+      )}
+      {data && !data.internal && (
         <div className="flex flex-col gap-6">
           {/* ── Carte statut ─────────────────────────────────────────── */}
           <div className="bg-surface border-border flex flex-col gap-4 rounded-lg border p-5">

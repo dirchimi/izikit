@@ -34,15 +34,22 @@ const messages: Record<string, Msg> = {
   'pwa.install.cta': { fr: 'Installer', en: 'Install', ar: 'تثبيت' },
   'pwa.install.later': { fr: 'Plus tard', en: 'Later', ar: 'لاحقًا' },
   // iOS/Safari : pas d'installation automatique possible → consigne manuelle.
+  // Apple interdit de déclencher l'ajout depuis la page : le client DOIT passer
+  // par le bouton Partager de Safari (barre du bas), d'où les étapes explicites.
   'pwa.ios.title': {
-    fr: 'Ajouter à l’écran d’accueil',
-    en: 'Add to home screen',
-    ar: 'أضِف إلى الشاشة الرئيسية',
+    fr: 'Installer sur votre iPhone',
+    en: 'Install on your iPhone',
+    ar: 'ثبّت على جهاز iPhone',
   },
-  'pwa.ios.body': {
-    fr: 'Appuie sur Partager, puis « Sur l’écran d’accueil ».',
-    en: 'Tap Share, then “Add to Home Screen”.',
-    ar: 'اضغط مشاركة، ثم «أضف إلى الشاشة الرئيسية».',
+  'pwa.ios.step1': {
+    fr: 'Touchez le bouton Partager de Safari, en bas de l’écran',
+    en: 'Tap Safari’s Share button at the bottom of the screen',
+    ar: 'اضغط زر المشاركة في Safari بأسفل الشاشة',
+  },
+  'pwa.ios.step2': {
+    fr: 'Faites défiler et choisissez « Sur l’écran d’accueil »',
+    en: 'Scroll and choose “Add to Home Screen”',
+    ar: 'مرّر واختر «أضف إلى الشاشة الرئيسية»',
   },
   'receipt.title': { fr: 'Reçu', en: 'Receipt', ar: 'إيصال' },
   'receipt.print': { fr: 'Imprimer', en: 'Print', ar: 'طباعة' },
@@ -2031,6 +2038,16 @@ const messages: Record<string, Msg> = {
     fr: 'Vous économisez {amount}.',
     en: 'You save {amount}.',
     ar: 'أنت توفّر {amount}.',
+  },
+  'sub.internal.title': {
+    fr: 'Accès offert',
+    en: 'Complimentary access',
+    ar: 'وصول مجاني',
+  },
+  'sub.internal.body': {
+    fr: 'Votre boutique bénéficie d’un accès gratuit et permanent. Aucun paiement n’est requis.',
+    en: 'Your shop has free, permanent access. No payment is required.',
+    ar: 'متجرك يتمتع بوصول مجاني ودائم. لا حاجة لأي دفع.',
   },
   'sub.banner.trialEnding': {
     fr: 'Votre essai gratuit se termine dans {n} jour(s).',

@@ -108,21 +108,64 @@ export default function InstallPrompt() {
   }
 
   if (mode === 'hidden') return null;
-  const isIos = mode === 'ios';
 
+  const wrapperCls =
+    'animate-fade-in-up fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[110] p-3 lg:bottom-0';
+
+  // iOS : Apple interdit de déclencher l'installation depuis la page. On affiche
+  // donc une carte de consignes en 2 étapes, en insistant sur le bouton Partager
+  // de SAFARI (barre du bas de l'écran) — pas une icône cliquable de la bannière.
+  if (mode === 'ios') {
+    return (
+      <div className={wrapperCls}>
+        <div className="bg-primary text-primary-foreground mx-auto flex max-w-2xl flex-col gap-3 rounded-xl px-4 py-3 shadow-2xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
+                <Icon i="share" size={18} />
+              </div>
+              <p className="font-headings text-sm font-bold">{t('pwa.ios.title')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={later}
+              className="font-body shrink-0 rounded-md px-3 py-2 text-xs font-semibold opacity-80 hover:opacity-100"
+            >
+              {t('pwa.install.later')}
+            </button>
+          </div>
+          <ol className="font-body flex flex-col gap-2 text-xs">
+            <li className="flex items-center gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+                1
+              </span>
+              <span className="flex flex-wrap items-center gap-1">
+                {t('pwa.ios.step1')}
+                <Icon i="share" size={13} className="opacity-90" />
+              </span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+                2
+              </span>
+              <span>{t('pwa.ios.step2')}</span>
+            </li>
+          </ol>
+        </div>
+      </div>
+    );
+  }
+
+  // Android / Chrome / Edge : invite native au clic sur « Installer ».
   return (
-    <div className="animate-fade-in-up fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[110] p-3 lg:bottom-0">
+    <div className={wrapperCls}>
       <div className="bg-primary text-primary-foreground mx-auto flex max-w-2xl items-center gap-3 rounded-xl px-4 py-3 shadow-2xl">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15">
-          <Icon i={isIos ? 'share' : 'download'} size={20} />
+          <Icon i="download" size={20} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-headings truncate text-sm font-bold">
-            {t(isIos ? 'pwa.ios.title' : 'pwa.install.title')}
-          </p>
-          <p className="font-body text-xs opacity-80">
-            {t(isIos ? 'pwa.ios.body' : 'pwa.install.body')}
-          </p>
+          <p className="font-headings truncate text-sm font-bold">{t('pwa.install.title')}</p>
+          <p className="font-body text-xs opacity-80">{t('pwa.install.body')}</p>
         </div>
         <button
           type="button"
@@ -131,15 +174,13 @@ export default function InstallPrompt() {
         >
           {t('pwa.install.later')}
         </button>
-        {!isIos && (
-          <button
-            type="button"
-            onClick={install}
-            className="text-primary font-body shrink-0 rounded-md bg-white px-4 py-2 text-xs font-bold transition-transform hover:scale-[1.02]"
-          >
-            {t('pwa.install.cta')}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={install}
+          className="text-primary font-body shrink-0 rounded-md bg-white px-4 py-2 text-xs font-bold transition-transform hover:scale-[1.02]"
+        >
+          {t('pwa.install.cta')}
+        </button>
       </div>
     </div>
   );

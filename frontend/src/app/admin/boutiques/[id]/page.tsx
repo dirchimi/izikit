@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useApi } from '@/lib/useApi';
+import { api, ApiError } from '@/lib/api';
+import { useToast } from '@/contexts/ToastContext';
+import { useAdmin } from '@/components/admin/AdminContext';
 import { formatFCFA } from '@/lib/boutique/format';
 import { AdminHeader, Badge, Panel, StatCard } from '@/components/admin/ui';
+import Modal from '@/components/ui/Modal';
 import Icon from '@/components/ui/Icon';
 
 interface BoutiqueDetail {
@@ -12,6 +17,7 @@ interface BoutiqueDetail {
   name: string;
   slug: string;
   createdAt: string;
+  internal: boolean;
   owner: { id: string; name: string | null; email: string };
   settings: {
     phone: string | null;
@@ -119,9 +125,27 @@ function InfoRow({
 export default function AdminBoutiqueDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { data, loading, error } = useApi<{ boutique: BoutiqueDetail }>(
+  const { toast } = useToast();
+  const admin = useAdmin();
+  const { data, loading, error, refresh } = useApi<{ boutique: BoutiqueDetail }>(
     `/api/admin/boutiques/${id}`,
   );
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function toggleInternal(next: boolean) {
+    setBusy(true);
+    try {
+      await api(`/api/admin/boutiques/${id}`, { method: 'PATCH', body: { internal: next } });
+      toast(next ? 'Boutique marquée comme interne.' : 'Marquage interne retiré.', 'success');
+      setConfirming(false);
+      await refresh();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -161,6 +185,7 @@ export default function AdminBoutiqueDetailPage() {
           <Icon i="arrow-left" size={14} /> Boutiques
         </Link>
         <AdminHeader title={b.name} subtitle={`Inscrite le ${fmtDate(b.createdAt)}`}>
+          {b.internal ? <Badge tone="purple">Interne</Badge> : null}
           <Badge tone={SUB_TONE[sub.status] ?? 'neutral'}>
             {SUB_LABEL[sub.status] ?? sub.status}
           </Badge>
@@ -219,6 +244,34 @@ export default function AdminBoutiqueDetailPage() {
           </div>
         </Panel>
       </div>
+
+      {/* Compte interne / offert — SUPERADMIN uniquement */}
+      {admin.role === 'SUPERADMIN' && (
+        <div className="bg-surface border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div className="min-w-0">
+            <p className="font-body text-foreground text-sm font-semibold">
+              Compte interne / offert
+            </p>
+            <p className="text-muted-foreground font-body text-xs">
+              {b.internal
+                ? 'Accès gratuit permanent · exclue de toutes les statistiques.'
+                : 'Test, associé ou compte offert : accès gratuit, exclue des stats. Ses paiements d’abonnement seront supprimés.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => (b.internal ? void toggleInternal(false) : setConfirming(true))}
+            disabled={busy}
+            className={`font-body shrink-0 rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
+              b.internal
+                ? 'border-border bg-surface text-foreground border'
+                : 'bg-primary text-primary-foreground'
+            }`}
+          >
+            {b.internal ? 'Retirer le marquage' : 'Marquer comme interne'}
+          </button>
+        </div>
+      )}
 
       {/* Agrégats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -333,6 +386,41 @@ export default function AdminBoutiqueDetailPage() {
           )}
         </Panel>
       </div>
+
+      {/* Confirmation du marquage interne (destructif : supprime les paiements) */}
+      <Modal
+        open={confirming}
+        onClose={() => (busy ? undefined : setConfirming(false))}
+        title="Marquer comme interne"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground font-body text-sm">
+            <span className="text-foreground font-semibold">{b.name}</span> deviendra un compte
+            interne : accès gratuit permanent, exclue de toutes les statistiques, et ses paiements
+            d’abonnement seront <span className="text-danger font-semibold">supprimés</span>. À
+            réserver aux comptes test, associés ou offerts.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => void toggleInternal(true)}
+              disabled={busy}
+              className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {busy ? 'Traitement…' : 'Marquer comme interne'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

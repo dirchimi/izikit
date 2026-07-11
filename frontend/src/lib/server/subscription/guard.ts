@@ -27,10 +27,13 @@ export async function requireActiveSubscription(
 ): Promise<NextResponse | null> {
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { plan: true, trialEndsAt: true, currentPeriodEnd: true },
+    select: { plan: true, trialEndsAt: true, currentPeriodEnd: true, internal: true },
   });
   // Org absente : ne pas bloquer ici (cas déjà géré en amont par le 404 métier).
   if (!org) return null;
+
+  // Compte interne / offert : jamais bloqué (accès gratuit permanent).
+  if (org.internal) return null;
 
   const sub = computeSubscription(org, now);
   if (!sub.writeBlocked) return null;

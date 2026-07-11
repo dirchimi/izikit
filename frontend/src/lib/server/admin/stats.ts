@@ -131,6 +131,15 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
   // si (pas d'abo actif) et l'essai court encore. Réutilisé par plusieurs where.
   const notActive = { OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { lt: now } }] };
 
+  // Comptes INTERNES (test / associés / offerts) : exclus de toutes les métriques
+  // — ce ne sont pas de vrais clients. On récupère leurs ids une fois puis on les
+  // écarte de chaque requête (`notIn: []` = aucun filtre côté Prisma).
+  const internalIds = (
+    await prisma.organization.findMany({ where: { internal: true }, select: { id: true } })
+  ).map((o) => o.id);
+  const orgFilter = internalIds.length ? { id: { notIn: internalIds } } : {};
+  const scopeFilter = internalIds.length ? { organizationId: { notIn: internalIds } } : {};
+
   const [
     usersTotal,
     usersVerified,
@@ -168,7 +177,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     prisma.user.count({ where: { createdAt: { gte: since7 } } }),
     prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
     prisma.user.groupBy({ by: ['role'], _count: true }) as unknown as Promise<RoleGroup>,
-    prisma.organization.count(),
+    prisma.organization.count({ where: { ...orgFilter } }),
     prisma.order.count(),
     prisma.order.groupBy({
       by: ['status'],
@@ -181,13 +190,17 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       _sum: { amount: true },
     }) as unknown as Promise<StatusSumGroup>,
     // Volume = ventes réelles : on exclut les ventes annulées (CANCELLED).
-    prisma.sale.aggregate({ where: { status: 'ACTIVE' }, _sum: { total: true }, _count: true }),
+    prisma.sale.aggregate({
+      where: { status: 'ACTIVE', ...scopeFilter },
+      _sum: { total: true },
+      _count: true,
+    }),
     prisma.receivable.aggregate({
-      where: { status: { in: ['OPEN', 'PARTIAL'] } },
+      where: { status: { in: ['OPEN', 'PARTIAL'] }, ...scopeFilter },
       _sum: { amount: true, amountPaid: true },
       _count: true,
     }),
-    prisma.product.count(),
+    prisma.product.count({ where: { ...scopeFilter } }),
     prisma.outboxEvent.count({ where: { status: 'PENDING' } }),
     prisma.emailJob.count({ where: { status: 'PENDING' } }),
     prisma.user.findMany({ where: { createdAt: { gte: since14 } }, select: { createdAt: true } }),
@@ -210,21 +223,23 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       select: { id: true, actorId: true, action: true, targetType: true, createdAt: true },
     }),
     // Abonnements actifs / en essai (statuts dérivés → comptés via dates).
-    prisma.organization.count({ where: { currentPeriodEnd: { gte: now } } }),
-    prisma.organization.count({ where: { AND: [{ trialEndsAt: { gte: now } }, notActive] } }),
+    prisma.organization.count({ where: { currentPeriodEnd: { gte: now }, ...orgFilter } }),
+    prisma.organization.count({
+      where: { AND: [{ trialEndsAt: { gte: now } }, notActive], ...orgFilter },
+    }),
     prisma.organization.groupBy({
       by: ['plan'],
-      where: { currentPeriodEnd: { gte: now } },
+      where: { currentPeriodEnd: { gte: now }, ...orgFilter },
       _count: true,
     }) as unknown as Promise<Array<{ plan: string | null; _count: number }>>,
     prisma.subscriptionPayment.aggregate({
-      where: { status: 'PENDING' },
+      where: { status: 'PENDING', ...scopeFilter },
       _count: true,
       _sum: { amount: true },
     }),
     // File des paiements à valider — les plus anciens d'abord (FIFO).
     prisma.subscriptionPayment.findMany({
-      where: { status: 'PENDING' },
+      where: { status: 'PENDING', ...scopeFilter },
       orderBy: { createdAt: 'asc' },
       take: 6,
       select: {
@@ -244,6 +259,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
           { currentPeriodEnd: { gte: now, lte: soonEnd } },
           { AND: [{ trialEndsAt: { gte: now, lte: soonEnd } }, notActive] },
         ],
+        ...orgFilter,
       },
       // Trié par fin d'abonnement croissante : la fenêtre `take` contient bien
       // les plus urgentes (proxy sûr de `daysLeft`, qui n'est pas une colonne).
@@ -257,31 +273,31 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     // (une vente annulée ne compte pas comme activité).
     prisma.sale.groupBy({
       by: ['organizationId'],
-      where: { status: 'ACTIVE', createdAt: { gte: since7 } },
+      where: { status: 'ACTIVE', createdAt: { gte: since7 }, ...scopeFilter },
     }) as unknown as Promise<Array<{ organizationId: string }>>,
     prisma.sale.groupBy({
       by: ['organizationId'],
-      where: { status: 'ACTIVE', createdAt: { gte: since30 } },
+      where: { status: 'ACTIVE', createdAt: { gte: since30 }, ...scopeFilter },
     }) as unknown as Promise<Array<{ organizationId: string }>>,
     // CA total par boutique (ventes ACTIVE, tout l'historique), trié décroissant.
     // Sert à la fois au top-5 CA et à l'agrégation du CA par ville.
     prisma.sale.groupBy({
       by: ['organizationId'],
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...scopeFilter },
       _sum: { total: true },
       orderBy: { _sum: { total: 'desc' } },
     }) as unknown as Promise<Array<{ organizationId: string; _sum: { total: number | null } }>>,
     // Encaissé par boutique (abonnements CONFIRMED) — top 5.
     prisma.subscriptionPayment.groupBy({
       by: ['organizationId'],
-      where: { status: 'CONFIRMED' },
+      where: { status: 'CONFIRMED', ...scopeFilter },
       _sum: { amount: true },
       orderBy: { _sum: { amount: 'desc' } },
       take: 5,
     }) as unknown as Promise<Array<{ organizationId: string; _sum: { amount: number | null } }>>,
     // Ville de chaque boutique (pour agréger le CA par ville en mémoire).
     prisma.boutiqueSettings.findMany({
-      where: { city: { not: null } },
+      where: { city: { not: null }, ...scopeFilter },
       select: { organizationId: true, city: true },
     }),
   ]);

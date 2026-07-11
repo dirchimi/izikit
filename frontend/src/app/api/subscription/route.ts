@@ -33,7 +33,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const org = await prisma.organization.findUnique({
       where: { id: primary.organizationId },
-      select: { plan: true, trialEndsAt: true, currentPeriodEnd: true },
+      select: { plan: true, trialEndsAt: true, currentPeriodEnd: true, internal: true },
     });
     if (!org) {
       return NextResponse.json(
@@ -42,7 +42,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const view = computeSubscription(org, new Date());
+    const computed = computeSubscription(org, new Date());
+    // Compte interne / offert : présenté comme ACTIF (jamais d'écritures bloquées,
+    // pas de bannière d'expiration) + drapeau `internal` pour l'affichage dédié.
+    const view = org.internal
+      ? { ...computed, status: 'ACTIVE' as const, writeBlocked: false, internal: true }
+      : { ...computed, internal: false };
     const isOwner = primary.role === 'OWNER';
 
     // Historique + demande en attente : patron uniquement.

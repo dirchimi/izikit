@@ -10,9 +10,12 @@ export const runtime = 'nodejs';
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
-import { requireAdmin } from '@/lib/server/middleware';
+import { requireAdmin, requireSuperadmin } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
+import { verifyCsrf } from '@/lib/server/auth';
+import { logAdminAction } from '@/lib/server/admin/audit';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeSubscription } from '@/lib/subscription/status';
@@ -24,6 +27,7 @@ const ORG_SELECT = {
   plan: true,
   trialEndsAt: true,
   currentPeriodEnd: true,
+  internal: true,
   createdAt: true,
   owner: { select: { id: true, name: true, email: true } },
   settings: {
@@ -133,11 +137,12 @@ export async function GET(
       name: org.name,
       slug: org.slug,
       createdAt: org.createdAt,
+      internal: org.internal,
       owner: org.owner,
       settings: org.settings,
       subscription: {
         plan: sub.plan,
-        status: sub.status,
+        status: org.internal ? 'ACTIVE' : sub.status,
         daysLeft: sub.daysLeft,
         activeUntil: sub.activeUntil,
         trialEndsAt: sub.trialEndsAt,
@@ -166,5 +171,78 @@ export async function GET(
     };
 
     return NextResponse.json({ boutique }, { headers: { 'x-request-id': reqCtx.requestId } });
+  });
+}
+
+const PatchBody = z.object({ internal: z.boolean() });
+
+/**
+ * PATCH /api/admin/boutiques/[id] — bascule le statut « compte interne / offert »
+ * (SUPERADMIN uniquement). Marquer interne = accès gratuit permanent + exclusion
+ * de toutes les stats ; on efface aussi les paiements d'abonnement de la boutique
+ * (données de test/comp qui n'ont plus de sens). Retirer = retour à l'état normal
+ * (sans plan ni période payée). Audité.
+ */
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const reqCtx = makeRequestContext(req.headers);
+  return withRequestContext(reqCtx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireSuperadmin();
+    if (auth instanceof NextResponse) return auth;
+
+    const limited = await enforceAdminRateLimit(auth.admin.id);
+    if (limited) return limited;
+
+    const { id } = await ctx.params;
+    const parsed = PatchBody.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'VALIDATION_FAILED', message: 'Corps de requête invalide' },
+        { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+
+    const existing = await prisma.organization.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'BOUTIQUE_NOT_FOUND', message: 'Boutique introuvable' },
+        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+
+    const { internal } = parsed.data;
+    const deleted = await prisma.$transaction(async (tx) => {
+      // Marquer interne : on efface plan + période payée (l'accès passe par le
+      // garde, pas par une date) et on supprime les paiements test/comp de la
+      // boutique. Retirer : retour à l'état neutre (expiré, à re-souscrire).
+      const del = internal
+        ? await tx.subscriptionPayment.deleteMany({ where: { organizationId: id } })
+        : { count: 0 };
+      await tx.organization.update({
+        where: { id },
+        data: { internal, plan: null, currentPeriodEnd: null },
+      });
+      await logAdminAction(tx, {
+        actorId: auth.admin.id,
+        action: internal ? 'boutique.mark_internal' : 'boutique.unmark_internal',
+        targetType: 'Organization',
+        targetId: id,
+        metadata: { name: existing.name, deletedPayments: del.count },
+      });
+      return del.count;
+    });
+
+    return NextResponse.json(
+      { internal, deletedPayments: deleted },
+      { headers: { 'x-request-id': reqCtx.requestId } },
+    );
   });
 }

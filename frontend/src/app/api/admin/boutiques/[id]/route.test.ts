@@ -1,21 +1,35 @@
-// GET /api/admin/boutiques/[id] — fiche détail.
+// GET + PATCH /api/admin/boutiques/[id] — fiche détail + marquage interne.
 import { prismaMock } from '@/test-utils/prisma-mock';
+import { mockNextCookies, __cookieStore } from '@/test-utils/mock-cookies';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { GET } from './route';
+import { GET, PATCH } from './route';
 
-vi.mock('@/lib/server/middleware', () => ({ requireAdmin: vi.fn() }));
+mockNextCookies();
+
+vi.mock('@/lib/server/middleware', () => ({
+  requireAdmin: vi.fn(),
+  requireSuperadmin: vi.fn(),
+}));
 vi.mock('@/lib/server/middleware/rate-limit-by-userid', () => ({ enforceAdminRateLimit: vi.fn() }));
+vi.mock('@/lib/server/admin/audit', () => ({ logAdminAction: vi.fn() }));
 
-import { requireAdmin } from '@/lib/server/middleware';
+import { requireAdmin, requireSuperadmin } from '@/lib/server/middleware';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
+import { logAdminAction } from '@/lib/server/admin/audit';
 
 const mockRequireAdmin = vi.mocked(requireAdmin);
+const mockRequireSuper = vi.mocked(requireSuperadmin);
 const mockRateLimit = vi.mocked(enforceAdminRateLimit);
+const mockAudit = vi.mocked(logAdminAction);
 
 const adminCtx = {
   user: { sub: 'admin_1', email: 'admin@test.local' },
   admin: { id: 'admin_1', email: 'admin@test.local', role: 'ADMIN' as const },
+};
+const superCtx = {
+  user: { sub: 'super_1', email: 'super@test.local' },
+  admin: { id: 'super_1', email: 'super@test.local', role: 'SUPERADMIN' as const },
 };
 
 const FUTURE = new Date('2999-01-01T00:00:00Z');
@@ -39,10 +53,30 @@ function stubAggregates() {
   prismaMock.sale.findMany.mockResolvedValue([] as never);
 }
 
+function makePatch(id: string, body: unknown): NextRequest {
+  return new NextRequest(`http://test/api/admin/boutiques/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': 'tok',
+      cookie: 'app-csrf=tok',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  __cookieStore.clear();
   mockRequireAdmin.mockResolvedValue(adminCtx);
+  mockRequireSuper.mockResolvedValue(superCtx as never);
   mockRateLimit.mockResolvedValue(null);
+  mockAudit.mockResolvedValue(undefined as never);
+  prismaMock.$transaction.mockImplementation((cb: unknown) =>
+    typeof cb === 'function'
+      ? ((cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>)
+      : Promise.resolve(cb),
+  );
   stubAggregates();
 });
 
@@ -155,5 +189,63 @@ describe('/api/admin/boutiques/[id] — detail', () => {
     const res = await GET(makeGet(), paramsOf('org1'));
     expect(res.status).toBe(403);
     expect(prismaMock.organization.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/admin/boutiques/[id] — PATCH marquage interne', () => {
+  beforeEach(() => {
+    prismaMock.organization.findUnique.mockResolvedValue({ id: 'org1', name: 'Chez Ali' } as never);
+    prismaMock.subscriptionPayment.deleteMany.mockResolvedValue({ count: 2 } as never);
+    prismaMock.organization.update.mockResolvedValue({} as never);
+  });
+
+  it('marque interne : efface les paiements, neutralise le plan, audite → 200', async () => {
+    const res = await PATCH(makePatch('org1', { internal: true }), paramsOf('org1'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { internal: boolean; deletedPayments: number };
+    expect(body).toEqual({ internal: true, deletedPayments: 2 });
+
+    expect(prismaMock.subscriptionPayment.deleteMany).toHaveBeenCalledWith({
+      where: { organizationId: 'org1' },
+    });
+    expect(prismaMock.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'org1' },
+        data: { internal: true, plan: null, currentPeriodEnd: null },
+      }),
+    );
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'boutique.mark_internal' }),
+    );
+  });
+
+  it('retire le marquage : ne supprime aucun paiement → 200', async () => {
+    const res = await PATCH(makePatch('org1', { internal: false }), paramsOf('org1'));
+    expect(res.status).toBe(200);
+    expect(prismaMock.subscriptionPayment.deleteMany).not.toHaveBeenCalled();
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'boutique.unmark_internal' }),
+    );
+  });
+
+  it('404 si la boutique est introuvable', async () => {
+    prismaMock.organization.findUnique.mockResolvedValueOnce(null as never);
+    const res = await PATCH(makePatch('ghost', { internal: true }), paramsOf('ghost'));
+    expect(res.status).toBe(404);
+    expect(prismaMock.organization.update).not.toHaveBeenCalled();
+  });
+
+  it('400 si le corps est invalide', async () => {
+    const res = await PATCH(makePatch('org1', { internal: 'yes' }), paramsOf('org1'));
+    expect(res.status).toBe(400);
+  });
+
+  it('403 sans session superadmin', async () => {
+    mockRequireSuper.mockResolvedValueOnce(NextResponse.json({ error: 'x' }, { status: 403 }));
+    const res = await PATCH(makePatch('org1', { internal: true }), paramsOf('org1'));
+    expect(res.status).toBe(403);
+    expect(prismaMock.organization.update).not.toHaveBeenCalled();
   });
 });

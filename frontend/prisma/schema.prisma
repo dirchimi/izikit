@@ -119,9 +119,14 @@ model Organization {
   // ── Abonnement (Phase 8 — SaaS billing, gestion manuelle v1) ──────────────
   // Le STATUT (essai / actif / expiré) n'est jamais stocké : il est DÉRIVÉ de
   // ces trois champs par lib/subscription/status.ts, ce qui évite toute dérive.
-  plan             String? // "SOLO" | "BOUTIQUE" — null tant qu'aucun plan choisi
+  plan             String? // "PREMIUM" — null tant qu'aucun plan choisi
   trialEndsAt      DateTime? // fin de l'essai gratuit (création + TRIAL_DAYS jours)
   currentPeriodEnd DateTime? // fin de l'abonnement payé (null si jamais payé)
+  // Compte INTERNE / exonéré (boutiques test, associés, comptes offerts) : accès
+  // gratuit permanent (le garde d'abonnement ne bloque jamais) ET exclu de TOUTES
+  // les statistiques plateforme (MRR, encaissé, boutiques, ventes…) — ce n'est pas
+  // un vrai client. Basculé par un SUPERADMIN depuis la fiche boutique admin.
+  internal         Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
