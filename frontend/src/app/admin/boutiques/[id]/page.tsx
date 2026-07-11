@@ -132,6 +132,9 @@ export default function AdminBoutiqueDetailPage() {
   );
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [wipeOpen, setWipeOpen] = useState(false);
+  const [wipeName, setWipeName] = useState('');
+  const [wiping, setWiping] = useState(false);
 
   async function toggleInternal(next: boolean) {
     setBusy(true);
@@ -144,6 +147,24 @@ export default function AdminBoutiqueDetailPage() {
       toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function wipeData() {
+    setWiping(true);
+    try {
+      await api(`/api/admin/boutiques/${id}/wipe-data`, {
+        method: 'POST',
+        body: { confirmName: wipeName.trim() },
+      });
+      toast('Données de la boutique vidées.', 'success');
+      setWipeOpen(false);
+      setWipeName('');
+      await refresh();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+    } finally {
+      setWiping(false);
     }
   }
 
@@ -387,6 +408,28 @@ export default function AdminBoutiqueDetailPage() {
         </Panel>
       </div>
 
+      {/* Zone de danger — SUPERADMIN uniquement */}
+      {admin.role === 'SUPERADMIN' && (
+        <div className="border-danger/40 bg-danger/5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div className="min-w-0">
+            <p className="text-danger font-body text-sm font-semibold">Zone de danger</p>
+            <p className="text-muted-foreground font-body text-xs">
+              Vider toutes les données de la boutique (produits, ventes, clients, créances, dettes,
+              dépenses, documents). La boutique, l’équipe et l’abonnement sont conservés. Action{' '}
+              <span className="text-danger font-semibold">irréversible</span>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWipeOpen(true)}
+            disabled={wiping}
+            className="border-danger text-danger hover:bg-danger/10 font-body shrink-0 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            Vider les données
+          </button>
+        </div>
+      )}
+
       {/* Confirmation du marquage interne (destructif : supprime les paiements) */}
       <Modal
         open={confirming}
@@ -417,6 +460,55 @@ export default function AdminBoutiqueDetailPage() {
               className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
               {busy ? 'Traitement…' : 'Marquer comme interne'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirmation du vidage des données (irréversible) — saisie du nom exigée */}
+      <Modal
+        open={wipeOpen}
+        onClose={() => (wiping ? undefined : (setWipeOpen(false), setWipeName('')))}
+        title="Vider les données de la boutique"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground font-body text-sm">
+            Toutes les données de <span className="text-foreground font-semibold">{b.name}</span>{' '}
+            seront <span className="text-danger font-semibold">définitivement supprimées</span>{' '}
+            (produits, ventes, clients, créances, dettes, dépenses, documents). La boutique,
+            l’équipe et l’abonnement restent en place. Cette action est irréversible.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="wipe-name" className="font-body text-foreground text-xs font-semibold">
+              Pour confirmer, tape le nom exact : <span className="text-foreground">{b.name}</span>
+            </label>
+            <input
+              id="wipe-name"
+              type="text"
+              value={wipeName}
+              onChange={(e) => setWipeName(e.target.value)}
+              placeholder={b.name}
+              autoComplete="off"
+              className="border-border bg-input text-foreground font-body focus:border-danger rounded-md border px-3 py-2 text-sm outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => (setWipeOpen(false), setWipeName(''))}
+              disabled={wiping}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => void wipeData()}
+              disabled={wiping || wipeName.trim() !== b.name.trim()}
+              className="bg-danger font-body rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {wiping ? 'Suppression…' : 'Vider définitivement'}
             </button>
           </div>
         </div>
