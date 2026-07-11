@@ -53,7 +53,7 @@ beforeEach(() => {
     status: 'PENDING',
     months: 1,
     plan: 'PREMIUM',
-    amount: 30000,
+    amount: 50000,
     organizationId: 'org1',
     organization: { currentPeriodEnd: null },
   } as never);
@@ -63,21 +63,21 @@ beforeEach(() => {
 
 describe('POST /api/admin/subscriptions/[id]/confirm', () => {
   it('recalcule le montant quand le superadmin force une durée différente', async () => {
-    // Demande d'origine : PREMIUM 1 mois (30000). Confirmée en forçant 3 mois.
+    // Demande d'origine : PREMIUM 1 mois (50000). Confirmée en forçant 3 mois.
     const res = await POST(makePost({ months: 3 }), params);
     expect(res.status).toBe(200);
 
-    // Le montant suit la grille par durée : 3 mois = 81000 (remise incluse).
+    // Le montant suit la grille par durée : 3 mois = 135000 (remise incluse).
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'pay1', status: 'PENDING' },
-        data: expect.objectContaining({ status: 'CONFIRMED', months: 3, amount: 81000 }),
+        data: expect.objectContaining({ status: 'CONFIRMED', months: 3, amount: 135000 }),
       }),
     );
     // Le journal d'audit reflète le montant recalculé.
     expect(mockAudit).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ metadata: expect.objectContaining({ amount: 81000, months: 3 }) }),
+      expect.objectContaining({ metadata: expect.objectContaining({ amount: 135000, months: 3 }) }),
     );
   });
 
@@ -86,7 +86,7 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ months: 1, amount: 30000 }),
+        data: expect.objectContaining({ months: 1, amount: 50000 }),
       }),
     );
   });
@@ -97,7 +97,7 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
       status: 'CONFIRMED',
       months: 1,
       plan: 'PREMIUM',
-      amount: 30000,
+      amount: 50000,
       organizationId: 'org1',
       organization: { currentPeriodEnd: null },
     } as never);

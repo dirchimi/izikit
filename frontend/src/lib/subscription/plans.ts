@@ -39,13 +39,13 @@ export interface SubPeriod {
   labelKey: string;
 }
 export const SUB_PERIODS: readonly SubPeriod[] = [
-  { months: 1, price: 30_000, labelKey: 'sub.period.monthly' },
-  { months: 3, price: 81_000, labelKey: 'sub.period.quarterly' },
-  { months: 12, price: 300_000, labelKey: 'sub.period.annual' },
+  { months: 1, price: 50_000, labelKey: 'sub.period.monthly' },
+  { months: 3, price: 135_000, labelKey: 'sub.period.quarterly' },
+  { months: 12, price: 500_000, labelKey: 'sub.period.annual' },
 ] as const;
 
 /** Prix mensuel de référence (mensuel sans remise) — sert au MRR admin. */
-export const MONTHLY_PRICE = 30_000;
+export const MONTHLY_PRICE = 50_000;
 
 export function isPlanId(v: unknown): v is PlanId {
   return v === 'PREMIUM';

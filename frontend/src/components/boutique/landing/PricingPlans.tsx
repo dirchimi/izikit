@@ -6,12 +6,12 @@ import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { CONTACT_WHATSAPP } from '@/lib/contact';
 
-// Prix Premium ancrés sur l'annuel (300 000 FCFA/an). Remise croissante.
+// Prix Premium ancrés sur l'annuel (500 000 FCFA/an). Remise croissante.
 const PERIODS = [
   {
     id: 'monthly',
     labelKey: 'landing.pricing.per.monthly',
-    total: '30 000',
+    total: '50 000',
     unitKey: 'landing.pricing.unit.monthly',
     perMonth: null,
     savePct: null,
@@ -19,17 +19,17 @@ const PERIODS = [
   {
     id: 'quarterly',
     labelKey: 'landing.pricing.per.quarterly',
-    total: '81 000',
+    total: '135 000',
     unitKey: 'landing.pricing.unit.quarterly',
-    perMonth: '27 000',
+    perMonth: '45 000',
     savePct: 10,
   },
   {
     id: 'annual',
     labelKey: 'landing.pricing.per.annual',
-    total: '300 000',
+    total: '500 000',
     unitKey: 'landing.pricing.unit.annual',
-    perMonth: '25 000',
+    perMonth: '≈ 41 700',
     savePct: 17,
   },
 ] as const;

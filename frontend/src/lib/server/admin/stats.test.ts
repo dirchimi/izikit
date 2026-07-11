@@ -155,7 +155,7 @@ describe('computeAdminStats', () => {
     expect(s.subscriptions.active).toBe(2);
     expect(s.subscriptions.trial).toBe(1);
     expect(s.subscriptions.expired).toBe(2); // 5 − 2 − 1
-    expect(s.subscriptions.mrr).toBe(60000); // 2 × 30000 (PREMIUM)
+    expect(s.subscriptions.mrr).toBe(100000); // 2 × 50000 (PREMIUM)
     expect(s.subscriptions.pendingCount).toBe(3);
     expect(s.subscriptions.pendingAmount).toBe(45000);
     expect(s.subscriptions.pending[0]).toMatchObject({
