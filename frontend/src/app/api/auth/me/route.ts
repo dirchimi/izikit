@@ -20,7 +20,9 @@ export const runtime = 'nodejs';
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { requireAuth } from '@/lib/server/middleware';
+import { verifyCsrf } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
@@ -41,6 +43,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       select: {
         id: true,
         email: true,
+        name: true,
         emailVerifiedAt: true,
         createdAt: true,
         updatedAt: true,
@@ -56,6 +59,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       sub: auth.user.sub,
       id: dbUser?.id ?? auth.user.sub,
       email: dbUser?.email ?? auth.user.email,
+      name: dbUser?.name ?? null,
       emailVerifiedAt: dbUser?.emailVerifiedAt
         ? dbUser.emailVerifiedAt instanceof Date
           ? dbUser.emailVerifiedAt.toISOString()
@@ -81,5 +85,38 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
+  });
+}
+
+// PATCH /api/auth/me — l'utilisateur met à jour son propre profil (nom affiché).
+// Le nom vide efface le nom (retour à l'affichage par e-mail). CSRF requis.
+const PatchBody = z.object({ name: z.string().max(80) });
+
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth(req.headers.get('authorization'));
+    if (auth instanceof NextResponse) {
+      auth.headers.set('x-request-id', ctx.requestId);
+      return auth;
+    }
+
+    const parsed = PatchBody.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'VALIDATION_FAILED', message: 'Corps de requête invalide' },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    const trimmed = parsed.data.name.trim();
+    const name = trimmed.length > 0 ? trimmed : null;
+
+    await prisma.user.update({ where: { id: auth.user.sub }, data: { name } });
+
+    return NextResponse.json({ name }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
   });
 }

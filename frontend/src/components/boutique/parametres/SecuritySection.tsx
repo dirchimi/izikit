@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import { api, ApiError } from '@/lib/api';
@@ -34,12 +34,20 @@ export default function SecuritySection() {
   const router = useRouter();
   const t = useT();
 
+  const [name, setName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Synchronise le champ avec la valeur serveur (au chargement et après save).
+  const serverName = user?.name ?? '';
+  useEffect(() => {
+    setName(serverName);
+  }, [serverName]);
 
   if (!user) {
     return (
@@ -52,6 +60,20 @@ export default function SecuritySection() {
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
   const userEmail = user.email;
+
+  async function onSaveName(e: FormEvent) {
+    e.preventDefault();
+    setSavingName(true);
+    try {
+      await api('/api/auth/me', { method: 'PATCH', body: { name: name.trim() } });
+      toast(t('security.nameSaved'), 'success');
+      await refresh();
+    } catch {
+      toast(t('security.err.network'), 'error');
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   async function onSubmitPassword(e: FormEvent) {
     e.preventDefault();
@@ -119,6 +141,51 @@ export default function SecuritySection() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Profil — nom affiché */}
+      <form onSubmit={onSaveName} className="bg-surface border-border rounded-lg border">
+        <div className="border-border border-b px-5 py-4 md:px-6">
+          <h2 className="font-headings text-foreground text-base font-bold">
+            {t('security.profileTitle')}
+          </h2>
+          <p className="text-muted-foreground font-body mt-0.5 text-xs">
+            {t('security.profileSub')}
+          </p>
+        </div>
+        <div className="flex flex-col gap-4 px-5 py-5 md:px-6">
+          <div className="flex flex-col gap-1">
+            <label className={labelClass} htmlFor="sec-name">
+              {t('security.nameLabel')}
+            </label>
+            <input
+              id="sec-name"
+              type="text"
+              maxLength={80}
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('security.namePlaceholder')}
+              className={fieldClass}
+            />
+            <span className="text-muted-foreground font-body text-xs">
+              {t('security.nameHint')}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-muted-foreground font-body text-xs break-all">
+              {t('security.accountEmail')}: {userEmail}
+            </span>
+            <button
+              type="submit"
+              disabled={savingName || name.trim() === (user.name ?? '')}
+              className="bg-primary text-primary-foreground font-body flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold disabled:opacity-60"
+            >
+              <Icon i="user" size={14} />
+              {savingName ? t('security.saving') : t('security.saveName')}
+            </button>
+          </div>
+        </div>
+      </form>
+
       {/* Mot de passe */}
       <form onSubmit={onSubmitPassword} className="bg-surface border-border rounded-lg border">
         <div className="border-border border-b px-5 py-4 md:px-6">

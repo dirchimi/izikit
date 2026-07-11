@@ -16,7 +16,7 @@ vi.mock('@/lib/server/auth', async () => {
 });
 
 import { verifyToken } from '@/lib/server/auth';
-import { GET } from './route';
+import { GET, PATCH } from './route';
 import { NextRequest } from 'next/server';
 
 function makeReq(opts: { tokenCookie?: string; bearer?: string } = {}): NextRequest {
@@ -25,6 +25,20 @@ function makeReq(opts: { tokenCookie?: string; bearer?: string } = {}): NextRequ
   return new NextRequest('https://test/api/auth/me', {
     method: 'GET',
     headers,
+  });
+}
+
+function makePatch(body: unknown, opts: { bearer?: string; csrf?: boolean } = {}): NextRequest {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (opts.bearer) headers.authorization = `Bearer ${opts.bearer}`;
+  if (opts.csrf !== false) {
+    headers['x-csrf-token'] = 'tok';
+    headers.cookie = 'app-csrf=tok';
+  }
+  return new NextRequest('https://test/api/auth/me', {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(body),
   });
 }
 
@@ -91,5 +105,54 @@ describe('GET /api/auth/me', () => {
 
     const res = await GET(makeReq({ bearer: 'orphan-jwt' }));
     expect(res.status).toBe(401);
+  });
+});
+
+describe('PATCH /api/auth/me (nom affiché)', () => {
+  beforeEach(() => {
+    vi.mocked(verifyToken).mockResolvedValue({ sub: 'u1', email: 'a@b.com', tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+    } as never);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1' } as never);
+  });
+
+  it('met à jour le nom (trim) → 200', async () => {
+    const res = await PATCH(makePatch({ name: '  Ali Mahamat  ' }, { bearer: 'valid' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ name: 'Ali Mahamat' });
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { name: 'Ali Mahamat' },
+    });
+  });
+
+  it('nom vide → efface (null)', async () => {
+    const res = await PATCH(makePatch({ name: '   ' }, { bearer: 'valid' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ name: null });
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { name: null },
+    });
+  });
+
+  it('403 sans jeton CSRF', async () => {
+    const res = await PATCH(makePatch({ name: 'Ali' }, { bearer: 'valid', csrf: false }));
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('401 sans session', async () => {
+    const res = await PATCH(makePatch({ name: 'Ali' }));
+    expect(res.status).toBe(401);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('400 corps invalide', async () => {
+    const res = await PATCH(makePatch({ name: 123 }, { bearer: 'valid' }));
+    expect(res.status).toBe(400);
   });
 });

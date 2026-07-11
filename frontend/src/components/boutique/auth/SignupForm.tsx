@@ -36,6 +36,7 @@ export default function SignupForm() {
   const router = useRouter();
   const { user } = useAuth();
   const t = useT();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -56,7 +57,11 @@ export default function SignupForm() {
     setSubmitting(true);
     setError(null);
     try {
-      await api('/api/auth/signup', { method: 'POST', body: { email, password } });
+      const trimmedName = name.trim();
+      await api('/api/auth/signup', {
+        method: 'POST',
+        body: { email, password, ...(trimmedName ? { name: trimmedName } : {}) },
+      });
       router.push(`/verifier-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(signupError(err, t));
@@ -70,6 +75,26 @@ export default function SignupForm() {
       <p className="text-muted-foreground font-body -mt-1 text-center text-xs">
         {t('auth.signupIntro')}
       </p>
+
+      {/* Nom (facultatif) — s'affiche ensuite sur les ventes, reçus, etc. */}
+      <div className="flex flex-col gap-1">
+        <label htmlFor="su-name" className={authLabel}>
+          {t('auth.name')}
+        </label>
+        <div className={authFieldWrap}>
+          <Icon i="user" size={14} className="text-muted-foreground shrink-0" />
+          <input
+            id="su-name"
+            type="text"
+            autoComplete="name"
+            maxLength={80}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('auth.namePlaceholder')}
+            className={authInput}
+          />
+        </div>
+      </div>
 
       {/* E-mail */}
       <div className="flex flex-col gap-1">

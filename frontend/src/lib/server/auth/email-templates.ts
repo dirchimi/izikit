@@ -19,6 +19,32 @@
 // rendered TTL matches `AUTH_VERIFICATION_TTL_MIN` (was hardcoded "15 minutes"
 // which lied when operators tuned the env var).
 import 'server-only';
+import { CONTACT_EMAIL, CONTACT_PHONE_DISPLAY, CONTACT_WHATSAPP } from '@/lib/contact';
+
+// URL absolue de l'app (même source que les liens d'invitation). Sert à héberger
+// le logo dans l'en-tête des emails — les images en data:/inline sont bloquées
+// par Gmail & co, il faut une URL absolue sur notre domaine.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sahilley.com';
+
+/**
+ * En-tête de marque commun aux emails : logo (image hébergée) + « Sahilley » en
+ * TEXTE. Les clients mail masquent les images par défaut → le texte reste le
+ * repère fiable, le logo est un bonus quand les images sont autorisées.
+ */
+function emailHeader(): string {
+  return `<tr><td style="background:#0a3d2e;padding:16px 24px;">
+<img src="${SITE_URL}/icon" width="26" height="26" alt="" style="vertical-align:middle;border-radius:7px;margin-right:9px;">
+<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;vertical-align:middle;">Sahilley</span>
+</td></tr>`;
+}
+
+/** Pied de page commun : signature + coordonnées de contact (légitimité + délivrabilité). */
+function emailFooter(): string {
+  return `<tr><td style="background:#faf8f3;border-top:1px solid #e4e0d6;padding:14px 24px;">
+<p style="margin:0;font-size:11px;color:#9a9486;">Sahilley — Gestion de boutique.</p>
+<p style="margin:6px 0 0 0;font-size:11px;color:#9a9486;"><a href="${CONTACT_WHATSAPP}" style="color:#0e9f6e;text-decoration:none;">WhatsApp ${CONTACT_PHONE_DISPLAY}</a> &nbsp;·&nbsp; <a href="mailto:${CONTACT_EMAIL}" style="color:#0e9f6e;text-decoration:none;">${CONTACT_EMAIL}</a></p>
+</td></tr>`;
+}
 
 export interface EmailTemplate {
   subject: string;
@@ -90,9 +116,7 @@ function brandedHtml(opts: { heading: string; lead: string; code: string; ttl: s
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f3;padding:24px 12px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e0d6;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#0a3d2e;padding:18px 24px;">
-<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Sahilley</span>
-</td></tr>
+${emailHeader()}
 <tr><td style="padding:28px 24px 8px 24px;">
 <h1 style="margin:0 0 8px 0;font-size:19px;font-weight:700;color:#1a1a1a;">${opts.heading}</h1>
 <p style="margin:0;font-size:14px;line-height:1.6;color:#5b5648;">${opts.lead}</p>
@@ -106,9 +130,7 @@ function brandedHtml(opts: { heading: string; lead: string; code: string; ttl: s
 <tr><td style="padding:8px 24px 24px 24px;">
 <p style="margin:0;font-size:12px;line-height:1.6;color:#9a9486;">Si tu n'es pas à l'origine de cette demande, ignore simplement cet email.</p>
 </td></tr>
-<tr><td style="background:#faf8f3;border-top:1px solid #e4e0d6;padding:14px 24px;">
-<p style="margin:0;font-size:11px;color:#9a9486;">Sahilley — Gestion de boutique.</p>
-</td></tr>
+${emailFooter()}
 </table>
 </td></tr>
 </table>
@@ -154,9 +176,7 @@ export function orgInvitationEmail(args: OrgInvitationEmailArgs): EmailTemplate 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f3;padding:24px 12px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e0d6;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#0a3d2e;padding:18px 24px;">
-<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Sahilley</span>
-</td></tr>
+${emailHeader()}
 <tr><td style="padding:28px 24px 8px 24px;">
 <h1 style="margin:0 0 8px 0;font-size:19px;font-weight:700;color:#1a1a1a;">Rejoins ${orgName}</h1>
 <p style="margin:0;font-size:14px;line-height:1.6;color:#5b5648;">${inviter} t'invite à rejoindre sa boutique <strong>${orgName}</strong> sur Sahilley. Clique pour créer ton accès.</p>
@@ -168,9 +188,7 @@ export function orgInvitationEmail(args: OrgInvitationEmailArgs): EmailTemplate 
 <tr><td style="padding:8px 24px 24px 24px;">
 <p style="margin:0;font-size:12px;line-height:1.6;color:#9a9486;">Si tu ne t'attendais pas à cette invitation, ignore simplement cet email.</p>
 </td></tr>
-<tr><td style="background:#faf8f3;border-top:1px solid #e4e0d6;padding:14px 24px;">
-<p style="margin:0;font-size:11px;color:#9a9486;">Sahilley — Gestion de boutique.</p>
-</td></tr>
+${emailFooter()}
 </table>
 </td></tr>
 </table>
