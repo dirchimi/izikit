@@ -70,6 +70,9 @@ export interface AdminStats {
   };
   // Villes les plus rentables (Σ CA des boutiques de la ville). Top 5.
   topCities: Array<{ city: string; revenue: number; boutiques: number }>;
+  // Encaissé (abonnements CONFIRMED) par mois — 6 derniers mois, du plus ancien
+  // au plus récent. `month` = YYYY-MM, `amount` = FCFA.
+  collectedByMonth: Array<{ month: string; amount: number }>;
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -120,6 +123,30 @@ function bucketSignups(
 
 type RoleGroup = Array<{ role: string; _count: number }>;
 type StatusSumGroup = Array<{ status: string; _count: number; _sum: { amount: number | null } }>;
+
+/** Clé de mois (YYYY-MM) en UTC. */
+function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Range des paiements confirmés en N seaux mensuels, du plus ancien au récent. */
+function bucketByMonth(
+  rows: Array<{ amount: number; confirmedAt: Date | null }>,
+  now: Date,
+  months: number,
+): Array<{ month: string; amount: number }> {
+  const totals = new Map<string, number>();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    totals.set(monthKey(d), 0);
+  }
+  for (const r of rows) {
+    if (!r.confirmedAt) continue;
+    const key = monthKey(r.confirmedAt);
+    if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + r.amount);
+  }
+  return [...totals.entries()].map(([month, amount]) => ({ month, amount }));
+}
 
 export async function computeAdminStats(prisma: PrismaClient, now: Date): Promise<AdminStats> {
   const since7 = new Date(now.getTime() - 7 * DAY_MS);
@@ -384,6 +411,20 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       })
     : [];
   const nameById = new Map(nameRows.map((o) => [o.id, o.name]));
+
+  // Encaissé par mois (6 derniers mois) : paiements CONFIRMED des vraies
+  // boutiques. Bucketé en mémoire (pas de date_trunc portable via Prisma).
+  const MONTHS_BACK = 6;
+  const firstMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (MONTHS_BACK - 1), 1),
+  );
+  const confirmedPayments =
+    (await prisma.subscriptionPayment.findMany({
+      where: { status: 'CONFIRMED', confirmedAt: { gte: firstMonth }, ...scopeFilter },
+      select: { amount: true, confirmedAt: true },
+    })) ?? [];
+  const collectedByMonth = bucketByMonth(confirmedPayments, now, MONTHS_BACK);
+
   const topBoutiques = {
     byRevenue: topRevenue.map((g) => ({
       id: g.organizationId,
@@ -445,6 +486,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     planSplit: { premium },
     topBoutiques,
     topCities,
+    collectedByMonth,
     ops: { outboxPending, emailPending },
     signups: bucketSignups(
       signupRows.map((r) => r.createdAt),

@@ -2,7 +2,8 @@
 //
 // Tripwire: verifies vercel.json declares all cron schedules with valid
 // cron-format strings and paths that correspond to actual route.ts files.
-// (5 Phase-5 canonical + email-job-purge + receivable-overdue + product-expiry.)
+// (5 Phase-5 canonical + email-job-purge + receivable-overdue + product-expiry
+// + subscription-expiry-reminder.)
 //
 // Wave 0 status: RED until Wave 1 plan 05-08 ships frontend/vercel.json.
 // Once GREEN, this test guards against route-rename / schedule-drift
@@ -33,11 +34,11 @@ describe('vercel.json schema (CRON-07, D-20)', () => {
     expect(existsSync(VERCEL_JSON)).toBe(true);
   });
 
-  it('declares exactly 8 cron schedules', () => {
+  it('declares exactly 9 cron schedules', () => {
     if (!existsSync(VERCEL_JSON)) return; // skip silently when RED-by-design
     const cfg = JSON.parse(readFileSync(VERCEL_JSON, 'utf8')) as VercelConfig;
     expect(cfg.crons).toBeDefined();
-    expect(cfg.crons!.length).toBe(8);
+    expect(cfg.crons!.length).toBe(9);
   });
 
   it('every cron path matches /^\\/api\\/cron\\/[a-z-]+$/ and schedule is valid 5-field cron', () => {
@@ -63,7 +64,7 @@ describe('vercel.json schema (CRON-07, D-20)', () => {
     }
   });
 
-  it('declares schedules for the 8 canonical crons (Phase 5 + post-audit + notifications)', () => {
+  it('declares schedules for the 9 canonical crons (Phase 5 + post-audit + notifications)', () => {
     if (!existsSync(VERCEL_JSON)) return;
     const cfg = JSON.parse(readFileSync(VERCEL_JSON, 'utf8')) as VercelConfig;
     const paths = (cfg.crons ?? []).map((c) => c.path).sort();
@@ -74,6 +75,7 @@ describe('vercel.json schema (CRON-07, D-20)', () => {
       '/api/cron/outbox-drain',
       '/api/cron/product-expiry',
       '/api/cron/receivable-overdue',
+      '/api/cron/subscription-expiry-reminder',
       '/api/cron/verification-cleanup',
       '/api/cron/webhook-log-purge',
     ]);

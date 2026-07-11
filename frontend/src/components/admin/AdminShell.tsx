@@ -24,10 +24,9 @@ const NAV: NavItem[] = [
   { href: '/admin', label: 'Tableau de bord', icon: 'layout-dashboard', exact: true },
   { href: '/admin/boutiques', label: 'Boutiques', icon: 'store' },
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
-  { href: '/admin/orders', label: 'Commandes', icon: 'shopping-bag' },
-  { href: '/admin/withdrawals', label: 'Retraits', icon: 'banknote' },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: 'badge-check' },
   { href: '/admin/discount-codes', label: 'Codes promo', icon: 'ticket-percent', superadmin: true },
+  { href: '/admin/announcements', label: 'Annonces', icon: 'megaphone', superadmin: true },
   { href: '/admin/audit-log', label: "Journal d'audit", icon: 'scroll-text' },
 ];
 

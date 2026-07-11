@@ -8,6 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useAdmin } from '@/components/admin/AdminContext';
 import { formatFCFA } from '@/lib/boutique/format';
+import { waLink } from '@/lib/wa';
 import { AdminHeader, Badge, Panel, StatCard } from '@/components/admin/ui';
 import Modal from '@/components/ui/Modal';
 import Icon from '@/components/ui/Icon';
@@ -139,6 +140,8 @@ export default function AdminBoutiqueDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteName, setDeleteName] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [grantDays, setGrantDays] = useState(30);
+  const [granting, setGranting] = useState(false);
 
   async function toggleInternal(next: boolean) {
     setBusy(true);
@@ -169,6 +172,20 @@ export default function AdminBoutiqueDetailPage() {
       toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
     } finally {
       setWiping(false);
+    }
+  }
+
+  async function grantAccess(days: number) {
+    if (days < 1) return;
+    setGranting(true);
+    try {
+      await api(`/api/admin/boutiques/${id}/grant-access`, { method: 'POST', body: { days } });
+      toast(`Accès prolongé de ${days} jour(s).`, 'success');
+      await refresh();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+    } finally {
+      setGranting(false);
     }
   }
 
@@ -243,9 +260,21 @@ export default function AdminBoutiqueDetailPage() {
             </InfoRow>
             <InfoRow icon="phone" label="Téléphone">
               {b.settings?.phone ? (
-                <a href={`tel:${b.settings.phone}`} className="hover:underline">
-                  {b.settings.phone}
-                </a>
+                <span className="flex flex-wrap items-center gap-2">
+                  <a href={`tel:${b.settings.phone}`} className="hover:underline">
+                    {b.settings.phone}
+                  </a>
+                  {waLink(b.settings.phone) && (
+                    <a
+                      href={waLink(b.settings.phone)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+                    >
+                      <Icon i="message-circle" size={12} /> WhatsApp
+                    </a>
+                  )}
+                </span>
               ) : (
                 '—'
               )}
@@ -310,6 +339,51 @@ export default function AdminBoutiqueDetailPage() {
           >
             {b.internal ? 'Retirer le marquage' : 'Marquer comme interne'}
           </button>
+        </div>
+      )}
+
+      {/* Prolonger l'accès (gratuit) — SUPERADMIN uniquement */}
+      {admin.role === 'SUPERADMIN' && (
+        <div className="bg-surface border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div className="min-w-0">
+            <p className="font-body text-foreground text-sm font-semibold">
+              Prolonger l’accès (gratuit)
+            </p>
+            <p className="text-muted-foreground font-body text-xs">
+              Ajoute des jours d’accès sans encaissement (geste commercial, cash reçu en main). Ne
+              compte pas dans le chiffre d’affaires.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[15, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => void grantAccess(d)}
+                disabled={granting}
+                className="border-border bg-surface text-foreground font-body rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                +{d} j
+              </button>
+            ))}
+            <span className="text-border">|</span>
+            <input
+              type="number"
+              min={1}
+              max={3650}
+              value={grantDays}
+              onChange={(e) => setGrantDays(Math.max(1, Number(e.target.value) || 0))}
+              className="border-border bg-input text-foreground font-body w-20 rounded-md border px-2 py-2 text-sm outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void grantAccess(grantDays)}
+              disabled={granting}
+              className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-bold disabled:opacity-50"
+            >
+              {granting ? '…' : 'Prolonger'}
+            </button>
+          </div>
         </div>
       )}
 

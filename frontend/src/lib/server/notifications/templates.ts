@@ -131,6 +131,27 @@ export function bigExpenseNotification(
   };
 }
 
+/**
+ * Relance avant la fin de l'essai / de l'abonnement. Une alerte par boutique,
+ * par échéance (activeUntil) et par jalon (J-3 / J-1) → pas de spam. NON opt-out
+ * (type absent de `BOUTIQUE_NOTIFICATION_TYPES`) : c'est une info business
+ * critique. `activeUntilKey` = YYYY-MM-DD de la fin d'accès.
+ */
+export function subscriptionExpiryNotification(
+  orgId: string,
+  args: { daysLeft: number; isTrial: boolean; activeUntilKey: string },
+): OwnerNotification {
+  const quoi = args.isTrial ? 'Ton essai gratuit' : 'Ton abonnement';
+  const quand = args.daysLeft <= 1 ? 'se termine demain' : `se termine dans ${args.daysLeft} jours`;
+  return {
+    type: 'SUBSCRIPTION_EXPIRY',
+    title: args.isTrial ? "Fin d'essai proche" : "Fin d'abonnement proche",
+    body: `${quoi} ${quand}. Contacte-nous pour continuer sans interruption.`,
+    data: { daysLeft: args.daysLeft, isTrial: args.isTrial, activeUntil: args.activeUntilKey },
+    dedupeKey: `subscription-expiry:${orgId}:${args.activeUntilKey}:${args.daysLeft}`,
+  };
+}
+
 export function welcomeNotification(userId: string, email: string): CreateNotificationInput {
   return {
     userId,

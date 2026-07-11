@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { AdminHeader, Badge, LoadMore, SearchBar, StatCard } from '@/components/admin/ui';
 import { formatFCFA } from '@/lib/boutique/format';
+import { waLink } from '@/lib/wa';
+import Icon from '@/components/ui/Icon';
 
 interface AdminBoutique {
   id: string;
@@ -49,7 +51,11 @@ const STATUS_LABEL: Record<AdminBoutique['status'], string> = {
   TRIAL: 'Essai',
   EXPIRED: 'Expiré',
 };
-const PLAN_LABEL: Record<string, string> = { SOLO: 'Solo', BOUTIQUE: 'Boutique' };
+const PLAN_LABEL: Record<string, string> = {
+  PREMIUM: 'Premium',
+  SOLO: 'Solo',
+  BOUTIQUE: 'Boutique',
+};
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: '', label: 'Toutes' },
@@ -200,9 +206,22 @@ export default function AdminBoutiquesPage() {
                 </td>
                 <td className="text-muted-foreground font-body px-4 py-3">
                   {b.phone ? (
-                    <a href={`tel:${b.phone}`} className="hover:text-foreground">
-                      {b.phone}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a href={`tel:${b.phone}`} className="hover:text-foreground">
+                        {b.phone}
+                      </a>
+                      {waLink(b.phone) && (
+                        <a
+                          href={waLink(b.phone)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Écrire sur WhatsApp"
+                          className="text-primary inline-flex shrink-0 items-center"
+                        >
+                          <Icon i="message-circle" size={15} />
+                        </a>
+                      )}
+                    </div>
                   ) : (
                     '—'
                   )}

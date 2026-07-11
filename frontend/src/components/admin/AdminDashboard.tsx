@@ -2,6 +2,7 @@
 
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
+import { labelForAction } from '@/lib/admin/action-labels';
 import { AdminHeader, Badge, MiniBars, Panel, StatBar, StatCard } from './ui';
 
 interface AdminStats {
@@ -51,6 +52,7 @@ interface AdminStats {
     byCollected: Array<{ id: string; name: string; value: number }>;
   };
   topCities: Array<{ city: string; revenue: number; boutiques: number }>;
+  collectedByMonth: Array<{ month: string; amount: number }>;
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -75,14 +77,11 @@ const fcfa = (n: number) => `${formatFCFA(n)} FCFA`;
 
 const ROLE_TONE: Record<string, string> = { SUPERADMIN: 'purple', ADMIN: 'blue', USER: 'neutral' };
 
-const ACTION_LABEL: Record<string, string> = {
-  'user.role_change': 'Changement de rôle',
-  'user.status_change': 'Changement de statut',
-  'withdrawal.cancel': 'Annulation retrait',
-  BOOTSTRAP_SUPERADMIN: 'Promotion super-admin',
+const PLAN_LABEL: Record<string, string> = {
+  PREMIUM: 'Premium',
+  SOLO: 'Solo',
+  BOUTIQUE: 'Boutique',
 };
-
-const PLAN_LABEL: Record<string, string> = { SOLO: 'Solo', BOUTIQUE: 'Boutique' };
 const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', MOBILE: 'Mobile money' };
 // Ton du badge selon l'urgence (jours restants avant expiration).
 function urgencyTone(daysLeft: number): string {
@@ -98,6 +97,41 @@ function daysLeftLabel(daysLeft: number): string {
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR');
+}
+
+const MONTH_SHORT = [
+  'jan',
+  'fév',
+  'mar',
+  'avr',
+  'mai',
+  'juin',
+  'juil',
+  'août',
+  'sep',
+  'oct',
+  'nov',
+  'déc',
+];
+const MONTH_LONG = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
+// "2026-07" → { short: "juil", long: "juillet 2026" }
+function fmtMonth(key: string): { short: string; long: string } {
+  const [y, m] = key.split('-');
+  const idx = Math.max(0, Math.min(11, Number(m) - 1));
+  return { short: MONTH_SHORT[idx] ?? m ?? '', long: `${MONTH_LONG[idx] ?? ''} ${y ?? ''}`.trim() };
 }
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', {
@@ -332,6 +366,22 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Ligne 3c — Encaissé par mois (revenu réel des abonnements) */}
+      <Panel title="Encaissé par mois — 6 derniers mois">
+        <div className="px-4 py-5">
+          <MiniBars
+            data={s.collectedByMonth.map((m) => {
+              const f = fmtMonth(m.month);
+              return {
+                label: f.short,
+                value: m.amount,
+                hint: `${f.long} : ${fcfa(m.amount)}`,
+              };
+            })}
+          />
+        </div>
+      </Panel>
+
       {/* Ligne 4 — graphe inscriptions + répartitions */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -455,7 +505,7 @@ export default function AdminDashboard() {
               >
                 <div className="min-w-0">
                   <p className="font-body text-foreground truncate text-sm font-medium">
-                    {ACTION_LABEL[a.action] ?? a.action}
+                    {labelForAction(a.action)}
                   </p>
                   <p className="text-muted-foreground font-body text-xs">
                     {a.targetType ?? '—'} · {a.actorId.slice(0, 8)}…
@@ -472,10 +522,9 @@ export default function AdminDashboard() {
 
       {/* Ligne 6 — santé technique */}
       <Panel title="Santé technique">
-        <div className="divide-border grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div className="divide-border grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
           <OpsStat label="Outbox en attente" value={s.ops.outboxPending} />
           <OpsStat label="Emails en attente" value={s.ops.emailPending} />
-          <OpsStat label="Commandes en attente" value={s.orders.pending} />
         </div>
       </Panel>
     </div>

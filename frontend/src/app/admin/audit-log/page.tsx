@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCursorList } from '@/lib/admin/useCursorList';
+import { labelForAction } from '@/lib/admin/action-labels';
 import { AdminHeader, Badge, LoadMore, SearchBar } from '@/components/admin/ui';
 
 interface AuditEntry {
@@ -59,7 +60,7 @@ export default function AdminAuditLogPage() {
                   {new Date(a.createdAt).toLocaleString('fr-FR')}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone="blue">{a.action}</Badge>
+                  <Badge tone="blue">{labelForAction(a.action)}</Badge>
                 </td>
                 <td className="text-muted-foreground font-body px-4 py-3">
                   {a.targetType}

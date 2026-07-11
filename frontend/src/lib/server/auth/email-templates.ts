@@ -200,6 +200,58 @@ ${emailFooter()}
   };
 }
 
+export interface SubscriptionExpiryEmailArgs {
+  orgName: string;
+  name: string | null;
+  daysLeft: number;
+  isTrial: boolean;
+  /** Date de fin d'accès (affichage lisible fr). */
+  activeUntil: Date;
+}
+
+/**
+ * Relance avant la fin de l'essai / de l'abonnement. Ton chaleureux, appel à
+ * l'action = nous contacter (vente pilotée par contact au Tchad). Aucune valeur
+ * interpolée n'est utilisateur-contrôlée hors `orgName`/`name` → échappées.
+ */
+export function subscriptionExpiryEmail(args: SubscriptionExpiryEmailArgs): EmailTemplate {
+  const org = htmlEscape(args.orgName);
+  const greeting = args.name ? htmlEscape(args.name) : org;
+  const quoi = args.isTrial ? 'ton essai gratuit' : 'ton abonnement';
+  const quand = args.daysLeft <= 1 ? 'demain' : `dans ${args.daysLeft} jours`;
+  const dateStr = args.activeUntil.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const subject = args.isTrial
+    ? `Ton essai Sahilley se termine ${quand}`
+    : `Ton abonnement Sahilley se termine ${quand}`;
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#faf8f3;font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f3;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e0d6;border-radius:16px;overflow:hidden;">
+${emailHeader()}
+<tr><td style="padding:28px 24px 8px 24px;">
+<h1 style="margin:0 0 8px 0;font-size:19px;font-weight:700;color:#1a1a1a;">Bonjour ${greeting},</h1>
+<p style="margin:0;font-size:14px;line-height:1.6;color:#5b5648;">${quoi.charAt(0).toUpperCase() + quoi.slice(1)} pour <strong>${org}</strong> se termine <strong>${quand}</strong> (le ${dateStr}). Pour continuer à vendre, gérer ton stock et tes crédits sans interruption, contacte-nous et on active ton accès.</p>
+</td></tr>
+<tr><td style="padding:20px 24px;" align="center">
+<a href="${CONTACT_WHATSAPP}" style="display:inline-block;background:#0e9f6e;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:10px;">Nous contacter sur WhatsApp</a>
+<p style="margin:12px 0 0 0;font-size:13px;color:#7a7468;">ou par email : ${CONTACT_EMAIL}</p>
+</td></tr>
+<tr><td style="padding:8px 24px 24px 24px;">
+<p style="margin:0;font-size:12px;line-height:1.6;color:#9a9486;">Après la fin d'accès, tu disposes encore de quelques jours de tolérance avant le blocage des écritures — mais mieux vaut anticiper.</p>
+</td></tr>
+${emailFooter()}
+</table>
+</td></tr>
+</table>
+</body></html>`;
+  const text = `Bonjour ${args.name ?? args.orgName},\n\n${quoi.charAt(0).toUpperCase() + quoi.slice(1)} pour ${args.orgName} se termine ${quand} (le ${dateStr}).\n\nPour continuer sans interruption, contacte-nous :\nWhatsApp ${CONTACT_PHONE_DISPLAY} — ${CONTACT_WHATSAPP}\nEmail — ${CONTACT_EMAIL}\n\nSahilley — Gestion de boutique.`;
+  return { subject, html, text };
+}
+
 export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate {
   const code = htmlEscape(args.code);
   const ttl = ttlWording(args.expiresAt);
