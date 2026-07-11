@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { useAdmin } from '@/components/admin/AdminContext';
 import { useCursorList } from '@/lib/admin/useCursorList';
 import { AdminHeader, Badge, LoadMore, SearchBar } from '@/components/admin/ui';
+import Modal from '@/components/ui/Modal';
 
 interface AdminUser {
   id: string;
@@ -28,6 +29,7 @@ export default function AdminUsersPage() {
   const admin = useAdmin();
   const canRole = admin.can.includes('users:role');
   const canRestore = admin.can.includes('users:status:restore');
+  const isSuper = admin.role === 'SUPERADMIN';
 
   const { items, setItems, hasMore, loading, error, load } =
     useCursorList<AdminUser>('/api/admin/users');
@@ -35,6 +37,8 @@ export default function AdminUsersPage() {
   const [status, setStatus] = useState('');
   const [role, setRole] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function reload() {
     void load(true, { q, status, role });
@@ -58,6 +62,29 @@ export default function AdminUsersPage() {
       toast(code === 'LAST_SUPERADMIN' ? 'Impossible : dernier super-admin.' : 'Échec.', 'error');
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api(`/api/admin/users/${deleteTarget.id}`, { method: 'DELETE' });
+      setItems((prev) => prev.filter((x) => x.id !== deleteTarget.id));
+      toast('Compte supprimé.', 'success');
+      setDeleteTarget(null);
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      toast(
+        code === 'USER_OWNS_BOUTIQUE'
+          ? 'Ce compte possède une boutique. Supprimez-la d’abord.'
+          : code === 'CANNOT_DELETE_STAFF'
+            ? 'Impossible de supprimer un administrateur.'
+            : 'Échec.',
+        'error',
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -162,28 +189,38 @@ export default function AdminUsersPage() {
                 <td className="text-muted-foreground font-body px-4 py-3">
                   {new Date(u.createdAt).toLocaleDateString('fr-FR')}
                 </td>
-                <td className="px-4 py-3 text-end">
-                  {u.status === 'ACTIVE' ? (
-                    <button
-                      type="button"
-                      onClick={() => void toggleStatus(u)}
-                      disabled={busyId === u.id}
-                      className="text-danger font-body text-xs font-semibold disabled:opacity-50"
-                    >
-                      Suspendre
-                    </button>
-                  ) : canRestore ? (
-                    <button
-                      type="button"
-                      onClick={() => void toggleStatus(u)}
-                      disabled={busyId === u.id}
-                      className="text-primary font-body text-xs font-semibold disabled:opacity-50"
-                    >
-                      Réactiver
-                    </button>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-3">
+                    {u.status === 'ACTIVE' ? (
+                      <button
+                        type="button"
+                        onClick={() => void toggleStatus(u)}
+                        disabled={busyId === u.id}
+                        className="text-danger font-body text-xs font-semibold disabled:opacity-50"
+                      >
+                        Suspendre
+                      </button>
+                    ) : canRestore ? (
+                      <button
+                        type="button"
+                        onClick={() => void toggleStatus(u)}
+                        disabled={busyId === u.id}
+                        className="text-primary font-body text-xs font-semibold disabled:opacity-50"
+                      >
+                        Réactiver
+                      </button>
+                    ) : null}
+                    {isSuper && u.role === 'USER' && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(u)}
+                        disabled={busyId === u.id}
+                        className="text-danger font-body text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-50"
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -203,6 +240,41 @@ export default function AdminUsersPage() {
         loading={loading}
         onClick={() => void load(false, { q, status, role })}
       />
+
+      {/* Confirmation de suppression d'un compte (irréversible) */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => (deleting ? undefined : setDeleteTarget(null))}
+        title="Supprimer le compte"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground font-body text-sm">
+            Le compte{' '}
+            <span className="text-foreground font-semibold break-all">{deleteTarget?.email}</span>{' '}
+            sera <span className="text-danger font-semibold">définitivement supprimé</span>. Son
+            email redeviendra libre. Cette action est irréversible.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmDelete()}
+              disabled={deleting}
+              className="bg-danger font-body rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {deleting ? 'Suppression…' : 'Supprimer'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

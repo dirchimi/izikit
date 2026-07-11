@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
@@ -125,6 +125,7 @@ function InfoRow({
 export default function AdminBoutiqueDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const router = useRouter();
   const { toast } = useToast();
   const admin = useAdmin();
   const { data, loading, error, refresh } = useApi<{ boutique: BoutiqueDetail }>(
@@ -135,6 +136,9 @@ export default function AdminBoutiqueDetailPage() {
   const [wipeOpen, setWipeOpen] = useState(false);
   const [wipeName, setWipeName] = useState('');
   const [wiping, setWiping] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteName, setDeleteName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   async function toggleInternal(next: boolean) {
     setBusy(true);
@@ -165,6 +169,21 @@ export default function AdminBoutiqueDetailPage() {
       toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
     } finally {
       setWiping(false);
+    }
+  }
+
+  async function deleteBoutique() {
+    setDeleting(true);
+    try {
+      const res = await api<{ deletedUsers: number }>(`/api/admin/boutiques/${id}/delete`, {
+        method: 'POST',
+        body: { confirmName: deleteName.trim() },
+      });
+      toast(`Boutique supprimée. ${res.deletedUsers} compte(s) supprimé(s).`, 'success');
+      router.push('/admin/boutiques');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+      setDeleting(false);
     }
   }
 
@@ -410,23 +429,40 @@ export default function AdminBoutiqueDetailPage() {
 
       {/* Zone de danger — SUPERADMIN uniquement */}
       {admin.role === 'SUPERADMIN' && (
-        <div className="border-danger/40 bg-danger/5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-          <div className="min-w-0">
-            <p className="text-danger font-body text-sm font-semibold">Zone de danger</p>
-            <p className="text-muted-foreground font-body text-xs">
-              Vider toutes les données de la boutique (produits, ventes, clients, créances, dettes,
-              dépenses, documents). La boutique, l’équipe et l’abonnement sont conservés. Action{' '}
-              <span className="text-danger font-semibold">irréversible</span>.
+        <div className="border-danger/40 bg-danger/5 flex flex-col gap-4 rounded-lg border p-4">
+          <p className="text-danger font-body text-sm font-semibold">Zone de danger</p>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-muted-foreground font-body min-w-0 text-xs">
+              <span className="text-foreground font-semibold">Vider les données</span> — efface
+              produits, ventes, clients, créances, dettes, dépenses, documents. La boutique,
+              l’équipe et l’abonnement sont conservés.
             </p>
+            <button
+              type="button"
+              onClick={() => setWipeOpen(true)}
+              disabled={wiping}
+              className="border-danger text-danger hover:bg-danger/10 font-body shrink-0 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Vider les données
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setWipeOpen(true)}
-            disabled={wiping}
-            className="border-danger text-danger hover:bg-danger/10 font-body shrink-0 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          >
-            Vider les données
-          </button>
+
+          <div className="border-danger/20 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <p className="text-muted-foreground font-body min-w-0 text-xs">
+              <span className="text-foreground font-semibold">Supprimer complètement</span> — la
+              boutique <em>et</em> les comptes (patron + vendeurs orphelins) disparaissent, les
+              emails redeviennent libres. Pour retirer un compte de test ou abandonné.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              disabled={deleting}
+              className="bg-danger font-body shrink-0 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Supprimer complètement
+            </button>
+          </div>
         </div>
       )}
 
@@ -509,6 +545,55 @@ export default function AdminBoutiqueDetailPage() {
               className="bg-danger font-body rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {wiping ? 'Suppression…' : 'Vider définitivement'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirmation de la suppression complète (boutique + comptes) */}
+      <Modal
+        open={deleteOpen}
+        onClose={() => (deleting ? undefined : (setDeleteOpen(false), setDeleteName('')))}
+        title="Supprimer complètement la boutique"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground font-body text-sm">
+            <span className="text-foreground font-semibold">{b.name}</span> et toutes ses données
+            seront <span className="text-danger font-semibold">définitivement supprimées</span>. Le
+            compte du patron et des vendeurs (s’ils n’ont pas d’autre boutique) seront aussi
+            supprimés — leurs emails redeviendront libres. Cette action est irréversible.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="del-name" className="font-body text-foreground text-xs font-semibold">
+              Pour confirmer, tape le nom exact : <span className="text-foreground">{b.name}</span>
+            </label>
+            <input
+              id="del-name"
+              type="text"
+              value={deleteName}
+              onChange={(e) => setDeleteName(e.target.value)}
+              placeholder={b.name}
+              autoComplete="off"
+              className="border-border bg-input text-foreground font-body focus:border-danger rounded-md border px-3 py-2 text-sm outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => (setDeleteOpen(false), setDeleteName(''))}
+              disabled={deleting}
+              className="border-border bg-surface text-foreground font-body rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteBoutique()}
+              disabled={deleting || deleteName.trim() !== b.name.trim()}
+              className="bg-danger font-body rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {deleting ? 'Suppression…' : 'Supprimer définitivement'}
             </button>
           </div>
         </div>
