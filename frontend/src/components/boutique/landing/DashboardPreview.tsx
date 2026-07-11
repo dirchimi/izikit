@@ -48,9 +48,7 @@ export default async function DashboardPreview() {
         {/* Sidebar (masquée sur mobile) */}
         <div className="bg-sidebar hidden w-[180px] flex-col gap-1 py-4 sm:flex">
           <div className="mb-2 flex items-center gap-2.5 px-4 py-2">
-            <div className="bg-primary flex h-7 w-7 items-center justify-center rounded-md">
-              <span className="font-headings text-primary-foreground text-xs font-bold">S</span>
-            </div>
+            <img src="/logo-mark.svg" alt="" className="h-7 w-7 rounded-md" />
             <span className="font-headings text-primary-foreground text-sm font-bold">
               Sahilley
             </span>

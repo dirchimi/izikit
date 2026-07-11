@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import Icon from '@/components/ui/Icon';
 import LanguageSwitcher from '@/components/boutique/LanguageSwitcher';
 import ThemeToggle from '@/components/boutique/ThemeToggle';
-import { verifyToken, COOKIE_NAME } from '@/lib/server/auth';
+import { verifyToken, COOKIE_NAME, CSRF_COOKIE_NAME } from '@/lib/server/auth';
 import { getServerT } from '@/lib/i18n/server';
 import {
   CONTACT_EMAIL,
@@ -30,8 +30,16 @@ const ctaPrimary =
  */
 export default async function MarketingHeader() {
   const { t } = await getServerT();
-  const token = (await cookies()).get(COOKIE_NAME)?.value;
-  const authenticated = token ? !!(await verifyToken(token)) : false;
+  const store = await cookies();
+  // Le jeton d'accès expire en 15 min : s'y fier seul ferait afficher « Se
+  // connecter » à un utilisateur pourtant connecté (sa session de 7 jours vit
+  // encore). Le cookie CSRF (7 jours, posé à la connexion, effacé à la
+  // déconnexion) est un marqueur de session fiable et lisible ici → on l'utilise
+  // en repli. Pire cas : session en réalité morte → la garde du dashboard
+  // renverra vers /connexion.
+  const token = store.get(COOKIE_NAME)?.value;
+  const hasSession = !!store.get(CSRF_COOKIE_NAME)?.value;
+  const authenticated = hasSession || (token ? !!(await verifyToken(token)) : false);
 
   return (
     <>
@@ -76,9 +84,11 @@ export default async function MarketingHeader() {
       <header className="bg-surface/90 border-border sticky top-0 z-30 border-b backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-3.5 md:px-10">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="bg-primary ring-primary/20 flex h-9 w-9 items-center justify-center rounded-lg shadow-sm ring-1">
-              <span className="font-headings text-primary-foreground text-base font-bold">S</span>
-            </div>
+            <img
+              src="/logo-mark.svg"
+              alt=""
+              className="ring-primary/20 h-9 w-9 rounded-lg shadow-sm ring-1"
+            />
             <span className="font-headings text-foreground text-lg font-bold tracking-tight">
               Sahilley
             </span>

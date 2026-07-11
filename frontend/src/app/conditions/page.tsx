@@ -35,7 +35,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
       {
         heading: '3. Essai et abonnement',
         paragraphs: [
-          'Un plan Gratuit limité est disponible en permanence. Le plan Premium démarre par un essai gratuit de 30 jours, sans carte bancaire. Pour vous abonner ensuite, contactez-nous (notamment sur WhatsApp). Les tarifs peuvent évoluer ; toute modification vous sera communiquée à l’avance.',
+          'Un plan Gratuit limité est disponible en permanence. Le plan Premium démarre par un essai gratuit de 15 jours, sans carte bancaire. Pour vous abonner ensuite, contactez-nous (notamment sur WhatsApp). Les tarifs peuvent évoluer ; toute modification vous sera communiquée à l’avance.',
         ],
       },
       {
@@ -104,7 +104,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
       {
         heading: '3. Trial and subscription',
         paragraphs: [
-          'A limited Free plan is always available. The Premium plan starts with a 30-day free trial, no credit card. To subscribe afterwards, contact us (including on WhatsApp). Prices may change; any change will be communicated in advance.',
+          'A limited Free plan is always available. The Premium plan starts with a 15-day free trial, no credit card. To subscribe afterwards, contact us (including on WhatsApp). Prices may change; any change will be communicated in advance.',
         ],
       },
       {
@@ -173,7 +173,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
       {
         heading: '3. التجربة والاشتراك',
         paragraphs: [
-          'تتوفر خطة مجانية محدودة بشكل دائم. تبدأ خطة Premium بتجربة مجانية لمدة 30 يوماً دون بطاقة بنكية. وللاشتراك لاحقاً، تواصل معنا (عبر واتساب مثلاً). قد تتغيّر الأسعار، وسيتم إعلامك بأي تغيير مسبقاً.',
+          'تتوفر خطة مجانية محدودة بشكل دائم. تبدأ خطة Premium بتجربة مجانية لمدة 15 يوماً دون بطاقة بنكية. وللاشتراك لاحقاً، تواصل معنا (عبر واتساب مثلاً). قد تتغيّر الأسعار، وسيتم إعلامك بأي تغيير مسبقاً.',
         ],
       },
       {

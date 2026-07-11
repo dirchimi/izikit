@@ -543,9 +543,9 @@ const messages: Record<string, Msg> = {
     ar: 'بسيط وبلا مفاجآت',
   },
   'landing.pricing.subtitle': {
-    fr: '30 jours d’essai gratuit — aucune carte bancaire requise',
-    en: '30-day free trial — no card required',
-    ar: 'تجربة مجانية لمدة 30 يوماً — دون الحاجة إلى بطاقة بنكية',
+    fr: '15 jours d’essai gratuit — aucune carte bancaire requise',
+    en: '15-day free trial — no card required',
+    ar: 'تجربة مجانية لمدة 15 يوماً — دون الحاجة إلى بطاقة بنكية',
   },
   'landing.pricing.popular': { fr: 'Populaire', en: 'Popular', ar: 'الأكثر رواجاً' },
   'landing.pricing.cta': { fr: 'Essayer gratuitement', en: 'Try for free', ar: 'جرّب مجاناً' },
@@ -614,9 +614,9 @@ const messages: Record<string, Msg> = {
     ar: 'أنشئ متجرك مجاناً',
   },
   'landing.final.fineprint': {
-    fr: 'Aucune carte requise · 30 jours gratuits · Annulation à tout moment',
-    en: 'No card required · 30 days free · Cancel anytime',
-    ar: 'دون بطاقة · 30 يوماً مجاناً · يمكنك الإلغاء في أي وقت',
+    fr: 'Aucune carte requise · 15 jours gratuits · Annulation à tout moment',
+    en: 'No card required · 15 days free · Cancel anytime',
+    ar: 'دون بطاقة · 15 يوماً مجاناً · يمكنك الإلغاء في أي وقت',
   },
   'landing.footer.brandDesc': {
     fr: 'Logiciel de gestion de boutique pour les commerçants d’Afrique centrale. Hors-ligne, simple, trilingue.',
@@ -671,9 +671,9 @@ const messages: Record<string, Msg> = {
     ar: 'FR · EN · العربية',
   },
   'landing.hero.fineprint': {
-    fr: '30 jours gratuits · sans carte bancaire · prêt en 2 minutes',
-    en: '30 days free · no credit card · ready in 2 minutes',
-    ar: '30 يوماً مجاناً · بدون بطاقة بنكية · جاهز خلال دقيقتين',
+    fr: '15 jours gratuits · sans carte bancaire · prêt en 2 minutes',
+    en: '15 days free · no credit card · ready in 2 minutes',
+    ar: '15 يوماً مجاناً · بدون بطاقة بنكية · جاهز خلال دقيقتين',
   },
   'landing.trust.title': {
     fr: 'Conçu pour les boutiques du Tchad',
@@ -770,9 +770,9 @@ const messages: Record<string, Msg> = {
     ar: 'كيف أدفع الاشتراك؟',
   },
   'landing.faq.a4': {
-    fr: 'Vous commencez avec 30 jours gratuits, sans carte bancaire. Pour vous abonner ensuite, écrivez-nous sur WhatsApp.',
-    en: 'You start with 30 days free, no credit card. To subscribe afterwards, message us on WhatsApp.',
-    ar: 'تبدأ بـ 30 يوماً مجاناً وبدون بطاقة بنكية. وللاشتراك لاحقاً، راسلنا عبر واتساب.',
+    fr: 'Vous commencez avec 15 jours gratuits, sans carte bancaire. Pour vous abonner ensuite, écrivez-nous sur WhatsApp.',
+    en: 'You start with 15 days free, no credit card. To subscribe afterwards, message us on WhatsApp.',
+    ar: 'تبدأ بـ 15 يوماً مجاناً وبدون بطاقة بنكية. وللاشتراك لاحقاً، راسلنا عبر واتساب.',
   },
   'landing.faq.q5': {
     fr: 'C’est compliqué si je n’ai jamais utilisé d’application ?',
@@ -826,9 +826,9 @@ const messages: Record<string, Msg> = {
     ar: 'مجاني للأبد',
   },
   'landing.pricing.trialNote': {
-    fr: '30 jours d’essai Premium gratuits, sans carte bancaire.',
-    en: '30-day free Premium trial, no credit card.',
-    ar: 'تجربة Premium مجانية لمدة 30 يوماً، بدون بطاقة بنكية.',
+    fr: '15 jours d’essai Premium gratuits, sans carte bancaire.',
+    en: '15-day free Premium trial, no credit card.',
+    ar: 'تجربة Premium مجانية لمدة 15 يوماً، بدون بطاقة بنكية.',
   },
   'landing.pricing.altDurations': {
     fr: 'Ou 21 000 FCFA / 3 mois · 36 000 FCFA / 6 mois — jusqu’à −20 %',

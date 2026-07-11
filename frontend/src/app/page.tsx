@@ -4,7 +4,7 @@ import LandingPage from '@/components/boutique/landing/LandingPage';
 export const metadata: Metadata = {
   title: 'Sahilley — Gérez votre boutique, simplement',
   description:
-    'Caisse, stock, ventes à crédit, dépenses et rapports pour votre boutique. Consultation hors-ligne, en FCFA, trilingue. 30 jours d’essai gratuit.',
+    'Caisse, stock, ventes à crédit, dépenses et rapports pour votre boutique. Consultation hors-ligne, en FCFA, trilingue. 15 jours d’essai gratuit.',
 };
 
 // Page d'accueil publique (marketing). Accessible à tous, y compris connecté :

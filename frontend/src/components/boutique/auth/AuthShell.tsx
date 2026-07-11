@@ -27,9 +27,7 @@ export default async function AuthShell({
       <div className="bg-surface border-border flex w-full max-w-[420px] flex-col items-center gap-6 rounded-xl border px-6 py-9 sm:px-10 sm:py-10">
         {/* Logo */}
         <div className="flex flex-col items-center gap-2">
-          <div className="bg-primary flex h-14 w-14 items-center justify-center rounded-xl">
-            <span className="font-headings text-primary-foreground text-2xl font-bold">S</span>
-          </div>
+          <img src="/logo-mark.svg" alt="" className="h-14 w-14 rounded-xl" />
           <span className="font-headings text-foreground text-xl font-bold tracking-tight">
             Sahilley
           </span>

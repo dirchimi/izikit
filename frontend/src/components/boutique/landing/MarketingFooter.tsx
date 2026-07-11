@@ -57,9 +57,7 @@ export default async function MarketingFooter() {
           {/* Marque */}
           <div className="flex max-w-[280px] flex-col gap-4">
             <div className="flex items-center gap-2.5">
-              <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
-                <span className="font-headings text-primary-foreground text-sm font-bold">S</span>
-              </div>
+              <img src="/logo-mark.svg" alt="" className="h-8 w-8 rounded-md" />
               <span className="font-headings text-primary-foreground text-base font-bold">
                 Sahilley
               </span>
