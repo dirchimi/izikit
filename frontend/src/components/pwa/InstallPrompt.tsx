@@ -10,10 +10,11 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// « Plus tard » n'est plus définitif : on mémorise l'horodatage du dernier refus
-// et on ré-invite après 3 jours, tant que l'app n'est pas installée.
-const SNOOZE_KEY = 'pwa-install-snooze';
-const SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
+// « Plus tard » ne masque que pour la SESSION en cours (sessionStorage) : la
+// bannière réapparaît à chaque nouvelle ouverture de l'app, tant qu'elle n'est
+// pas installée. On évite ainsi le trou de 3 jours qui tuait l'installation
+// pendant l'onboarding, sans harceler le client au sein d'une même visite.
+const DISMISS_KEY = 'pwa-install-dismissed';
 
 /** App déjà installée (lancée en mode autonome) — sur Android/desktop ET iOS. */
 function isStandalone(): boolean {
@@ -24,10 +25,9 @@ function isStandalone(): boolean {
   );
 }
 
-/** Rappel encore « en sommeil » (moins de 3 jours depuis le dernier « Plus tard »). */
-function isSnoozed(): boolean {
-  const ts = Number(window.localStorage.getItem(SNOOZE_KEY) ?? 0);
-  return Number.isFinite(ts) && ts > 0 && Date.now() - ts < SNOOZE_MS;
+/** « Plus tard » déjà cliqué durant cette session (repart à zéro à la réouverture). */
+function isDismissedThisSession(): boolean {
+  return window.sessionStorage.getItem(DISMISS_KEY) === '1';
 }
 
 /**
@@ -53,7 +53,7 @@ type Mode = 'hidden' | 'android' | 'ios';
  *    l'invite native au clic sur « Installer ».
  *  - iOS Safari : cet événement n'existe pas (restriction Apple) → on affiche
  *    une consigne pour ajouter l'app manuellement à l'écran d'accueil.
- * Masquée si déjà installée. « Plus tard » reporte le rappel de 3 jours.
+ * Masquée si déjà installée. « Plus tard » ne masque que la session en cours.
  */
 export default function InstallPrompt() {
   const t = useT();
@@ -61,7 +61,7 @@ export default function InstallPrompt() {
   const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (isStandalone() || isSnoozed()) return;
+    if (isStandalone() || isDismissedThisSession()) return;
 
     // iOS : aucune invite native → consigne manuelle immédiate.
     if (isIosSafari()) {
@@ -76,8 +76,9 @@ export default function InstallPrompt() {
       setMode('android');
     };
     const onInstalled = () => {
-      // Installée → on ne rappellera plus (et pas de rappel résiduel).
-      window.localStorage.setItem(SNOOZE_KEY, String(Date.now()));
+      // Installée → plus rien à proposer. isStandalone() prendra le relais aux
+      // ouvertures suivantes ; on marque la session pour éviter tout résidu.
+      window.sessionStorage.setItem(DISMISS_KEY, '1');
       setEvt(null);
       setMode('hidden');
     };
@@ -99,8 +100,9 @@ export default function InstallPrompt() {
   }
 
   function later() {
-    // Reporte le rappel de 3 jours (au lieu de le masquer définitivement).
-    window.localStorage.setItem(SNOOZE_KEY, String(Date.now()));
+    // Masque pour cette session seulement : la bannière reviendra à la prochaine
+    // ouverture de l'app, tant que le client n'a pas installé.
+    window.sessionStorage.setItem(DISMISS_KEY, '1');
     setEvt(null);
     setMode('hidden');
   }
