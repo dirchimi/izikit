@@ -22,7 +22,7 @@ interface BoutiqueDetail {
     businessType: string | null;
   } | null;
   subscription: {
-    plan: 'SOLO' | 'BOUTIQUE' | null;
+    plan: string | null;
     status: 'ACTIVE' | 'TRIAL' | 'EXPIRED';
     daysLeft: number;
     activeUntil: string | null;
@@ -71,7 +71,11 @@ const fcfa = (n: number) => `${formatFCFA(n)} FCFA`;
 
 const SUB_TONE: Record<string, string> = { ACTIVE: 'green', TRIAL: 'amber', EXPIRED: 'red' };
 const SUB_LABEL: Record<string, string> = { ACTIVE: 'Abonné', TRIAL: 'Essai', EXPIRED: 'Expiré' };
-const PLAN_LABEL: Record<string, string> = { SOLO: 'Solo', BOUTIQUE: 'Boutique' };
+const PLAN_LABEL: Record<string, string> = {
+  PREMIUM: 'Premium',
+  SOLO: 'Solo',
+  BOUTIQUE: 'Boutique',
+};
 const METHOD_LABEL: Record<string, string> = {
   CASH: 'Espèces',
   MOBILE: 'Mobile money',

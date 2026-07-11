@@ -45,7 +45,7 @@ interface AdminStats {
       daysLeft: number;
     }>;
   };
-  planSplit: { solo: number; boutique: number };
+  planSplit: { premium: number };
   topBoutiques: {
     byRevenue: Array<{ id: string; name: string; value: number }>;
     byCollected: Array<{ id: string; name: string; value: number }>;
@@ -399,18 +399,12 @@ export default function AdminDashboard() {
             </div>
             <div className="flex flex-col gap-3">
               <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
-                Plans actifs
+                Abonnements actifs
               </span>
               <StatBar
-                label="Solo"
-                value={s.planSplit.solo}
-                total={s.planSplit.solo + s.planSplit.boutique}
-                tone="blue"
-              />
-              <StatBar
-                label="Boutique"
-                value={s.planSplit.boutique}
-                total={s.planSplit.solo + s.planSplit.boutique}
+                label="Premium"
+                value={s.planSplit.premium}
+                total={s.boutiques.total}
                 tone="purple"
               />
             </div>

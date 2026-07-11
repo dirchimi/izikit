@@ -16,6 +16,7 @@ import { requireSuperadmin } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { logAdminAction } from '@/lib/server/admin/audit';
 import { extendPeriod } from '@/lib/subscription/status';
+import { planPrice, isPlanId } from '@/lib/subscription/plans';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
@@ -69,6 +70,10 @@ export async function POST(
       if (payment.status !== 'PENDING') return { kind: 'NOT_PENDING' as const };
 
       const months = parsed.data.months ?? payment.months;
+      // Si le superadmin force une durée différente de celle demandée, le montant
+      // encaissé doit suivre (cohérence comptable : montant = prix × mois). Repli
+      // sur le montant d'origine si le plan stocké n'est pas reconnu.
+      const amount = isPlanId(payment.plan) ? planPrice(payment.plan, months) : payment.amount;
       const { periodStart, periodEnd } = extendPeriod(
         payment.organization.currentPeriodEnd,
         now,
@@ -84,6 +89,7 @@ export async function POST(
         data: {
           status: 'CONFIRMED',
           months,
+          amount,
           periodStart,
           periodEnd,
           confirmedById: auth.admin.id,
@@ -106,7 +112,7 @@ export async function POST(
         metadata: {
           organizationId: payment.organizationId,
           plan: payment.plan,
-          amount: payment.amount,
+          amount,
           months,
           periodEnd: periodEnd.toISOString(),
         },

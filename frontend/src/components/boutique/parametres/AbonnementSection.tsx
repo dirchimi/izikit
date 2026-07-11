@@ -11,7 +11,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
 import {
   PLANS,
-  PLAN_IDS,
+  SUB_PERIODS,
   planPrice,
   isPlanId,
   type PlanId,
@@ -81,22 +81,78 @@ export default function AbonnementSection() {
   const [months, setMonths] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
+  // Code de réduction (facultatif) : le patron saisit un code puis « applique »
+  // pour prévisualiser le prix remisé. `applied` mémorise l'aperçu validé par le
+  // serveur pour la durée courante ; il est vidé si la durée change.
+  const [code, setCode] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState<{
+    code: string;
+    months: number;
+    baseAmount: number;
+    finalAmount: number;
+  } | null>(null);
+
   const pending = data?.payments.find((p) => p.status === 'PENDING') ?? null;
+
+  // Le code appliqué n'est valable que pour la durée sur laquelle il a été
+  // prévisualisé (le prix de base change avec la durée).
+  const activeDiscount = applied && applied.months === months ? applied : null;
+  const displayTotal = activeDiscount
+    ? activeDiscount.finalAmount
+    : planPrice(choosing ?? 'PREMIUM', months);
+
+  function resetDiscount() {
+    setCode('');
+    setApplied(null);
+  }
+
+  async function applyCode() {
+    if (!choosing || !code.trim()) return;
+    setApplying(true);
+    try {
+      const res = await api<{ baseAmount: number; finalAmount: number; code: string }>(
+        '/api/subscription/discount/preview',
+        { method: 'POST', body: { plan: choosing, months, code: code.trim() } },
+      );
+      setApplied({
+        code: res.code,
+        months,
+        baseAmount: res.baseAmount,
+        finalAmount: res.finalAmount,
+      });
+      toast(t('sub.discountApplied'), 'success');
+    } catch (err) {
+      setApplied(null);
+      const c = err instanceof ApiError ? err.code : '';
+      toast(c.startsWith('DISCOUNT_') ? t('sub.discountInvalid') : t('async.error'), 'error');
+    } finally {
+      setApplying(false);
+    }
+  }
 
   async function submitRequest() {
     if (!choosing) return;
     setSubmitting(true);
     try {
+      const trimmed = code.trim();
       await api('/api/subscription/request', {
         method: 'POST',
-        body: { plan: choosing, method, months },
+        body: { plan: choosing, method, months, ...(trimmed ? { code: trimmed } : {}) },
       });
       toast(t('sub.requestSent'), 'success');
       setChoosing(null);
+      resetDiscount();
       await refresh();
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
-      toast(code === 'SUB_REQUEST_PENDING' ? t('sub.alreadyPending') : t('async.error'), 'error');
+      const c = err instanceof ApiError ? err.code : '';
+      const msg =
+        c === 'SUB_REQUEST_PENDING'
+          ? t('sub.alreadyPending')
+          : c.startsWith('DISCOUNT_')
+            ? t('sub.discountInvalid')
+            : t('async.error');
+      toast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -179,56 +235,51 @@ export default function AbonnementSection() {
             <h3 className="font-headings text-foreground text-sm font-bold">
               {data.status === 'ACTIVE' ? t('sub.renew') : t('sub.choosePlan')}
             </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {PLAN_IDS.map((id) => {
-                const plan = PLANS[id];
-                const current = data.plan === id && data.status === 'ACTIVE';
-                return (
+            <div className="bg-surface border-border flex flex-col gap-4 rounded-lg border p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="font-headings text-foreground text-base font-bold">
+                    {t(PLANS.PREMIUM.nameKey)}
+                  </span>
+                  <p className="text-muted-foreground font-body mt-0.5 text-xs">
+                    {t('sub.plan.premium.desc')}
+                  </p>
+                </div>
+                {data.plan === 'PREMIUM' && data.status === 'ACTIVE' && (
+                  <span className="bg-primary/15 text-primary font-body shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold">
+                    {t('sub.current')}
+                  </span>
+                )}
+              </div>
+              {/* Les 3 durées disponibles (remise croissante). */}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {SUB_PERIODS.map((p) => (
                   <div
-                    key={id}
-                    className={`bg-surface flex flex-col gap-3 rounded-lg border p-5 ${
-                      current ? 'border-primary' : 'border-border'
-                    }`}
+                    key={p.months}
+                    className="border-border bg-background rounded-md border px-3 py-2.5 text-center"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-headings text-foreground text-base font-bold">
-                        {t(plan.nameKey)}
-                      </span>
-                      {current && (
-                        <span className="bg-primary/15 text-primary font-body rounded-full px-2 py-0.5 text-[10px] font-bold">
-                          {t('sub.current')}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <span className="font-headings text-foreground text-xl font-bold">
-                        {formatFCFA(plan.priceMonthly)}
-                      </span>
-                      <span className="text-muted-foreground font-body text-xs">
-                        {' '}
-                        {t('common.fcfa')} {t('sub.perMonth')}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground font-body text-xs">
-                      {plan.maxUsers === null
-                        ? t('sub.plan.boutique.desc')
-                        : t('sub.plan.solo.desc')}
+                    <p className="text-muted-foreground font-body text-[11px] font-semibold uppercase">
+                      {t(p.labelKey)}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChoosing(id);
-                        setMethod('CASH');
-                        setMonths(1);
-                      }}
-                      disabled={!!pending}
-                      className="bg-primary text-primary-foreground font-body mt-auto rounded-md px-4 py-2 text-sm font-bold disabled:opacity-50"
-                    >
-                      {current ? t('sub.renew') : t('sub.choose')}
-                    </button>
+                    <p className="font-headings text-foreground mt-0.5 text-sm font-bold">
+                      {formatFCFA(p.price)} {t('common.fcfa')}
+                    </p>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setChoosing('PREMIUM');
+                  setMethod('CASH');
+                  setMonths(1);
+                  resetDiscount();
+                }}
+                disabled={!!pending}
+                className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+              >
+                {data.status === 'ACTIVE' ? t('sub.renew') : t('sub.choose')}
+              </button>
             </div>
             {pending && (
               <p className="text-muted-foreground font-body text-xs">{t('sub.blockedByPending')}</p>
@@ -289,7 +340,10 @@ export default function AbonnementSection() {
       {/* ── Modale : mode de paiement + durée ──────────────────────── */}
       <Modal
         open={choosing !== null}
-        onClose={() => setChoosing(null)}
+        onClose={() => {
+          setChoosing(null);
+          resetDiscount();
+        }}
         title={choosing ? t('sub.payTitle', { plan: t(PLANS[choosing].nameKey) }) : ''}
         size="sm"
       >
@@ -299,19 +353,25 @@ export default function AbonnementSection() {
               <span className="text-foreground font-body text-xs font-semibold">
                 {t('sub.duration')}
               </span>
-              <div className="flex items-center gap-2">
-                {[1, 3, 6, 12].map((m) => (
+              <div className="grid grid-cols-1 gap-2">
+                {SUB_PERIODS.map((p) => (
                   <button
-                    key={m}
+                    key={p.months}
                     type="button"
-                    onClick={() => setMonths(m)}
-                    className={`font-body flex-1 rounded-md border px-2 py-2 text-sm ${
-                      months === m
+                    onClick={() => {
+                      setMonths(p.months);
+                      setApplied(null);
+                    }}
+                    className={`font-body flex items-center justify-between rounded-md border px-3 py-2.5 text-sm ${
+                      months === p.months
                         ? 'border-primary bg-primary/10 text-primary font-bold'
                         : 'border-border text-muted-foreground'
                     }`}
                   >
-                    {t('sub.months', { n: m })}
+                    <span>{t(p.labelKey)}</span>
+                    <span className="font-bold">
+                      {formatFCFA(p.price)} {t('common.fcfa')}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -340,10 +400,50 @@ export default function AbonnementSection() {
               </div>
             </div>
 
+            {/* Code de réduction (facultatif). */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-foreground font-body text-xs font-semibold">
+                {t('sub.discountLabel')}
+              </span>
+              <div className="flex gap-2">
+                <input
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.toUpperCase());
+                    setApplied(null);
+                  }}
+                  placeholder={t('sub.discountPlaceholder')}
+                  className="border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary flex-1 rounded-md border px-3 py-2 font-mono text-sm outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={applyCode}
+                  disabled={applying || !code.trim()}
+                  className="border-border bg-surface text-foreground font-body shrink-0 rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {applying ? '…' : t('sub.discountApply')}
+                </button>
+              </div>
+              {activeDiscount && (
+                <p className="text-success font-body text-xs">
+                  {t('sub.discountSaved', {
+                    amount: `${formatFCFA(activeDiscount.baseAmount - activeDiscount.finalAmount)} ${t('common.fcfa')}`,
+                  })}
+                </p>
+              )}
+            </div>
+
             <div className="bg-muted flex items-center justify-between rounded-md px-3 py-2.5">
               <span className="text-muted-foreground font-body text-sm">{t('common.total')}</span>
-              <span className="font-headings text-foreground text-base font-bold">
-                {formatFCFA(planPrice(choosing, months))} {t('common.fcfa')}
+              <span className="flex items-baseline gap-2">
+                {activeDiscount && (
+                  <span className="text-muted-foreground font-body text-xs line-through">
+                    {formatFCFA(activeDiscount.baseAmount)}
+                  </span>
+                )}
+                <span className="font-headings text-foreground text-base font-bold">
+                  {formatFCFA(displayTotal)} {t('common.fcfa')}
+                </span>
               </span>
             </div>
 

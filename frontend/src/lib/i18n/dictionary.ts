@@ -1949,6 +1949,15 @@ const messages: Record<string, Msg> = {
     en: 'Unlimited users — owner, managers and sellers.',
     ar: 'مستخدمون غير محدودين — المالك والمديرون والبائعون.',
   },
+  'sub.plan.premium': { fr: 'Premium', en: 'Premium', ar: 'بريميوم' },
+  'sub.plan.premium.desc': {
+    fr: 'Toutes les fonctionnalités, utilisateurs illimités (patron, gérants, vendeurs).',
+    en: 'All features, unlimited users (owner, managers, sellers).',
+    ar: 'جميع الميزات، مستخدمون غير محدودين (المالك، المديرون، البائعون).',
+  },
+  'sub.period.monthly': { fr: 'Mensuel', en: 'Monthly', ar: 'شهري' },
+  'sub.period.quarterly': { fr: 'Trimestriel', en: 'Quarterly', ar: 'ربع سنوي' },
+  'sub.period.annual': { fr: 'Annuel', en: 'Annual', ar: 'سنوي' },
   'sub.blockedByPending': {
     fr: 'Une demande est déjà en attente. Attendez sa validation avant d’en créer une autre.',
     en: 'A request is already pending. Wait for it to be confirmed before creating another.',
@@ -1992,6 +2001,36 @@ const messages: Record<string, Msg> = {
     fr: 'Une demande est déjà en attente.',
     en: 'A request is already pending.',
     ar: 'هناك طلب قيد الانتظار بالفعل.',
+  },
+  'sub.discountLabel': {
+    fr: 'Code de réduction (facultatif)',
+    en: 'Discount code (optional)',
+    ar: 'رمز الخصم (اختياري)',
+  },
+  'sub.discountPlaceholder': {
+    fr: 'Ex. LANCEMENT',
+    en: 'e.g. LAUNCH',
+    ar: 'مثال: LANCEMENT',
+  },
+  'sub.discountApply': {
+    fr: 'Appliquer',
+    en: 'Apply',
+    ar: 'تطبيق',
+  },
+  'sub.discountApplied': {
+    fr: 'Code de réduction appliqué.',
+    en: 'Discount code applied.',
+    ar: 'تم تطبيق رمز الخصم.',
+  },
+  'sub.discountInvalid': {
+    fr: 'Code de réduction invalide ou expiré.',
+    en: 'Invalid or expired discount code.',
+    ar: 'رمز الخصم غير صالح أو منتهي الصلاحية.',
+  },
+  'sub.discountSaved': {
+    fr: 'Vous économisez {amount}.',
+    en: 'You save {amount}.',
+    ar: 'أنت توفّر {amount}.',
   },
   'sub.banner.trialEnding': {
     fr: 'Votre essai gratuit se termine dans {n} jour(s).',

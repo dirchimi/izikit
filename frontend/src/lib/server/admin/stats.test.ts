@@ -124,7 +124,7 @@ describe('computeAdminStats', () => {
       .mockResolvedValueOnce(5 as never) // boutiquesTotal
       .mockResolvedValueOnce(2 as never) // active (currentPeriodEnd >= now)
       .mockResolvedValueOnce(1 as never); // trial
-    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'BOUTIQUE', _count: 2 }]);
+    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'PREMIUM', _count: 2 }]);
     prismaMock.subscriptionPayment.aggregate.mockResolvedValue({
       _count: 3,
       _sum: { amount: 45000 },
@@ -132,8 +132,8 @@ describe('computeAdminStats', () => {
     prismaMock.subscriptionPayment.findMany.mockResolvedValue([
       {
         id: 'sp1',
-        plan: 'SOLO',
-        amount: 5000,
+        plan: 'PREMIUM',
+        amount: 30000,
         method: 'CASH',
         months: 1,
         createdAt: now,
@@ -144,7 +144,7 @@ describe('computeAdminStats', () => {
       {
         id: 'o1',
         name: 'Boutique Amir',
-        plan: 'BOUTIQUE',
+        plan: 'PREMIUM',
         trialEndsAt: null,
         currentPeriodEnd: new Date(now.getTime() + 3 * 86_400_000),
       },
@@ -155,13 +155,13 @@ describe('computeAdminStats', () => {
     expect(s.subscriptions.active).toBe(2);
     expect(s.subscriptions.trial).toBe(1);
     expect(s.subscriptions.expired).toBe(2); // 5 − 2 − 1
-    expect(s.subscriptions.mrr).toBe(30000); // 2 × 15000 (BOUTIQUE)
+    expect(s.subscriptions.mrr).toBe(60000); // 2 × 30000 (PREMIUM)
     expect(s.subscriptions.pendingCount).toBe(3);
     expect(s.subscriptions.pendingAmount).toBe(45000);
     expect(s.subscriptions.pending[0]).toMatchObject({
       org: 'Chez Ali',
-      plan: 'SOLO',
-      amount: 5000,
+      plan: 'PREMIUM',
+      amount: 30000,
     });
     expect(s.subscriptions.expiringSoon).toHaveLength(1);
     expect(s.subscriptions.expiringSoon[0]).toMatchObject({
@@ -193,11 +193,8 @@ describe('computeAdminStats', () => {
   });
 
   it('derives Phase B leaderboards: plan split, top boutiques (CA + encaissé), top cities', async () => {
-    // Plans actifs → répartition Solo / Boutique (réutilise le groupBy du MRR).
-    asMock(prismaMock.organization.groupBy).mockResolvedValue([
-      { plan: 'SOLO', _count: 3 },
-      { plan: 'BOUTIQUE', _count: 2 },
-    ]);
+    // Plans actifs → nombre d'abonnés Premium (réutilise le groupBy du MRR).
+    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'PREMIUM', _count: 5 }]);
     // sale.groupBy est appelé 3 fois, dans l'ordre : 7j, 30j, puis CA/boutique.
     asMock(prismaMock.sale.groupBy)
       .mockResolvedValueOnce([]) // activeWeek (7j)
@@ -221,7 +218,7 @@ describe('computeAdminStats', () => {
 
     const s = await computeAdminStats(prismaMock as never, now);
 
-    expect(s.planSplit).toEqual({ solo: 3, boutique: 2 });
+    expect(s.planSplit).toEqual({ premium: 5 });
     expect(s.topBoutiques.byRevenue).toEqual([
       { id: 'o1', name: 'Chez Ali', value: 100000 },
       { id: 'o2', name: 'Boutique Amir', value: 40000 },

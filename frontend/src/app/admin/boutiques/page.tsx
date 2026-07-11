@@ -15,7 +15,7 @@ interface AdminBoutique {
   phone: string | null;
   city: string | null;
   sellers: number;
-  plan: 'SOLO' | 'BOUTIQUE' | null;
+  plan: string | null;
   status: 'ACTIVE' | 'TRIAL' | 'EXPIRED';
   daysLeft: number;
   activeUntil: string | null;

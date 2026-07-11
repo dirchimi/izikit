@@ -46,7 +46,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         ? statusParam
         : null;
     const planParam = url.searchParams.get('plan');
-    const plan = planParam === 'SOLO' || planParam === 'BOUTIQUE' ? planParam : null;
+    const plan = planParam === 'PREMIUM' ? planParam : null;
     const methodParam = url.searchParams.get('method');
     const method = methodParam === 'CASH' || methodParam === 'MOBILE' ? methodParam : null;
     const cursor = decodeCursor(url.searchParams.get('cursor'));

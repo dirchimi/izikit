@@ -8,7 +8,7 @@
  */
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
-import { PLANS } from '@/lib/subscription/plans';
+import { isPlanId, MONTHLY_PRICE } from '@/lib/subscription/plans';
 import { computeSubscription } from '@/lib/subscription/status';
 
 const DAY_MS = 86_400_000;
@@ -61,7 +61,7 @@ export interface AdminStats {
     }>;
   };
   // Répartition des abonnements ACTIFS par plan (qui paie quoi).
-  planSplit: { solo: number; boutique: number };
+  planSplit: { premium: number };
   // Classements par boutique : chiffre d'affaires (ventes) et encaissé
   // (abonnements confirmés). value = FCFA. Top 5 chacun.
   topBoutiques: {
@@ -299,9 +299,9 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
 
   const openAmount = (receivablesAgg._sum.amount ?? 0) - (receivablesAgg._sum.amountPaid ?? 0);
 
-  // MRR = somme du prix mensuel des plans effectivement actifs.
+  // MRR = somme du prix mensuel de référence des abonnements actifs.
   const mrr = activePlanGroups.reduce((sum, g) => {
-    const price = g.plan && g.plan in PLANS ? PLANS[g.plan as keyof typeof PLANS].priceMonthly : 0;
+    const price = isPlanId(g.plan) ? MONTHLY_PRICE : 0;
     return sum + price * g._count;
   }, 0);
   const expired = Math.max(0, boutiquesTotal - subsActive - subsTrial);
@@ -331,12 +331,10 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     .sort((a, b) => a.daysLeft - b.daysLeft)
     .slice(0, 8);
 
-  // Répartition des abonnements actifs par plan (reprend le groupBy du MRR).
-  let solo = 0;
-  let boutique = 0;
+  // Nombre d'abonnements Premium actifs (une seule offre payante).
+  let premium = 0;
   for (const g of activePlanGroups) {
-    if (g.plan === 'SOLO') solo = g._count;
-    else if (g.plan === 'BOUTIQUE') boutique = g._count;
+    if (isPlanId(g.plan)) premium += g._count;
   }
 
   // CA par ville : on croise le CA par boutique avec la ville de chaque boutique.
@@ -428,7 +426,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       })),
       expiringSoon,
     },
-    planSplit: { solo, boutique },
+    planSplit: { premium },
     topBoutiques,
     topCities,
     ops: { outboxPending, emailPending },

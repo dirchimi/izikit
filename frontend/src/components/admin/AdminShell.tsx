@@ -12,13 +12,22 @@ interface AdminMeResponse {
   can: string[];
 }
 
-const NAV = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  exact?: boolean;
+  superadmin?: boolean;
+}
+
+const NAV: NavItem[] = [
   { href: '/admin', label: 'Tableau de bord', icon: 'layout-dashboard', exact: true },
   { href: '/admin/boutiques', label: 'Boutiques', icon: 'store' },
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/orders', label: 'Commandes', icon: 'shopping-bag' },
   { href: '/admin/withdrawals', label: 'Retraits', icon: 'banknote' },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: 'badge-check' },
+  { href: '/admin/discount-codes', label: 'Codes promo', icon: 'ticket-percent', superadmin: true },
   { href: '/admin/audit-log', label: "Journal d'audit", icon: 'scroll-text' },
 ];
 
@@ -83,11 +92,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <nav className="flex flex-row gap-1 overflow-x-auto md:flex-col">
-            {NAV.map((item) => {
-              const active =
-                'exact' in item && item.exact
-                  ? pathname === item.href
-                  : pathname === item.href || pathname.startsWith(item.href + '/');
+            {NAV.filter((item) => !item.superadmin || admin.role === 'SUPERADMIN').map((item) => {
+              const active = item.exact
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link
                   key={item.href}

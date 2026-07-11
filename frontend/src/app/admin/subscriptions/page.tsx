@@ -33,7 +33,11 @@ const STATUS_LABEL: Record<string, string> = {
   CONFIRMED: 'Confirmé',
   REJECTED: 'Refusé',
 };
-const PLAN_LABEL: Record<string, string> = { SOLO: 'Solo', BOUTIQUE: 'Boutique' };
+const PLAN_LABEL: Record<string, string> = {
+  PREMIUM: 'Premium',
+  SOLO: 'Solo',
+  BOUTIQUE: 'Boutique',
+};
 const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', MOBILE: 'Mobile money' };
 
 // Sélecteur de filtre réutilisable (même charte que le filtre de statut).
@@ -165,10 +169,7 @@ export default function AdminSubscriptionsPage() {
             applyFilters({ plan: v });
           }}
           allLabel="Tous les plans"
-          options={[
-            { value: 'SOLO', label: 'Solo' },
-            { value: 'BOUTIQUE', label: 'Boutique' },
-          ]}
+          options={[{ value: 'PREMIUM', label: 'Premium' }]}
         />
         <FilterSelect
           value={method}

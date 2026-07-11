@@ -18,11 +18,11 @@ describe('computeSubscription', () => {
 
   it('ACTIVE when paid period valid (paid overrides expired trial)', () => {
     const v = computeSubscription(
-      { plan: 'BOUTIQUE', trialEndsAt: inDays(-5), currentPeriodEnd: inDays(20) },
+      { plan: 'PREMIUM', trialEndsAt: inDays(-5), currentPeriodEnd: inDays(20) },
       NOW,
     );
     expect(v.status).toBe('ACTIVE');
-    expect(v.plan).toBe('BOUTIQUE');
+    expect(v.plan).toBe('PREMIUM');
     expect(v.daysLeft).toBe(20);
   });
 

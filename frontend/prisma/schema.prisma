@@ -404,11 +404,13 @@ model SubscriptionPayment {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan           String // "SOLO" | "BOUTIQUE"
-  amount         Int // FCFA
+  plan           String // "PREMIUM"
+  amount         Int // FCFA — montant NET à payer (après réduction éventuelle)
   method         String // "CASH" | "MOBILE"
   months         Int          @default(1) // durée couverte par le paiement
   status         String       @default("PENDING") // PENDING | CONFIRMED | REJECTED
+  discountCode   String? // code de réduction appliqué (null = aucun)
+  baseAmount     Int? // prix avant réduction (renseigné si un code a été appliqué)
   periodStart    DateTime? // renseigné à la confirmation
   periodEnd      DateTime? // renseigné à la confirmation
   note           String?
@@ -420,6 +422,26 @@ model SubscriptionPayment {
 
   @@index([organizationId])
   @@index([status])
+}
+
+// Code de réduction sur l'abonnement (Phase 8). Créé par un SUPERADMIN dans le
+// back-office, saisi par le patron avant d'émettre sa demande de paiement.
+// `type` = PERCENT (value en %) ou AMOUNT (value en FCFA à retrancher).
+// `maxUses` null = illimité ; `usedCount` incrémenté à chaque demande l'utilisant.
+model DiscountCode {
+  id          String    @id @default(cuid())
+  code        String    @unique // normalisé en MAJUSCULES
+  type        String // "PERCENT" | "AMOUNT"
+  value       Int // pourcentage (1–100) ou montant FCFA
+  maxUses     Int? // null = illimité
+  usedCount   Int       @default(0)
+  expiresAt   DateTime? // null = pas d'expiration
+  active      Boolean   @default(true)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([active])
 }
 
 // Role precedence: OWNER > ADMIN > MEMBER. The owner is also a member row

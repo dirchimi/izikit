@@ -54,7 +54,7 @@ function orgRow(o: OrgRowOverrides = {}) {
     id,
     name: o.name ?? 'Chez Ali',
     slug: `${id}-slug`,
-    plan: o.plan ?? 'BOUTIQUE',
+    plan: o.plan ?? 'PREMIUM',
     // `in` checks so an explicit `null` isn't coalesced back to a default date.
     trialEndsAt: 'trialEndsAt' in o ? o.trialEndsAt! : null,
     currentPeriodEnd: 'currentPeriodEnd' in o ? o.currentPeriodEnd! : FUTURE,
@@ -107,7 +107,7 @@ describe('/api/admin/boutiques — list', () => {
       phone: '90000000',
       city: "N'Djamena",
       sellers: 3,
-      plan: 'BOUTIQUE',
+      plan: 'PREMIUM',
       status: 'ACTIVE', // currentPeriodEnd = FUTURE
       collected: 45000,
       salesTotal: 120000,

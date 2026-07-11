@@ -59,7 +59,7 @@ describe('/api/admin/boutiques/[id] — detail', () => {
       id: 'org1',
       name: 'Chez Ali',
       slug: 'chez-ali',
-      plan: 'BOUTIQUE',
+      plan: 'PREMIUM',
       trialEndsAt: null,
       currentPeriodEnd: FUTURE,
       createdAt: new Date('2026-05-01T00:00:00Z'),
@@ -102,8 +102,8 @@ describe('/api/admin/boutiques/[id] — detail', () => {
     prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
       {
         id: 'sp1',
-        plan: 'BOUTIQUE',
-        amount: 15000,
+        plan: 'PREMIUM',
+        amount: 30000,
         method: 'CASH',
         months: 1,
         status: 'CONFIRMED',
@@ -131,7 +131,7 @@ describe('/api/admin/boutiques/[id] — detail', () => {
       id: 'org1',
       name: 'Chez Ali',
       owner: { name: 'Ali Sow', email: 'ali@test.local' },
-      subscription: { plan: 'BOUTIQUE', status: 'ACTIVE' },
+      subscription: { plan: 'PREMIUM', status: 'ACTIVE' },
       stats: {
         collected: 45000,
         salesTotal: 120000,
