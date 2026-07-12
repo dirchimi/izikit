@@ -106,7 +106,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="stagger flex flex-col gap-5">
       <AdminHeader title="Utilisateurs" subtitle="Comptes de la plateforme">
         <SearchBar value={q} onChange={setQ} onSubmit={reload} placeholder="Email ou nom…" />
       </AdminHeader>
@@ -146,7 +146,79 @@ export default function AdminUsersPage() {
         </p>
       )}
 
-      <div className="bg-surface border-border overflow-x-auto rounded-lg border">
+      {/* Cartes (mobile) */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {items.map((u) => (
+          <div key={u.id} className="bg-surface border-border rounded-xl border p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-foreground font-body truncate text-sm font-semibold">
+                  {u.email}
+                </p>
+                <p className="text-muted-foreground font-body truncate text-xs">{u.name ?? '—'}</p>
+              </div>
+              <Badge tone={u.status === 'ACTIVE' ? 'green' : 'red'}>
+                {u.status === 'ACTIVE' ? 'Actif' : 'Suspendu'}
+              </Badge>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              {canRole ? (
+                <select
+                  value={u.role}
+                  disabled={busyId === u.id}
+                  onChange={(e) => void changeRole(u, e.target.value as AdminUser['role'])}
+                  className="border-border bg-surface text-foreground font-body rounded-md border px-2 py-1 text-xs"
+                >
+                  <option value="USER">USER</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SUPERADMIN">SUPERADMIN</option>
+                </select>
+              ) : (
+                <Badge tone={ROLE_TONE[u.role] ?? 'neutral'}>{u.role}</Badge>
+              )}
+              <div className="flex items-center gap-3">
+                {u.status === 'ACTIVE' ? (
+                  <button
+                    type="button"
+                    onClick={() => void toggleStatus(u)}
+                    disabled={busyId === u.id}
+                    className="text-danger font-body text-xs font-semibold disabled:opacity-50"
+                  >
+                    Suspendre
+                  </button>
+                ) : canRestore ? (
+                  <button
+                    type="button"
+                    onClick={() => void toggleStatus(u)}
+                    disabled={busyId === u.id}
+                    className="text-primary font-body text-xs font-semibold disabled:opacity-50"
+                  >
+                    Réactiver
+                  </button>
+                ) : null}
+                {isSuper && u.role === 'USER' && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(u)}
+                    disabled={busyId === u.id}
+                    className="text-danger font-body text-xs font-semibold hover:underline disabled:opacity-50"
+                  >
+                    Supprimer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        {!loading && items.length === 0 && (
+          <div className="bg-surface border-border text-muted-foreground font-body rounded-xl border px-4 py-8 text-center text-sm shadow-sm">
+            Aucun utilisateur.
+          </div>
+        )}
+      </div>
+
+      {/* Tableau (desktop) */}
+      <div className="bg-surface border-border hidden overflow-x-auto rounded-xl border shadow-sm md:block">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-border text-muted-foreground font-body border-b text-left text-xs font-semibold uppercase">

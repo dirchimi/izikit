@@ -73,6 +73,9 @@ export interface AdminStats {
   // Encaissé (abonnements CONFIRMED) par mois — 6 derniers mois, du plus ancien
   // au plus récent. `month` = YYYY-MM, `amount` = FCFA.
   collectedByMonth: Array<{ month: string; amount: number }>;
+  // Conversion essai → payant : `paying` = boutiques ayant déjà payé, `total` =
+  // toutes les boutiques (hors internes), `rate` = pourcentage arrondi.
+  conversion: { paying: number; total: number; rate: number };
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -425,6 +428,16 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     })) ?? [];
   const collectedByMonth = bucketByMonth(confirmedPayments, now, MONTHS_BACK);
 
+  // Conversion essai → payant : boutiques (non-internes) ayant DÉJÀ au moins un
+  // paiement confirmé, rapportées au total. Proxy simple du taux de conversion.
+  const payingOrgGroups =
+    ((await prisma.subscriptionPayment.groupBy({
+      by: ['organizationId'],
+      where: { status: 'CONFIRMED', ...scopeFilter },
+    })) as unknown as Array<{ organizationId: string }>) ?? [];
+  const payingCount = payingOrgGroups.length;
+  const conversionRate = boutiquesTotal > 0 ? Math.round((payingCount / boutiquesTotal) * 100) : 0;
+
   const topBoutiques = {
     byRevenue: topRevenue.map((g) => ({
       id: g.organizationId,
@@ -487,6 +500,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     topBoutiques,
     topCities,
     collectedByMonth,
+    conversion: { paying: payingCount, total: boutiquesTotal, rate: conversionRate },
     ops: { outboxPending, emailPending },
     signups: bucketSignups(
       signupRows.map((r) => r.createdAt),

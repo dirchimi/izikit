@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { AdminHeader, Badge, LoadMore, SearchBar, StatCard } from '@/components/admin/ui';
 import { formatFCFA } from '@/lib/boutique/format';
 import { waLink } from '@/lib/wa';
+import { toCsv, downloadCsv } from '@/lib/csv';
 import Icon from '@/components/ui/Icon';
 
 interface AdminBoutique {
@@ -110,8 +111,45 @@ export default function AdminBoutiquesPage() {
     void load(true, {});
   }, [load]);
 
+  // Export CSV des boutiques chargées (ouvrable dans Excel). N'exporte que les
+  // lignes déjà affichées — cliquer « Charger plus » avant d'exporter en entier.
+  const exportCsv = useCallback(() => {
+    const headers = [
+      'Boutique',
+      'Patron',
+      'Email',
+      'Téléphone',
+      'Ville',
+      'Vendeurs',
+      'Statut',
+      'Formule',
+      'Actif jusqu’au',
+      'Encaissé (FCFA)',
+      'Chiffre d’affaires (FCFA)',
+      'Inscrite le',
+    ];
+    const rows = items.map((b) => [
+      b.name,
+      b.ownerName ?? '',
+      b.ownerEmail,
+      b.phone ?? '',
+      b.city ?? '',
+      b.sellers,
+      STATUS_LABEL[b.status],
+      b.plan ? (PLAN_LABEL[b.plan] ?? b.plan) : '',
+      b.activeUntil ? new Date(b.activeUntil).toLocaleDateString('fr-FR') : '',
+      b.collected,
+      b.salesTotal,
+      new Date(b.createdAt).toLocaleDateString('fr-FR'),
+    ]);
+    downloadCsv(
+      `boutiques-sahilley-${new Date().toISOString().slice(0, 10)}.csv`,
+      toCsv(headers, rows),
+    );
+  }, [items]);
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="stagger flex flex-col gap-5">
       <AdminHeader
         title="Boutiques"
         subtitle="Toutes les boutiques, leur patron et leur abonnement"
@@ -136,6 +174,15 @@ export default function AdminBoutiquesPage() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={items.length === 0}
+          title="Exporter les boutiques affichées en CSV"
+          className="border-border bg-surface text-foreground font-body hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-semibold transition active:scale-95 disabled:opacity-50"
+        >
+          <Icon i="download" size={15} /> Exporter
+        </button>
       </AdminHeader>
 
       {summary && (
@@ -174,7 +221,59 @@ export default function AdminBoutiquesPage() {
         </p>
       )}
 
-      <div className="bg-surface border-border overflow-x-auto rounded-lg border">
+      {/* Cartes (mobile) */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {items.map((b) => (
+          <div
+            key={b.id}
+            className="bg-surface border-border hover-lift rounded-xl border p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link
+                  href={`/admin/boutiques/${b.id}`}
+                  className="text-foreground hover:text-primary font-body font-semibold hover:underline"
+                >
+                  {b.name}
+                </Link>
+                <p className="text-muted-foreground font-body truncate text-xs">
+                  {b.ownerName ?? b.ownerEmail}
+                </p>
+              </div>
+              <Badge tone={STATUS_TONE[b.status]}>{STATUS_LABEL[b.status]}</Badge>
+            </div>
+            <div className="text-muted-foreground font-body mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <span>{b.city ?? '—'}</span>
+              <span>{b.sellers} vendeur(s)</span>
+              <span>{statusSub(b)}</span>
+            </div>
+            <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
+              <span className="font-body text-xs">
+                <span className="text-muted-foreground">Encaissé </span>
+                <span className="text-foreground font-semibold">{formatFCFA(b.collected)} F</span>
+              </span>
+              {b.phone && waLink(b.phone) ? (
+                <a
+                  href={waLink(b.phone)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary inline-flex items-center gap-1 text-xs font-semibold"
+                >
+                  <Icon i="message-circle" size={14} /> WhatsApp
+                </a>
+              ) : null}
+            </div>
+          </div>
+        ))}
+        {!loading && items.length === 0 && (
+          <div className="bg-surface border-border text-muted-foreground font-body rounded-xl border px-4 py-8 text-center text-sm shadow-sm">
+            Aucune boutique.
+          </div>
+        )}
+      </div>
+
+      {/* Tableau (desktop) */}
+      <div className="bg-surface border-border hidden overflow-x-auto rounded-xl border shadow-sm md:block">
         <table className="w-full min-w-[960px] text-sm">
           <thead>
             <tr className="border-border text-muted-foreground font-body border-b text-left text-xs font-semibold uppercase">

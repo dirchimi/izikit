@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { href: '/admin/subscriptions', label: 'Abonnements', icon: 'badge-check' },
   { href: '/admin/discount-codes', label: 'Codes promo', icon: 'ticket-percent', superadmin: true },
   { href: '/admin/announcements', label: 'Annonces', icon: 'megaphone', superadmin: true },
+  { href: '/admin/banner', label: 'Bannière', icon: 'panel-top', superadmin: true },
   { href: '/admin/audit-log', label: "Journal d'audit", icon: 'scroll-text' },
 ];
 

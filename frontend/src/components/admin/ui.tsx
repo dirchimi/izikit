@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 
@@ -38,10 +38,57 @@ const TONES: Record<string, string> = {
 export function Badge({ tone = 'neutral', children }: { tone?: string; children: ReactNode }) {
   return (
     <span
-      className={`font-body inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${TONES[tone] ?? TONES.neutral}`}
+      className={`font-body inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${TONES[tone] ?? TONES.neutral}`}
     >
       {children}
     </span>
+  );
+}
+
+/** Bloc squelette (shimmer) pour les états de chargement. */
+export function Skeleton({ className = '', style }: { className?: string; style?: CSSProperties }) {
+  return <div className={`skeleton ${className}`} style={style} aria-hidden="true" />;
+}
+
+/** Squelette de tableau/liste pendant le chargement (n lignes × n colonnes). */
+export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="bg-surface border-border divide-border overflow-hidden rounded-xl border shadow-sm">
+      {Array.from({ length: rows }).map((_, r) => (
+        <div
+          key={r}
+          className="border-border flex items-center gap-4 border-b px-4 py-3.5 last:border-b-0"
+        >
+          {Array.from({ length: cols }).map((_, c) => (
+            <Skeleton
+              key={c}
+              className="h-4"
+              style={{ width: c === 0 ? '24%' : `${Math.max(8, 16 - c * 2)}%` }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Coche de succès animée (pop + halo) — feedback « c'est fait ! » après une
+ * action importante (confirmer un paiement, envoyer, prolonger…). Respecte
+ * prefers-reduced-motion via `.animate-scale-in` (le halo `animate-ping` reste
+ * discret et bref).
+ */
+export function SuccessCheck({ label }: { label?: string }) {
+  return (
+    <div className="animate-scale-in flex flex-col items-center justify-center gap-3 py-6">
+      <span className="relative flex h-16 w-16 items-center justify-center">
+        <span className="bg-primary/25 absolute inline-flex h-full w-full animate-ping rounded-full" />
+        <span className="bg-primary text-primary-foreground relative flex h-16 w-16 items-center justify-center rounded-full shadow-lg">
+          <Icon i="check" size={32} />
+        </span>
+      </span>
+      {label ? <p className="text-foreground font-body text-sm font-semibold">{label}</p> : null}
+    </div>
   );
 }
 
@@ -71,13 +118,13 @@ export function StatCard({
 }) {
   const clickable = !!href;
   const shell = [
-    'group relative flex flex-col gap-3 rounded-lg border px-5 py-5 transition-all',
+    'group relative flex flex-col gap-3 rounded-xl border px-5 py-5 shadow-sm transition-all',
     accent
       ? 'bg-primary border-primary'
       : warn
         ? 'bg-amber-50 border-amber-200'
         : 'bg-surface border-border',
-    clickable ? 'hover:ring-primary/40 hover:-translate-y-0.5 hover:shadow-sm hover:ring-2' : '',
+    clickable ? 'hover-lift hover:ring-primary/40 hover:ring-2' : '',
   ].join(' ');
 
   const labelCls = accent
@@ -139,7 +186,7 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-surface border-border flex flex-col rounded-lg border">
+    <div className="bg-surface border-border animate-fade-in flex flex-col overflow-hidden rounded-xl border shadow-sm">
       <div className="border-border flex items-center justify-between border-b px-4 py-3">
         <h2 className="font-headings text-foreground text-sm font-bold">{title}</h2>
         {action}
@@ -229,7 +276,7 @@ export function LoadMore({
       type="button"
       onClick={onClick}
       disabled={loading}
-      className="border-border bg-surface text-foreground font-body self-start rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+      className="border-border bg-surface text-foreground font-body hover:bg-muted self-start rounded-md border px-4 py-2 text-sm font-semibold transition-colors active:scale-95 disabled:opacity-50"
     >
       {loading ? 'Chargement…' : 'Charger plus'}
     </button>
@@ -261,11 +308,11 @@ export function SearchBar({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary rounded-md border px-3 py-2 text-sm outline-none"
+        className="border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 rounded-md border px-3 py-2 text-sm outline-none transition-shadow focus:ring-2"
       />
       <button
         type="submit"
-        className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-semibold"
+        className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2 text-sm font-semibold transition-all hover:brightness-105 active:scale-95"
       >
         Rechercher
       </button>

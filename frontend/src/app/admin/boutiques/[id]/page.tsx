@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApi } from '@/lib/useApi';
@@ -19,6 +19,7 @@ interface BoutiqueDetail {
   slug: string;
   createdAt: string;
   internal: boolean;
+  adminNote: string | null;
   owner: { id: string; name: string | null; email: string };
   settings: {
     phone: string | null;
@@ -142,6 +143,32 @@ export default function AdminBoutiqueDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [grantDays, setGrantDays] = useState(30);
   const [granting, setGranting] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const [note, setNote] = useState('');
+  const [noteSeeded, setNoteSeeded] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+
+  // Amorce le champ note avec la valeur serveur au premier chargement (sans
+  // écraser une saisie en cours lors des rafraîchissements suivants).
+  useEffect(() => {
+    if (data && !noteSeeded) {
+      setNote(data.boutique.adminNote ?? '');
+      setNoteSeeded(true);
+    }
+  }, [data, noteSeeded]);
+
+  async function saveNote() {
+    setSavingNote(true);
+    try {
+      await api(`/api/admin/boutiques/${id}/note`, { method: 'PUT', body: { note } });
+      toast('Note enregistrée.', 'success');
+      await refresh();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   async function toggleInternal(next: boolean) {
     setBusy(true);
@@ -172,6 +199,24 @@ export default function AdminBoutiqueDetailPage() {
       toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
     } finally {
       setWiping(false);
+    }
+  }
+
+  async function sendReminder() {
+    setReminding(true);
+    try {
+      const res = await api<{ emailed: boolean }>(`/api/admin/boutiques/${id}/remind`, {
+        method: 'POST',
+        body: {},
+      });
+      toast(
+        res.emailed ? 'Rappel envoyé (notification + email).' : 'Rappel envoyé (notification).',
+        'success',
+      );
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Échec.', 'error');
+    } finally {
+      setReminding(false);
     }
   }
 
@@ -291,7 +336,21 @@ export default function AdminBoutiqueDetailPage() {
           </div>
         </Panel>
 
-        <Panel title="Abonnement">
+        <Panel
+          title="Abonnement"
+          action={
+            admin.role === 'SUPERADMIN' ? (
+              <button
+                type="button"
+                onClick={() => void sendReminder()}
+                disabled={reminding}
+                className="text-primary font-body inline-flex items-center gap-1 text-xs font-semibold hover:underline disabled:opacity-50"
+              >
+                <Icon i="bell" size={13} /> {reminding ? 'Envoi…' : 'Envoyer un rappel'}
+              </button>
+            ) : undefined
+          }
+        >
           <div className="divide-border divide-y">
             <InfoRow icon="badge-check" label="Statut">
               <Badge tone={SUB_TONE[sub.status] ?? 'neutral'}>
@@ -310,9 +369,43 @@ export default function AdminBoutiqueDetailPage() {
             <InfoRow icon="credit-card" label="Fin d'abonnement payé">
               {sub.currentPeriodEnd ? fmtDate(sub.currentPeriodEnd) : '—'}
             </InfoRow>
+            <InfoRow icon="receipt" label="Dernière vente">
+              {b.recentSales[0] ? fmtDate(b.recentSales[0].createdAt) : 'Aucune vente'}
+            </InfoRow>
           </div>
         </Panel>
       </div>
+
+      {/* Notes internes (mini-CRM) — SUPERADMIN uniquement */}
+      {admin.role === 'SUPERADMIN' && (
+        <Panel title="Notes internes">
+          <div className="flex flex-col gap-3 px-4 py-4">
+            <p className="text-muted-foreground font-body text-xs">
+              Suivi commercial, contexte, historique d’échanges. Visible uniquement par les
+              super-admins — jamais par le patron ni les vendeurs.
+            </p>
+            <textarea
+              rows={4}
+              maxLength={4000}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex : Client rencontré au marché central. Rappeler après le 15 pour le renouvellement."
+              className="border-border bg-input text-foreground font-body focus:border-primary rounded-md border px-3 py-2 text-sm outline-none"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground font-body text-xs">{note.length}/4000</span>
+              <button
+                type="button"
+                onClick={() => void saveNote()}
+                disabled={savingNote || note.trim() === (b.adminNote ?? '').trim()}
+                className="bg-primary text-primary-foreground font-body inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-bold transition active:scale-95 disabled:opacity-50"
+              >
+                <Icon i="save" size={15} /> {savingNote ? 'Enregistrement…' : 'Enregistrer la note'}
+              </button>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       {/* Compte interne / offert — SUPERADMIN uniquement */}
       {admin.role === 'SUPERADMIN' && (

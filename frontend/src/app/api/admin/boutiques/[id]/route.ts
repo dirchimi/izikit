@@ -28,6 +28,7 @@ const ORG_SELECT = {
   trialEndsAt: true,
   currentPeriodEnd: true,
   internal: true,
+  adminNote: true,
   createdAt: true,
   owner: { select: { id: true, name: true, email: true } },
   settings: {
@@ -138,6 +139,7 @@ export async function GET(
       slug: org.slug,
       createdAt: org.createdAt,
       internal: org.internal,
+      adminNote: org.adminNote,
       owner: org.owner,
       settings: org.settings,
       subscription: {

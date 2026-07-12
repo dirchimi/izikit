@@ -127,6 +127,9 @@ model Organization {
   // les statistiques plateforme (MRR, encaissé, boutiques, ventes…) — ce n'est pas
   // un vrai client. Basculé par un SUPERADMIN depuis la fiche boutique admin.
   internal         Boolean  @default(false)
+  // Note interne libre du SUPERADMIN sur ce client (mini-CRM) : contexte, suivi
+  // commercial, historique d'échanges. Jamais visible par le patron/vendeurs.
+  adminNote        String? // texte libre, null = aucune note
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -445,6 +448,20 @@ model DiscountCode {
   createdById String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([active])
+}
+
+// Bannière d'information globale affichée en haut de l'app à TOUS les patrons /
+// vendeurs (maintenance, nouveauté, promo…). Gérée par un SUPERADMIN. Un seul
+// enregistrement en pratique : l'app lit la bannière active la plus récente.
+model AppBanner {
+  id        String   @id @default(cuid())
+  message   String // texte affiché (court)
+  level     String   @default("INFO") // "INFO" | "WARNING" | "SUCCESS"
+  active    Boolean  @default(false) // false = masquée pour tout le monde
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([active])
 }

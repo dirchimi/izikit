@@ -3,7 +3,9 @@
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
 import { labelForAction } from '@/lib/admin/action-labels';
-import { AdminHeader, Badge, MiniBars, Panel, StatBar, StatCard } from './ui';
+import { toCsv, downloadCsv } from '@/lib/csv';
+import Icon from '@/components/ui/Icon';
+import { AdminHeader, Badge, MiniBars, Panel, Skeleton, StatBar, StatCard } from './ui';
 
 interface AdminStats {
   users: {
@@ -53,6 +55,7 @@ interface AdminStats {
   };
   topCities: Array<{ city: string; revenue: number; boutiques: number }>;
   collectedByMonth: Array<{ month: string; amount: number }>;
+  conversion: { paying: number; total: number; rate: number };
   ops: { outboxPending: number; emailPending: number };
   signups: Array<{ date: string; count: number }>;
   recentUsers: Array<{
@@ -157,13 +160,43 @@ export default function AdminDashboard() {
   }
 
   if (!data) {
+    if (!loading) {
+      return (
+        <>
+          <AdminHeader title="Tableau de bord" subtitle="Vue d'ensemble de la plateforme" />
+          <div className="bg-surface border-border text-muted-foreground font-body rounded-xl border px-6 py-12 text-center text-sm shadow-sm">
+            Aucune donnée.
+          </div>
+        </>
+      );
+    }
+    // Squelette de chargement (mêmes gabarits que le contenu réel).
     return (
-      <>
+      <div className="flex flex-col gap-5">
         <AdminHeader title="Tableau de bord" subtitle="Vue d'ensemble de la plateforme" />
-        <div className="bg-surface border-border text-muted-foreground font-body rounded-lg border px-6 py-12 text-center text-sm">
-          {loading ? 'Chargement…' : 'Aucune donnée.'}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-surface border-border flex flex-col gap-3 rounded-xl border p-5 shadow-sm"
+            >
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-7 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          ))}
         </div>
-      </>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="bg-surface border-border rounded-xl border p-5 shadow-sm">
+              <Skeleton className="mb-4 h-4 w-1/3" />
+              {Array.from({ length: 4 }).map((_, j) => (
+                <Skeleton key={j} className="mb-3 h-9 w-full" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -171,7 +204,7 @@ export default function AdminDashboard() {
   const totalUsers = s.users.total;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="stagger flex flex-col gap-5">
       <AdminHeader title="Tableau de bord" subtitle="Vue d'ensemble de la plateforme">
         <button
           type="button"
@@ -367,7 +400,24 @@ export default function AdminDashboard() {
       </div>
 
       {/* Ligne 3c — Encaissé par mois (revenu réel des abonnements) */}
-      <Panel title="Encaissé par mois — 6 derniers mois">
+      <Panel
+        title="Encaissé par mois — 6 derniers mois"
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              const rows = s.collectedByMonth.map((m) => [fmtMonth(m.month).long, m.amount]);
+              downloadCsv(
+                'encaisse-par-mois-sahilley.csv',
+                toCsv(['Mois', 'Encaissé (FCFA)'], rows),
+              );
+            }}
+            className="border-border text-foreground font-body hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95"
+          >
+            <Icon i="download" size={13} /> CSV
+          </button>
+        }
+      >
         <div className="px-4 py-5">
           <MiniBars
             data={s.collectedByMonth.map((m) => {
@@ -456,6 +506,17 @@ export default function AdminDashboard() {
                 value={s.planSplit.premium}
                 total={s.boutiques.total}
                 tone="purple"
+              />
+            </div>
+            <div className="flex flex-col gap-3">
+              <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
+                Conversion essai → payant
+              </span>
+              <StatBar
+                label="Boutiques ayant déjà payé"
+                value={s.conversion.paying}
+                total={s.conversion.total}
+                tone="green"
               />
             </div>
           </div>

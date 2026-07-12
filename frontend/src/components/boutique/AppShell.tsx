@@ -6,6 +6,7 @@ import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
 import BottomNav from './BottomNav';
 import SubscriptionBanner from './SubscriptionBanner';
+import GlobalBanner from './GlobalBanner';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import OfflineBanner from '@/components/pwa/OfflineBanner';
 import { useApi } from '@/lib/useApi';
@@ -84,6 +85,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
         </header>
+
+        {/* Bandeau d'information global (super-admin) puis bandeau d'abonnement */}
+        <GlobalBanner />
 
         {/* Bandeau d'abonnement (essai finissant / expiré) — application douce */}
         <SubscriptionBanner />

@@ -5,7 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useAdmin } from '@/components/admin/AdminContext';
 import { useCursorList } from '@/lib/admin/useCursorList';
-import { AdminHeader, Badge, LoadMore } from '@/components/admin/ui';
+import { AdminHeader, Badge, LoadMore, SuccessCheck } from '@/components/admin/ui';
 import Modal from '@/components/ui/Modal';
 import { formatFCFA } from '@/lib/boutique/format';
 
@@ -87,6 +87,8 @@ export default function AdminSubscriptionsPage() {
     payment: AdminSubPayment;
   } | null>(null);
   const [reason, setReason] = useState('');
+  // Brève animation de succès dans la modale après une confirmation.
+  const [celebrate, setCelebrate] = useState(false);
 
   useEffect(() => {
     void load(true, { status: 'PENDING' });
@@ -123,7 +125,15 @@ export default function AdminSubscriptionsPage() {
         setItems((prev) =>
           prev.map((x) => (x.id === payment.id ? { ...x, status: res.status } : x)),
         );
-        toast('Abonnement activé.', 'success');
+        // Animation « c'est fait ! » dans la modale, puis fermeture + toast.
+        setCelebrate(true);
+        setBusyId(null);
+        setTimeout(() => {
+          setCelebrate(false);
+          setAction(null);
+          toast('Abonnement activé 🎉', 'success');
+        }, 1200);
+        return;
       } else {
         const trimmed = reason.trim();
         const res = await api<{ status: AdminSubPayment['status'] }>(
@@ -147,7 +157,7 @@ export default function AdminSubscriptionsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="stagger flex flex-col gap-5">
       <AdminHeader title="Abonnements" subtitle="Demandes de paiement (encaissement manuel)">
         <FilterSelect
           value={status}
@@ -191,7 +201,62 @@ export default function AdminSubscriptionsPage() {
         </p>
       )}
 
-      <div className="bg-surface border-border overflow-x-auto rounded-lg border">
+      {/* Cartes (mobile) */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {items.map((p) => (
+          <div key={p.id} className="bg-surface border-border rounded-xl border p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-foreground font-body truncate text-sm font-semibold">
+                  {p.organization.name}
+                </p>
+                <p className="text-muted-foreground font-body text-xs">
+                  {PLAN_LABEL[p.plan] ?? p.plan} · {p.months} mois ·{' '}
+                  {METHOD_LABEL[p.method] ?? p.method}
+                </p>
+              </div>
+              <Badge tone={TONE[p.status] ?? 'neutral'}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+            </div>
+            <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
+              <span className="font-headings text-foreground text-sm font-bold">
+                {formatFCFA(p.amount)} FCFA
+              </span>
+              {canConfirm && p.status === 'PENDING' ? (
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => openConfirm(p)}
+                    disabled={busyId === p.id}
+                    className="text-success font-body text-xs font-semibold disabled:opacity-50"
+                  >
+                    Confirmer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openReject(p)}
+                    disabled={busyId === p.id}
+                    className="text-danger font-body text-xs font-semibold disabled:opacity-50"
+                  >
+                    Refuser
+                  </button>
+                </div>
+              ) : (
+                <span className="text-muted-foreground font-body text-xs">
+                  {new Date(p.createdAt).toLocaleDateString('fr-FR')}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+        {!loading && items.length === 0 && (
+          <div className="bg-surface border-border text-muted-foreground font-body rounded-xl border px-4 py-8 text-center text-sm shadow-sm">
+            Aucune demande.
+          </div>
+        )}
+      </div>
+
+      {/* Tableau (desktop) */}
+      <div className="bg-surface border-border hidden overflow-x-auto rounded-xl border shadow-sm md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-border text-muted-foreground font-body border-b text-left text-xs font-semibold uppercase">
@@ -277,11 +342,19 @@ export default function AdminSubscriptionsPage() {
       {/* Modale de confirmation / refus (remplace window.confirm / prompt). */}
       <Modal
         open={!!action}
-        onClose={() => (busyId ? undefined : setAction(null))}
-        title={action?.kind === 'confirm' ? 'Confirmer l’encaissement' : 'Refuser la demande'}
+        onClose={() => (busyId || celebrate ? undefined : setAction(null))}
+        title={
+          celebrate
+            ? 'Encaissement confirmé'
+            : action?.kind === 'confirm'
+              ? 'Confirmer l’encaissement'
+              : 'Refuser la demande'
+        }
         size="sm"
       >
-        {action && (
+        {celebrate ? (
+          <SuccessCheck label="Abonnement activé" />
+        ) : action ? (
           <div className="flex flex-col gap-4">
             <div className="bg-muted/40 border-border flex flex-col gap-1 rounded-lg border px-4 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -345,7 +418,7 @@ export default function AdminSubscriptionsPage() {
               </button>
             </div>
           </div>
-        )}
+        ) : null}
       </Modal>
     </div>
   );
