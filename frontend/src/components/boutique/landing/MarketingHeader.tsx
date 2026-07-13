@@ -52,7 +52,7 @@ export default async function MarketingHeader() {
               className="hover:text-sidebar-foreground flex items-center gap-1.5 transition-colors"
             >
               <Icon i="phone" size={12} />
-              <span>{CONTACT_PHONE_DISPLAY}</span>
+              <span dir="ltr">{CONTACT_PHONE_DISPLAY}</span>
             </a>
             <a
               href={CONTACT_WHATSAPP}
@@ -68,7 +68,7 @@ export default async function MarketingHeader() {
               className="hover:text-sidebar-foreground hidden items-center gap-1.5 transition-colors md:flex"
             >
               <Icon i="mail" size={12} />
-              <span>{CONTACT_EMAIL}</span>
+              <span dir="ltr">{CONTACT_EMAIL}</span>
             </a>
           </div>
           <Link

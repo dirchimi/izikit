@@ -139,6 +139,10 @@ export default function ReceiptModal({
     canvas.height = H * dpr;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
+    // Reçu en mise en page LTR (libellé à gauche, montant à droite). On fixe la
+    // direction en LTR pour que les numéros (téléphone…) ne se retournent pas
+    // quand l'app est en arabe (RTL) — le glyphe arabe des libellés reste correct.
+    ctx.direction = 'ltr';
     ctx.scale(dpr, dpr);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
@@ -388,7 +392,11 @@ export default function ReceiptModal({
               )}
               <p className="font-headings text-base font-bold text-neutral-900">{shopName}</p>
               {city && <p className="font-body text-xs text-neutral-500">{city}</p>}
-              {phone && <p className="font-body text-xs text-neutral-500">{phone}</p>}
+              {phone && (
+                <p className="font-body text-xs text-neutral-500">
+                  <span dir="ltr">{phone}</span>
+                </p>
+              )}
               {address && <p className="font-body text-xs text-neutral-500">{address}</p>}
             </div>
 
@@ -407,7 +415,7 @@ export default function ReceiptModal({
             )}
             {receipt.customerPhone && (
               <p className="font-body text-xs text-neutral-500">
-                {t('common.phone')}: {receipt.customerPhone}
+                {t('common.phone')}: <span dir="ltr">{receipt.customerPhone}</span>
               </p>
             )}
 

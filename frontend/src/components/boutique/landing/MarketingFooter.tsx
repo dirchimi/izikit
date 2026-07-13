@@ -124,7 +124,7 @@ export default async function MarketingFooter() {
               className="hover:text-sidebar-foreground flex items-center gap-2 transition-colors"
             >
               <Icon i="phone" size={12} />
-              <span>{CONTACT_PHONE_DISPLAY}</span>
+              <span dir="ltr">{CONTACT_PHONE_DISPLAY}</span>
             </a>
             <span className="mx-2">·</span>
             <a
@@ -132,7 +132,7 @@ export default async function MarketingFooter() {
               className="hover:text-sidebar-foreground flex items-center gap-2 transition-colors"
             >
               <Icon i="mail" size={12} />
-              <span>{CONTACT_EMAIL}</span>
+              <span dir="ltr">{CONTACT_EMAIL}</span>
             </a>
           </div>
         </div>

@@ -191,9 +191,10 @@ export default function FacturationSection() {
               </label>
               <input
                 id="fac-phone"
+                dir="ltr"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className={fieldClass}
+                className={`${fieldClass} rtl:text-right`}
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -248,7 +249,11 @@ export default function FacturationSection() {
             )}
             <p className="font-headings text-base font-bold text-neutral-900">{shopName}</p>
             {city && <p className="font-body text-xs text-neutral-500">{city}</p>}
-            {form.phone && <p className="font-body text-xs text-neutral-500">{form.phone}</p>}
+            {form.phone && (
+              <p className="font-body text-xs text-neutral-500">
+                <span dir="ltr">{form.phone}</span>
+              </p>
+            )}
             {form.address && <p className="font-body text-xs text-neutral-500">{form.address}</p>}
           </div>
           <div className="my-3 border-t border-dashed border-neutral-300" />

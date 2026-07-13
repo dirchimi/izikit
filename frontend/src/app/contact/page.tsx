@@ -57,7 +57,9 @@ export default async function ContactPage() {
             <div className="bg-secondary flex h-10 w-10 items-center justify-center rounded-lg">
               <Icon i={m.icon} size={18} className="text-primary" />
             </div>
-            <p className="font-body text-foreground text-sm font-bold break-all">{m.value}</p>
+            <p className="font-body text-foreground text-sm font-bold break-all">
+              <span dir="ltr">{m.value}</span>
+            </p>
             <p className="text-muted-foreground font-body text-xs">{m.desc}</p>
           </a>
         ))}

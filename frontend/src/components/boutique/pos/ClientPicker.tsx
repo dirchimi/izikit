@@ -154,13 +154,14 @@ export default function ClientPicker({
           <input
             type="tel"
             inputMode="tel"
+            dir="ltr"
             value={value.phone ?? ''}
             onChange={(e) =>
               onChange({ ...value, phone: e.target.value.trim() === '' ? null : e.target.value })
             }
             placeholder={t('pos.client.phoneAdd')}
             aria-label={t('pos.client.phoneAdd')}
-            className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none"
+            className="text-foreground placeholder:text-muted-foreground font-body w-full bg-transparent text-sm outline-none rtl:text-right"
           />
         </div>
       )}
@@ -235,7 +236,9 @@ export default function ClientPicker({
                   </div>
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   {c.phone && (
-                    <span className="text-muted-foreground shrink-0 text-xs">{c.phone}</span>
+                    <span dir="ltr" className="text-muted-foreground shrink-0 text-xs">
+                      {c.phone}
+                    </span>
                   )}
                 </button>
               ))}

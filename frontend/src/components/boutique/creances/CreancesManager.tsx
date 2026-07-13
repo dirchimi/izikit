@@ -256,7 +256,10 @@ export default function CreancesManager() {
                           )}
                         </div>
                         <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <span className="text-muted-foreground font-body truncate text-xs">
+                          <span
+                            dir="ltr"
+                            className="text-muted-foreground font-body truncate text-xs"
+                          >
                             {d.phone}
                           </span>
                           <span className="text-muted-foreground font-body shrink-0 text-xs">
@@ -290,7 +293,7 @@ export default function CreancesManager() {
                         {selected.name}
                       </h2>
                       <p className="text-muted-foreground font-body mt-0.5 text-xs">
-                        {selected.phone} ·{' '}
+                        <span dir="ltr">{selected.phone}</span> ·{' '}
                         {t('creances.clientSince', { since: fmtSince(selected.since) })}
                       </p>
                     </div>

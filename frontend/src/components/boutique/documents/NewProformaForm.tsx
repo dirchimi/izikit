@@ -126,10 +126,11 @@ export default function NewProformaForm({
               </label>
               <input
                 id="pf-phone"
+                dir="ltr"
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}
                 placeholder="+235 …"
-                className={fieldClass}
+                className={`${fieldClass} rtl:text-right`}
               />
             </div>
             <div className="flex flex-col gap-1">

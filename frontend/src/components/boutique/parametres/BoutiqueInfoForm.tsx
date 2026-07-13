@@ -200,9 +200,10 @@ export default function BoutiqueInfoForm({
             </label>
             <input
               id="bi-phone"
+              dir="ltr"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className={fieldClass}
+              className={`${fieldClass} rtl:text-right`}
             />
           </div>
           <div className="flex flex-col gap-1">

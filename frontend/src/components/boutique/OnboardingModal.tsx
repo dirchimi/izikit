@@ -263,10 +263,11 @@ export default function OnboardingModal() {
                 </label>
                 <input
                   id="onb-phone"
+                  dir="ltr"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder={t('onb.q.phonePlaceholder')}
-                  className={inputClass}
+                  className={`${inputClass} rtl:text-right`}
                   inputMode="tel"
                 />
               </div>
