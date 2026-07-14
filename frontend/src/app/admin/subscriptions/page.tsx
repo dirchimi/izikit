@@ -38,7 +38,11 @@ const PLAN_LABEL: Record<string, string> = {
   SOLO: 'Solo',
   BOUTIQUE: 'Boutique',
 };
-const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', MOBILE: 'Mobile money' };
+const METHOD_LABEL: Record<string, string> = {
+  CASH: 'Espèces',
+  BANK: 'Virement bancaire',
+  MOBILE: 'Mobile money', // historique
+};
 
 // Sélecteur de filtre réutilisable (même charte que le filtre de statut).
 function FilterSelect({
@@ -190,6 +194,7 @@ export default function AdminSubscriptionsPage() {
           allLabel="Toutes les méthodes"
           options={[
             { value: 'CASH', label: 'Espèces' },
+            { value: 'BANK', label: 'Virement bancaire' },
             { value: 'MOBILE', label: 'Mobile money' },
           ]}
         />

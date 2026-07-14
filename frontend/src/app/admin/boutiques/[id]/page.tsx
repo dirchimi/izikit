@@ -86,7 +86,8 @@ const PLAN_LABEL: Record<string, string> = {
 };
 const METHOD_LABEL: Record<string, string> = {
   CASH: 'Espèces',
-  MOBILE: 'Mobile money',
+  BANK: 'Virement bancaire',
+  MOBILE: 'Mobile money', // historique (abonnements)
   CREDIT: 'Crédit',
   MIXED: 'Mixte',
 };

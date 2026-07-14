@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
+import { ltrIsolate } from '@/lib/i18n/bidi';
 import {
   PLANS,
   SUB_PERIODS,
@@ -238,7 +239,7 @@ export default function AbonnementSection() {
                 <p className="text-muted-foreground mt-0.5 text-xs">
                   {t('sub.pendingBody', {
                     plan: t(planNameKey(pending.plan)),
-                    amount: `${formatFCFA(pending.amount)} ${t('common.fcfa')}`,
+                    amount: ltrIsolate(`${formatFCFA(pending.amount)} ${t('common.fcfa')}`),
                     method: t(`sub.method.${pending.method.toLowerCase()}`),
                   })}
                 </p>
@@ -278,7 +279,9 @@ export default function AbonnementSection() {
                       {t(p.labelKey)}
                     </p>
                     <p className="font-headings text-foreground mt-0.5 text-sm font-bold">
-                      {formatFCFA(p.price)} {t('common.fcfa')}
+                      <span dir="ltr">
+                        {formatFCFA(p.price)} {t('common.fcfa')}
+                      </span>
                     </p>
                   </div>
                 ))}
@@ -329,7 +332,9 @@ export default function AbonnementSection() {
                           {t(planNameKey(p.plan))}
                         </td>
                         <td className="text-foreground font-body px-4 py-2.5 text-end font-semibold">
-                          {formatFCFA(p.amount)} {t('common.fcfa')}
+                          <span dir="ltr">
+                            {formatFCFA(p.amount)} {t('common.fcfa')}
+                          </span>
                         </td>
                         <td className="text-muted-foreground font-body px-4 py-2.5">
                           {t(`sub.method.${p.method.toLowerCase()}`)}
@@ -385,7 +390,7 @@ export default function AbonnementSection() {
                     }`}
                   >
                     <span>{t(p.labelKey)}</span>
-                    <span className="font-bold">
+                    <span dir="ltr" className="font-bold">
                       {formatFCFA(p.price)} {t('common.fcfa')}
                     </span>
                   </button>
@@ -398,7 +403,7 @@ export default function AbonnementSection() {
                 {t('sub.method')}
               </span>
               <div className="grid grid-cols-2 gap-2">
-                {(['CASH', 'MOBILE'] as PaymentMethod[]).map((m) => (
+                {(['CASH', 'BANK'] as PaymentMethod[]).map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -409,7 +414,7 @@ export default function AbonnementSection() {
                         : 'border-border text-muted-foreground'
                     }`}
                   >
-                    <Icon i={m === 'CASH' ? 'banknote' : 'smartphone'} size={15} />
+                    <Icon i={m === 'CASH' ? 'banknote' : 'landmark'} size={15} />
                     {t(`sub.method.${m.toLowerCase()}`)}
                   </button>
                 ))}
@@ -443,7 +448,9 @@ export default function AbonnementSection() {
               {activeDiscount && (
                 <p className="text-success font-body text-xs">
                   {t('sub.discountSaved', {
-                    amount: `${formatFCFA(activeDiscount.baseAmount - activeDiscount.finalAmount)} ${t('common.fcfa')}`,
+                    amount: ltrIsolate(
+                      `${formatFCFA(activeDiscount.baseAmount - activeDiscount.finalAmount)} ${t('common.fcfa')}`,
+                    ),
                   })}
                 </p>
               )}
@@ -453,11 +460,11 @@ export default function AbonnementSection() {
               <span className="text-muted-foreground font-body text-sm">{t('common.total')}</span>
               <span className="flex items-baseline gap-2">
                 {activeDiscount && (
-                  <span className="text-muted-foreground font-body text-xs line-through">
+                  <span dir="ltr" className="text-muted-foreground font-body text-xs line-through">
                     {formatFCFA(activeDiscount.baseAmount)}
                   </span>
                 )}
-                <span className="font-headings text-foreground text-base font-bold">
+                <span dir="ltr" className="font-headings text-foreground text-base font-bold">
                   {formatFCFA(displayTotal)} {t('common.fcfa')}
                 </span>
               </span>

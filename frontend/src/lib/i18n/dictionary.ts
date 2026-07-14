@@ -822,9 +822,9 @@ const messages: Record<string, Msg> = {
     ar: 'أي {amount} فرنك/شهرياً',
   },
   'landing.pricing.save': {
-    fr: 'Économisez {pct}%',
-    en: 'Save {pct}%',
-    ar: 'وفّر {pct}%',
+    fr: 'Économisez {pct}',
+    en: 'Save {pct}',
+    ar: 'وفّر {pct}',
   },
   'landing.pricing.freeForever': {
     fr: 'Gratuit, pour toujours',
@@ -1983,6 +1983,9 @@ const messages: Record<string, Msg> = {
   'sub.col.status': { fr: 'Statut', en: 'Status', ar: 'الحالة' },
   'sub.method': { fr: 'Mode de paiement', en: 'Payment method', ar: 'طريقة الدفع' },
   'sub.method.cash': { fr: 'Espèces', en: 'Cash', ar: 'نقدًا' },
+  'sub.method.bank': { fr: 'Virement bancaire', en: 'Bank transfer', ar: 'تحويل بنكي' },
+  // Conservé pour l'affichage des anciens paiements « Mobile money » (le choix
+  // à la souscription est désormais Espèces / Virement bancaire).
   'sub.method.mobile': { fr: 'Mobile money', en: 'Mobile money', ar: 'المحفظة الإلكترونية' },
   'sub.payment.pending': { fr: 'En attente', en: 'Pending', ar: 'قيد الانتظار' },
   'sub.payment.confirmed': { fr: 'Confirmé', en: 'Confirmed', ar: 'مؤكد' },
@@ -1994,6 +1997,11 @@ const messages: Record<string, Msg> = {
     fr: 'Remettez le montant en espèces au responsable ; votre abonnement sera activé après validation.',
     en: 'Hand the cash to the manager; your subscription activates once confirmed.',
     ar: 'سلّم المبلغ نقدًا للمسؤول؛ سيتم تفعيل اشتراكك بعد التأكيد.',
+  },
+  'sub.payHint.bank': {
+    fr: 'Contactez-nous pour obtenir nos coordonnées bancaires, faites le virement, puis envoyez-nous la preuve ; activation après validation.',
+    en: 'Contact us for our bank details, make the transfer, then send us the proof; activation after confirmation.',
+    ar: 'تواصل معنا للحصول على بياناتنا البنكية، قم بالتحويل ثم أرسل لنا الإثبات؛ التفعيل بعد التأكيد.',
   },
   'sub.payHint.mobile': {
     fr: 'Envoyez le montant par mobile money au numéro communiqué ; activation après validation.',

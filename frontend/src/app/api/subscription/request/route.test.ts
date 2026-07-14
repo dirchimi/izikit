@@ -133,7 +133,7 @@ describe('POST /api/subscription/request', () => {
   it('409 SUB_REQUEST_PENDING quand la course déclenche P2002 (index unique)', async () => {
     // Pré-check passé (null), mais le 2e POST simultané viole l'index partiel.
     prismaMock.subscriptionPayment.create.mockRejectedValueOnce({ code: 'P2002' } as never);
-    const res = await POST(makePost({ plan: 'PREMIUM', method: 'MOBILE' }));
+    const res = await POST(makePost({ plan: 'PREMIUM', method: 'BANK' }));
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toBe('SUB_REQUEST_PENDING');
   });

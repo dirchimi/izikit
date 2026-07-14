@@ -14,7 +14,10 @@ export const TRIAL_DAYS = 15;
 export const GRACE_DAYS = 3;
 
 export type PlanId = 'PREMIUM';
-export type PaymentMethod = 'CASH' | 'MOBILE';
+// Modes de paiement proposés à la souscription : espèces ou virement bancaire.
+// « MOBILE » n'est plus proposé mais reste une valeur possible en base pour les
+// anciens paiements (affichage historique via la clé i18n sub.method.mobile).
+export type PaymentMethod = 'CASH' | 'BANK';
 export type SubStatus = 'TRIAL' | 'ACTIVE' | 'EXPIRED';
 
 export interface PlanDef {
@@ -30,7 +33,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
 };
 
 export const PLAN_IDS: readonly PlanId[] = ['PREMIUM'] as const;
-export const PAYMENT_METHODS: readonly PaymentMethod[] = ['CASH', 'MOBILE'] as const;
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ['CASH', 'BANK'] as const;
 
 /** Grille tarifaire par durée (prix TOTAL en FCFA, aligné sur le landing). */
 export interface SubPeriod {
@@ -52,7 +55,7 @@ export function isPlanId(v: unknown): v is PlanId {
 }
 
 export function isPaymentMethod(v: unknown): v is PaymentMethod {
-  return v === 'CASH' || v === 'MOBILE';
+  return v === 'CASH' || v === 'BANK';
 }
 
 /**

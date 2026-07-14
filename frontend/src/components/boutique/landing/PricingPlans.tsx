@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { CONTACT_WHATSAPP } from '@/lib/contact';
+import { ltrIsolate } from '@/lib/i18n/bidi';
 
 // Prix Premium ancrés sur l'annuel (500 000 FCFA/an). Remise croissante.
 const PERIODS = [
@@ -84,7 +85,9 @@ export default function PricingPlans() {
             >
               {t(p.labelKey)}
               {p.savePct && !active && (
-                <span className="text-primary ms-1 text-xs font-bold">−{p.savePct}%</span>
+                <span dir="ltr" className="text-primary ms-1 text-xs font-bold">
+                  −{p.savePct}%
+                </span>
               )}
             </button>
           );
@@ -139,7 +142,10 @@ export default function PricingPlans() {
               {t('landing.pricing.premium.name')}
             </p>
             <div className="flex items-end gap-1">
-              <span className="font-headings text-primary-foreground text-[40px] leading-none font-bold">
+              <span
+                dir="ltr"
+                className="font-headings text-primary-foreground text-[40px] leading-none font-bold"
+              >
                 {period.total}
               </span>
               <span className="text-primary-foreground font-body pb-1 text-sm opacity-70">
@@ -149,12 +155,12 @@ export default function PricingPlans() {
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {period.perMonth && (
                 <span className="text-primary-foreground font-body text-xs opacity-80">
-                  {t('landing.pricing.perMonth', { amount: period.perMonth })}
+                  {t('landing.pricing.perMonth', { amount: ltrIsolate(period.perMonth) })}
                 </span>
               )}
               {period.savePct && (
                 <span className="bg-primary-foreground/20 text-primary-foreground font-body rounded-full px-2 py-0.5 text-xs font-bold">
-                  {t('landing.pricing.save', { pct: period.savePct })}
+                  {t('landing.pricing.save', { pct: ltrIsolate(`${period.savePct}%`) })}
                 </span>
               )}
             </div>

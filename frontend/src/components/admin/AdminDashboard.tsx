@@ -85,7 +85,11 @@ const PLAN_LABEL: Record<string, string> = {
   SOLO: 'Solo',
   BOUTIQUE: 'Boutique',
 };
-const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', MOBILE: 'Mobile money' };
+const METHOD_LABEL: Record<string, string> = {
+  CASH: 'Espèces',
+  BANK: 'Virement bancaire',
+  MOBILE: 'Mobile money', // historique
+};
 // Ton du badge selon l'urgence (jours restants avant expiration).
 function urgencyTone(daysLeft: number): string {
   if (daysLeft <= 1) return 'red';
