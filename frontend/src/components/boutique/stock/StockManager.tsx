@@ -12,6 +12,10 @@ import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/useApi';
 import { onStockChange } from '@/lib/boutique/realtime';
 import { uploadImage } from '@/lib/upload';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { getRole, pullResource } from '@/lib/offline/pull';
+import { productRowToPos, type PosProduct } from '@/lib/offline/pos-adapters';
 import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import ComboBox from '@/components/ui/ComboBox';
@@ -28,22 +32,10 @@ import SupplierDebtsPanel, { type SupplierDebtRow } from './SupplierDebtsPanel';
 import FloatingAddButton from '@/components/boutique/FloatingAddButton';
 import { useConfirm } from '@/contexts/ConfirmContext';
 
-interface ApiProduct {
-  id: string;
-  ref: string;
-  name: string;
-  category: string;
-  buyPrice: number;
-  sellPrice: number;
-  prixGros: number;
-  unite: string;
-  qty: number;
-  threshold: number;
-  status: 'ok' | 'low' | 'out';
-  imageUrl: string | null;
-  barcode: string | null;
-  expiryDate: string | null;
-}
+// Offline-first (Task 5.3): identical shape to `pos-adapters.ts`'s `PosProduct`
+// (raw catalogue columns + derived `status`), so `productRowToPos` is reused
+// as-is to map the local Dexie mirror into what this screen already renders.
+type ApiProduct = PosProduct;
 
 type StatusFilter = 'all' | 'low' | 'out';
 
@@ -132,18 +124,33 @@ export default function StockManager() {
   const [historyTarget, setHistoryTarget] = useState<ApiProduct | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{
-    products: ApiProduct[];
-    expiryAlertDays: number;
-  }>('/api/products');
-  const products = data?.products ?? [];
-  const expiryAlertDays = data?.expiryAlertDays ?? 30;
+  // Offline-first (Task 5.3): lecture locale (Dexie) au lieu du réseau — le
+  // miroir est alimenté par pullAll() (voir AppShell) et par
+  // createAdjustOffline() plus bas pour les mouvements saisis hors ligne.
+  // `loading`/`error` n'existent pas côté local (une lecture Dexie ne peut
+  // pas "échouer" comme un fetch réseau) — `error` reste `null` en
+  // permanence et `refresh()` est un no-op, `AsyncState` gère déjà ce cas
+  // (voir DepensesManager, même schéma).
+  const { data: productRows, loading } = useLocalResource(() => db.products.toArray(), [], []);
+  const products = useMemo(() => productRows.map(productRowToPos), [productRows]);
 
   // Gestion du catalogue/stock (créer/éditer/supprimer, réappro, ajuster, photo)
   // réservée au Manager (ADMIN) et au Patron (OWNER) — le serveur applique la
-  // même règle. Le Vendeur ne voit que la consultation + l'historique.
-  const { data: org } = useApi<{ role: string }>('/api/org/current');
-  const canManage = org?.role === 'OWNER' || org?.role === 'ADMIN';
+  // même règle (`requireOrgRole('ADMIN')`) quoi qu'il arrive côté client. Le
+  // Vendeur ne voit que la consultation + l'historique.
+  //
+  // Offline-first (Task 5.3): `/api/org/current` échoue hors ligne — on
+  // préfère son rôle en direct quand disponible (source la plus fraîche,
+  // couvre aussi un changement de rôle récent), sinon on retombe sur
+  // `meta.role` (alimenté par le dernier pullAll()) pour qu'un
+  // ADMIN/OWNER ne perde pas l'accès juste parce que le réseau est coupé.
+  const { data: org } = useApi<{ role: string; settings: { expiryAlertDays: number } }>(
+    '/api/org/current',
+  );
+  const { data: localRole } = useLocalResource(() => getRole(), [], null);
+  const effectiveRole = org?.role ?? localRole;
+  const canManage = effectiveRole === 'OWNER' || effectiveRole === 'ADMIN';
+  const expiryAlertDays = org?.settings.expiryAlertDays ?? 30;
 
   // Dettes fournisseurs (stock pris « en prêt ») — info financière réservée au
   // Patron/Manager ; on n'interroge pas l'API côté Vendeur. Poll léger 30s.
@@ -194,6 +201,11 @@ export default function StockManager() {
       await api(`/api/products/${productId}`, { method: 'PATCH', body: { imageUrl: url } });
       toast(t('stock.photo.updated'), 'success');
       onStockChange();
+      // Offline-first (Task 5.3): the product list now reads from the local
+      // Dexie mirror, not this network response — refresh just that resource
+      // (best-effort, matching AppShell's own error-swallowing pull) so the
+      // photo shows up immediately instead of waiting for the next pullAll().
+      void pullResource('products');
     } catch (err) {
       toast(photoUploadError(err, t), 'error');
     } finally {
@@ -248,6 +260,8 @@ export default function StockManager() {
       toast(t('stock.added', { name: res.product.name, ref: res.product.ref }), 'success');
       onStockChange();
       void refreshDebts();
+      // Offline-first (Task 5.3) — see `uploadCroppedPhoto`'s comment above.
+      void pullResource('products');
       return true;
     } catch (err) {
       toast(productWriteError(err), 'error');
@@ -271,6 +285,8 @@ export default function StockManager() {
       await api(`/api/products/${id}`, { method: 'PATCH', body: patch });
       toast(t('stock.updated', { name: patch.name }), 'success');
       onStockChange();
+      // Offline-first (Task 5.3) — see `uploadCroppedPhoto`'s comment above.
+      void pullResource('products');
       return true;
     } catch (err) {
       toast(productWriteError(err), 'error');
@@ -298,6 +314,11 @@ export default function StockManager() {
     setDeletingId(p.id);
     try {
       await api(`/api/products/${p.id}`, { method: 'DELETE' });
+      // Offline-first (Task 5.3): a delete has no server-side echo `pullResource`
+      // could bulkPut (the row is simply gone, and this pull design has no
+      // delete-tombstone mechanism) — remove it from the local mirror
+      // directly so it doesn't linger as a ghost row in this Dexie-backed list.
+      await db.products.delete(p.id);
       toast(t('stock.deleted', { name: p.name }), 'success');
       onStockChange();
     } catch {
@@ -454,8 +475,7 @@ export default function StockManager() {
           {/* Table */}
           <AsyncState
             loading={loading}
-            error={error}
-            onRetry={refresh}
+            error={null}
             isEmpty={products.length === 0}
             emptyLabel={t('stock.emptyAll')}
             emptyIcon="package"

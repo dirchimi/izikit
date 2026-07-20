@@ -35,6 +35,7 @@ import {
   type ProductRow,
   type SaleMethod,
   type StockMovementRow,
+  type StockMovementType,
   type SaleItemRow,
   type ReceivableRow,
   type CustomerRow,
@@ -637,6 +638,126 @@ export async function createRepayOffline(input: CreateRepayInput): Promise<Repay
       });
 
       return { id, applied, remainingDebt };
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// createAdjustOffline (Task 5.3) — the `adjust` mirror of the mutations
+// above. Backs BOTH stock screens: `AdjustStockForm` (correction — casse,
+// vol, inventaire — mandatory reason, either sense) and `ReapproForm`
+// (restock — entrée de stock, optional buyPrice update + optional supplier
+// debt "en prêt"). Both already POST the same `/api/products/[id]/adjust`
+// online, so one mutation covers both callers; `type` distinguishes the
+// StockMovement kind they record (see `CreateAdjustInput.type`'s doc).
+//
+// UNLIKE `createSaleOffline` (which RECORDS a stock conflict and lets the
+// sale through — Task 4.1's `stockConflicts`), an adjustment that would push
+// stock below 0 is REJECTED outright, matching the server's `/api/products/
+// [id]/adjust` (`AdjustRejection('INSUFFICIENT_STOCK', 409)`, no partial
+// application). `INSUFFICIENT_STOCK_LOCAL` mirrors that refusal locally so
+// the shopkeeper sees the same rejection offline as online, before ever
+// reaching the server.
+//
+// Supplier-debt limitation (documented, out of scope for Task 5.3): this
+// Dexie schema has no local `supplierDebts` table (see `db.ts`), so a
+// restock-on-credit's debt is forwarded to the server via the outbox payload
+// ONLY — it is not mirrored into any local table. `SupplierDebtsPanel` reads
+// `/api/supplier-debts` over the network (unchanged, out of scope per this
+// task), so the "à payer" KPI only reflects an offline-entered debt once the
+// device is back online and the `adjust` op has drained.
+// ---------------------------------------------------------------------------
+
+export interface CreateAdjustInput {
+  productId: string;
+  /** Signed. `> 0` = entrée (IN/réappro), `< 0` = sortie (OUT/correction). */
+  delta: number;
+  /** Mandatory (client-enforced) for an `ADJUST`-type correction; optional
+   * for a plain restock. Forwarded as-is to the server, which also enforces
+   * "reason required for type ADJUST" server-side (defense in depth). */
+  reason?: string;
+  /** Réapprovisionnement only — updates the product's current buy price. */
+  buyPrice?: number;
+  /** Movement kind recorded both locally and server-side. Omitted → derived
+   * from the sign of `delta` (`IN` if `> 0`, else `OUT`), same compat rule
+   * `/api/products/[id]/adjust`'s Body schema documents. Both current
+   * callers pass this explicitly: `AdjustStockForm` always sends `'ADJUST'`
+   * (either sense), `ReapproForm` always sends `'IN'`. */
+  type?: StockMovementType;
+  /** Restock "pris en prêt" — reste dû au fournisseur pour cette entrée.
+   * Forwarded to the server (bounded there to `delta × buyPrice`); see the
+   * module docblock above for why it is NOT mirrored into a local table. */
+  supplierDebt?: { amount: number; supplierName?: string };
+}
+
+export interface AdjustResult {
+  id: string;
+}
+
+/**
+ * Records a stock adjustment/restock locally (optimistic) and enqueues it
+ * for the server — the `adjust` counterpart of `createExpenseOffline`.
+ *
+ * @throws Error('NO_ORG') `meta.orgId` hasn't been populated yet (no
+ *   successful pull has ever run)
+ * @throws Error('PRODUCT_NOT_FOUND') the product isn't in the local mirror
+ * @throws Error('INSUFFICIENT_STOCK_LOCAL') the delta would push local qty
+ *   below 0 — rejected outright (no partial application), matching the
+ *   server's `INSUFFICIENT_STOCK` refusal
+ */
+export async function createAdjustOffline(input: CreateAdjustInput): Promise<AdjustResult> {
+  const id = newId();
+  const createdAt = new Date().toISOString();
+
+  return db.transaction(
+    'rw',
+    [db.products, db.stockMovements, db.meta, db.outbox],
+    async (): Promise<AdjustResult> => {
+      const orgId = await getOrgId();
+      if (!orgId) throw new Error('NO_ORG');
+
+      const product = await db.products.get(input.productId);
+      if (!product) throw new Error('PRODUCT_NOT_FOUND');
+
+      const newQty = product.qty + input.delta;
+      if (newQty < 0) throw new Error('INSUFFICIENT_STOCK_LOCAL');
+
+      await db.products.update(input.productId, {
+        qty: newQty,
+        ...(input.buyPrice !== undefined ? { buyPrice: input.buyPrice } : {}),
+      });
+
+      const type: StockMovementType = input.type ?? (input.delta > 0 ? 'IN' : 'OUT');
+      const movement: StockMovementRow = {
+        id: newId(),
+        organizationId: orgId,
+        productId: input.productId,
+        type,
+        delta: input.delta,
+        clientOpId: id,
+        createdAt,
+        synced: false,
+        ...(input.reason ? { reason: input.reason } : {}),
+      };
+      await db.stockMovements.add(movement);
+
+      // Enqueue — same shape the online POST sends, plus `clientOpId`.
+      const payload: Record<string, unknown> = {
+        clientOpId: id,
+        delta: input.delta,
+        type,
+        ...(input.reason ? { reason: input.reason } : {}),
+        ...(input.buyPrice !== undefined ? { buyPrice: input.buyPrice } : {}),
+        ...(input.supplierDebt ? { supplierDebt: input.supplierDebt } : {}),
+      };
+      await enqueue({
+        kind: 'adjust',
+        endpoint: `/api/products/${input.productId}/adjust`,
+        opId: id,
+        payload,
+      });
+
+      return { id };
     },
   );
 }

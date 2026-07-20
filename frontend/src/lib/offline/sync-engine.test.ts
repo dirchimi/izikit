@@ -10,7 +10,7 @@
  */
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { db, type SaleRow, type ExpenseRow } from './db';
+import { db, type SaleRow, type ExpenseRow, type ProductRow, type StockMovementRow } from './db';
 import { api, ApiError } from '@/lib/api';
 import { enqueue, listPending } from './outbox';
 import { drainOutbox } from './sync-engine';
@@ -64,6 +64,8 @@ beforeEach(async () => {
     db.expenses.clear(),
     db.conflicts.clear(),
     db.repayments.clear(),
+    db.products.clear(),
+    db.stockMovements.clear(),
   ]);
 });
 
@@ -187,6 +189,87 @@ describe('drainOutbox', () => {
     expect(rep?.synced).toBe(true);
     expect(rep?.applied).toBe(1200);
     expect(rep?.remainingDebt).toBe(300);
+  });
+
+  it('Task 5.3 — a drained adjust marks the local stockMovement synced:true and reconciles the product qty/buyPrice from the server echo', async () => {
+    await db.products.put({
+      id: 'p1',
+      organizationId: 'o1',
+      ref: 'REF-p1',
+      name: 'Riz',
+      category: 'Alimentation',
+      buyPrice: 100,
+      sellPrice: 500,
+      prixGros: 0,
+      unite: 'piece',
+      qty: 15, // this device's optimistic local qty (10 + 5)
+      threshold: 2,
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    } satisfies ProductRow);
+    await db.stockMovements.put({
+      id: 'mv1',
+      organizationId: 'o1',
+      productId: 'p1',
+      type: 'IN',
+      delta: 5,
+      clientOpId: 'adj1',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      synced: false,
+    } satisfies StockMovementRow);
+    await enqueue({
+      kind: 'adjust',
+      payload: { clientOpId: 'adj1', delta: 5, type: 'IN', buyPrice: 150 },
+      opId: 'adj1',
+      endpoint: '/api/products/p1/adjust',
+    });
+
+    // Server's authoritative qty is 20 (e.g. a second device also adjusted
+    // this product concurrently) — reconciliation should win over this
+    // device's stale optimistic 15.
+    mockedApi.mockResolvedValueOnce({
+      product: { id: 'p1', qty: 20, buyPrice: 150 },
+    });
+
+    const result = await drainOutbox();
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+    const movement = await db.stockMovements.get('mv1');
+    expect(movement?.synced).toBe(true);
+
+    const product = await db.products.get('p1');
+    expect(product?.qty).toBe(20);
+    expect(product?.buyPrice).toBe(150);
+  });
+
+  it('Task 5.3 — an adjust response with no numeric qty leaves the local product untouched (self-heals on next pull)', async () => {
+    await db.products.put({
+      id: 'p2',
+      organizationId: 'o1',
+      ref: 'REF-p2',
+      name: 'Sucre',
+      category: 'Alimentation',
+      buyPrice: 100,
+      sellPrice: 500,
+      prixGros: 0,
+      unite: 'piece',
+      qty: 8,
+      threshold: 2,
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    } satisfies ProductRow);
+    await enqueue({
+      kind: 'adjust',
+      payload: { clientOpId: 'adj2', delta: -2, type: 'ADJUST', reason: 'Casse' },
+      opId: 'adj2',
+      endpoint: '/api/products/p2/adjust',
+    });
+
+    mockedApi.mockResolvedValueOnce({}); // malformed/empty response
+
+    const result = await drainOutbox();
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+    const product = await db.products.get('p2');
+    expect(product?.qty).toBe(8);
   });
 
   it('stops immediately on a network error (status 0) and leaves later rows untouched/pending', async () => {

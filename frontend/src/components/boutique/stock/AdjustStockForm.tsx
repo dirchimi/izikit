@@ -4,7 +4,8 @@ import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
-import { api, ApiError } from '@/lib/api';
+import { createAdjustOffline } from '@/lib/offline/mutations';
+import { triggerDrain } from '@/lib/offline/sync-triggers';
 
 const fieldClass =
   'border-border bg-input text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none focus:border-primary';
@@ -12,8 +13,15 @@ const labelClass = 'text-foreground font-body text-xs font-semibold';
 
 /**
  * Ajustement de stock (correction : casse, vol, inventaire, erreur). Correction
- * en plus ou en moins avec MOTIF OBLIGATOIRE, via /api/products/[id]/adjust
- * (mouvement type ADJUST). Refuse une sortie qui ferait passer le stock sous 0.
+ * en plus ou en moins avec MOTIF OBLIGATOIRE (mouvement type ADJUST). Refuse
+ * une sortie qui ferait passer le stock sous 0.
+ *
+ * Offline-first (Task 5.3) : écriture locale optimiste via
+ * `createAdjustOffline` + mise en file d'attente (jamais de réseau direct
+ * ici) — même schéma que `createExpenseOffline` pour les dépenses. Le
+ * serveur (`/api/products/[id]/adjust`) reste seul à valider VRAIMENT à la
+ * synchro ; le refus local (`INSUFFICIENT_STOCK_LOCAL`) n'est qu'un
+ * feedback immédiat au commerçant.
  */
 export default function AdjustStockForm({
   product,
@@ -43,16 +51,19 @@ export default function AdjustStockForm({
     const delta = sense === 'remove' ? -q : q;
     setSubmitting(true);
     try {
-      await api(`/api/products/${product.id}/adjust`, {
-        method: 'POST',
-        body: { delta, type: 'ADJUST', reason: reason.trim() },
+      await createAdjustOffline({
+        productId: product.id,
+        delta,
+        type: 'ADJUST',
+        reason: reason.trim(),
       });
+      triggerDrain();
       toast(t('stock.adjust.success', { name: product.name }), 'success');
       onSuccess();
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
+      const code = err instanceof Error ? err.message : '';
       toast(
-        code === 'INSUFFICIENT_STOCK' ? t('stock.adjust.insufficient') : t('async.error'),
+        code === 'INSUFFICIENT_STOCK_LOCAL' ? t('stock.adjust.insufficient') : t('async.error'),
         'error',
       );
     } finally {

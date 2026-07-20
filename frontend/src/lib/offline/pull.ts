@@ -49,6 +49,13 @@ const LAST_PULL_KEY = 'lastPull';
 /** Task 5.1 — `meta` key holding the current boutique id, written by
  * `pullAll()` from the response's `orgId` and read back by `getOrgId()`. */
 const ORG_ID_KEY = 'orgId';
+/** Task 5.3 — `meta` key holding the caller's org role, written by
+ * `pullAll()` from the response's `role` and read back by `getRole()`. Feeds
+ * an offline-first fallback for ADMIN/OWNER-gated UI (e.g. `StockManager`'s
+ * `canManage`) when the live `/api/org/current` role lookup is unreachable —
+ * the SERVER still enforces the real role at sync regardless (defense in
+ * depth, see `requireOrgRole` on every mutating route). */
+const ROLE_KEY = 'role';
 
 // ---------------------------------------------------------------------------
 // Server response shapes — mirror the Prisma models field-for-field as they
@@ -198,6 +205,12 @@ export interface PullResponse {
    * by product-less offline writes (expenses, later customers/adjust/repay)
    * that have no referenced row to derive an org id from. */
   orgId: string;
+  /** Task 5.3 — the caller's role in that boutique (`'OWNER' | 'ADMIN' |
+   * 'MEMBER'`, same string the server's `requireOrgRole` compares against —
+   * kept as a plain `string` here rather than importing the server-only
+   * `OrgRole` type, mirroring how `SessionRow.role` already does it). Stored
+   * into `meta.role` by `pullAll()` below; read back via `getRole()`. */
+  role: string;
   serverTime: string;
 }
 
@@ -486,6 +499,10 @@ export async function pullAll(): Promise<void> {
       // pull: a failure never leaves `meta.orgId` pointing at data that was
       // never actually persisted.
       await db.meta.put({ key: ORG_ID_KEY, value: res.orgId });
+      // Task 5.3 foundation — store the caller's role alongside the cursor,
+      // same atomicity guarantee (never left pointing at an unpersisted
+      // pull). Feeds the offline fallback for `canManage`-style gates.
+      await db.meta.put({ key: ROLE_KEY, value: res.role });
     },
   );
 }
@@ -498,6 +515,20 @@ export async function pullAll(): Promise<void> {
  */
 export async function getOrgId(): Promise<string | null> {
   const row = await db.meta.get(ORG_ID_KEY);
+  return typeof row?.value === 'string' ? row.value : null;
+}
+
+/**
+ * Reads the org role last stored by `pullAll()` (Task 5.3). `null` before the
+ * first successful pull has ever completed. This is an OFFLINE FALLBACK only
+ * — callers that can reach `/api/org/current` should prefer that live value;
+ * this exists so an ADMIN/OWNER-gated UI doesn't hide itself just because the
+ * network call failed. The server independently re-checks the real role via
+ * `requireOrgRole` on every mutating route, so a stale/forged local value
+ * here is not a security concern, only a UI-affordance one.
+ */
+export async function getRole(): Promise<string | null> {
+  const row = await db.meta.get(ROLE_KEY);
   return typeof row?.value === 'string' ? row.value : null;
 }
 

@@ -15,6 +15,7 @@ import {
   createExpenseOffline,
   createCustomerOffline,
   createRepayOffline,
+  createAdjustOffline,
 } from './mutations';
 
 const ORG = 'org-1';
@@ -697,5 +698,130 @@ describe('createRepayOffline', () => {
     expect('method' in payload).toBe(false);
     expect('note' in payload).toBe(false);
     expect('date' in payload).toBe(false);
+  });
+});
+
+describe('createAdjustOffline', () => {
+  beforeEach(async () => {
+    await reset();
+    await db.meta.put({ key: 'orgId', value: ORG });
+  });
+
+  it('a positive delta (restock) increases qty, writes an unsynced movement with clientOpId, and enqueues an adjust op', async () => {
+    await seed([product({ id: 'p1', qty: 10, buyPrice: 100 })]);
+
+    const res = await createAdjustOffline({
+      productId: 'p1',
+      delta: 5,
+      type: 'IN',
+      reason: 'Réappro',
+    });
+
+    const p = await db.products.get('p1');
+    expect(p?.qty).toBe(15);
+
+    const movements = await db.stockMovements.toArray();
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.delta).toBe(5);
+    expect(movements[0]?.type).toBe('IN');
+    expect(movements[0]?.reason).toBe('Réappro');
+    expect(movements[0]?.clientOpId).toBe(res.id);
+    expect(movements[0]?.synced).toBe(false);
+    expect(movements[0]?.organizationId).toBe(ORG);
+
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('adjust');
+    expect(outbox[0]?.endpoint).toBe('/api/products/p1/adjust');
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.delta).toBe(5);
+    expect(payload.type).toBe('IN');
+    expect(payload.reason).toBe('Réappro');
+  });
+
+  it('updates buyPrice locally and in the payload when given (réappro)', async () => {
+    await seed([product({ id: 'p1', qty: 10, buyPrice: 100 })]);
+
+    await createAdjustOffline({ productId: 'p1', delta: 5, type: 'IN', buyPrice: 150 });
+
+    const p = await db.products.get('p1');
+    expect(p?.buyPrice).toBe(150);
+
+    const payload = (await db.outbox.toArray())[0]?.payload as Record<string, unknown>;
+    expect(payload.buyPrice).toBe(150);
+  });
+
+  it('forwards supplierDebt in the payload only — no local supplierDebts table to mirror it into', async () => {
+    await seed([product({ id: 'p1', qty: 10, buyPrice: 100 })]);
+
+    await createAdjustOffline({
+      productId: 'p1',
+      delta: 5,
+      type: 'IN',
+      buyPrice: 100,
+      supplierDebt: { amount: 300, supplierName: 'Fournisseur X' },
+    });
+
+    const payload = (await db.outbox.toArray())[0]?.payload as Record<string, unknown>;
+    expect(payload.supplierDebt).toEqual({ amount: 300, supplierName: 'Fournisseur X' });
+  });
+
+  it('derives type from the sign of delta when omitted (IN for positive, OUT for negative)', async () => {
+    await seed([product({ id: 'p1', qty: 10 }), product({ id: 'p2', qty: 10 })]);
+
+    await createAdjustOffline({ productId: 'p1', delta: 3 });
+    await createAdjustOffline({ productId: 'p2', delta: -1 });
+
+    const movements = await db.stockMovements.toArray();
+    const byProduct = new Map(movements.map((m) => [m.productId, m.type]));
+    expect(byProduct.get('p1')).toBe('IN');
+    expect(byProduct.get('p2')).toBe('OUT');
+  });
+
+  it('a negative delta beyond local stock throws INSUFFICIENT_STOCK_LOCAL and writes nothing (rollback)', async () => {
+    await seed([product({ id: 'p1', qty: 3 })]);
+
+    await expect(
+      createAdjustOffline({ productId: 'p1', delta: -5, type: 'ADJUST', reason: 'Casse' }),
+    ).rejects.toThrow('INSUFFICIENT_STOCK_LOCAL');
+
+    const p = await db.products.get('p1');
+    expect(p?.qty).toBe(3);
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('a negative delta exactly emptying stock (to 0) is allowed', async () => {
+    await seed([product({ id: 'p1', qty: 5 })]);
+
+    await createAdjustOffline({ productId: 'p1', delta: -5, type: 'ADJUST', reason: 'Inventaire' });
+
+    const p = await db.products.get('p1');
+    expect(p?.qty).toBe(0);
+  });
+
+  it('throws PRODUCT_NOT_FOUND and writes nothing when the product is not in the local mirror', async () => {
+    await expect(
+      createAdjustOffline({ productId: 'missing', delta: 5, type: 'IN' }),
+    ).rejects.toThrow('PRODUCT_NOT_FOUND');
+
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws NO_ORG and writes nothing when meta.orgId is absent', async () => {
+    await seed([product({ id: 'p1', qty: 10 })]);
+    await db.meta.delete('orgId');
+
+    await expect(createAdjustOffline({ productId: 'p1', delta: 5, type: 'IN' })).rejects.toThrow(
+      'NO_ORG',
+    );
+
+    const p = await db.products.get('p1');
+    expect(p?.qty).toBe(10);
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
   });
 });

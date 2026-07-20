@@ -121,6 +121,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // to derive it from the way `createSaleOffline` derives it from the
         // sale's products.
         orgId: organizationId,
+        // Task 5.3 — additive: the caller's org role (already resolved above
+        // for the `requireOrgRole` gate — no extra query). Stored into
+        // `meta.role` by `pullAll()` (see `pull.ts`'s `getRole()`) so an
+        // offline-first ADMIN/OWNER gate (e.g. `StockManager`'s `canManage`)
+        // has a fallback when `/api/org/current` is unreachable.
+        role: primary.role,
         serverTime: new Date().toISOString(),
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

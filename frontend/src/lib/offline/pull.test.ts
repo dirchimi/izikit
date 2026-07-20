@@ -10,7 +10,7 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from './db';
 import { api } from '@/lib/api';
-import { pullAll, pullResource, getOrgId, type PullResponse } from './pull';
+import { pullAll, pullResource, getOrgId, getRole, type PullResponse } from './pull';
 
 vi.mock('@/lib/api', () => ({
   api: vi.fn(),
@@ -153,6 +153,7 @@ function makeResponse(overrides: Partial<PullResponse> = {}): PullResponse {
     ],
     serverTime: '2026-07-20T00:00:00.000Z',
     orgId: 'o1',
+    role: 'ADMIN',
     ...overrides,
   };
 }
@@ -253,6 +254,19 @@ describe('pullAll', () => {
 
   it('getOrgId resolves null before any pull has ever run', async () => {
     await expect(getOrgId()).resolves.toBeNull();
+  });
+
+  it('stores the response role into meta.role, readable via getRole (Task 5.3)', async () => {
+    mockedApi.mockResolvedValueOnce(makeResponse({ role: 'OWNER' }));
+    await pullAll();
+
+    const stored = await db.meta.get('role');
+    expect(stored?.value).toBe('OWNER');
+    await expect(getRole()).resolves.toBe('OWNER');
+  });
+
+  it('getRole resolves null before any pull has ever run', async () => {
+    await expect(getRole()).resolves.toBeNull();
   });
 
   it('omits nullable server fields rather than storing them as null', async () => {

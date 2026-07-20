@@ -185,6 +185,13 @@ describe('GET /api/sync/pull', () => {
     expect(body.orgId).toBe('org1');
   });
 
+  it('renvoie role (Task 5.3 — rôle de l’appelant, pour meta.role côté client)', async () => {
+    mockPrimary.mockResolvedValueOnce({ organizationId: 'org1', role: 'ADMIN' });
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.role).toBe('ADMIN');
+  });
+
   it('ne renvoie que les lignes du membre — where scopé sur son organizationId (pas une autre org)', async () => {
     mockPrimary.mockResolvedValueOnce({ organizationId: 'org-other', role: 'MEMBER' });
     await GET(makeGet());

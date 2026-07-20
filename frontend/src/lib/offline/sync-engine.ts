@@ -76,6 +76,14 @@ interface StockConflictPayload {
   shortfall: number;
 }
 
+/** Parses the product id out of an `/api/products/<id>/adjust` endpoint
+ * string — the fallback path in the `adjust` case of `applySyncSuccess`
+ * below, for the rare case the local `stockMovement` row is already gone. */
+function extractProductId(endpoint: string): string | undefined {
+  const match = /^\/api\/products\/([^/]+)\/adjust$/.exec(endpoint);
+  return match?.[1];
+}
+
 function isStockConflictPayload(value: unknown): value is StockConflictPayload {
   return (
     isRecord(value) &&
@@ -231,6 +239,32 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
       const movement = await db.stockMovements.filter((m) => m.clientOpId === row.opId).first();
       if (movement) {
         await db.stockMovements.update(movement.id, { synced: true });
+      }
+
+      // Task 5.3 — reconcile the product's qty (and buyPrice, when the op
+      // updated it) from the server's authoritative echo NOW, rather than
+      // waiting for the next `pullAll()`. `createAdjustOffline` computed the
+      // optimistic `newQty` from whatever this device's local mirror showed
+      // at write time; if a SECOND device (or a concurrent server-side
+      // write) also adjusted the same product in between, the server's
+      // `{ qty: { increment: delta } }` composed correctly but this
+      // device's local qty is now stale until the next pull. Patching it
+      // here closes that window immediately. Guarded: only applied when the
+      // product row still exists locally and the response actually carries
+      // a numeric `qty` — a missing/malformed response leaves the qty as-is
+      // (self-heals on the next `pullAll()` regardless).
+      const productBody = isRecord(body.product) ? body.product : undefined;
+      if (productBody && typeof productBody.qty === 'number') {
+        // The product id is normally read off the just-located `movement`
+        // row; if that row is already gone (e.g. purged), fall back to
+        // parsing it out of `row.endpoint` (`/api/products/<id>/adjust`) —
+        // the same id `createAdjustOffline` built the endpoint from.
+        const productId = movement?.productId ?? extractProductId(row.endpoint);
+        if (productId) {
+          const changes: { qty: number; buyPrice?: number } = { qty: productBody.qty };
+          if (typeof productBody.buyPrice === 'number') changes.buyPrice = productBody.buyPrice;
+          await db.products.update(productId, changes);
+        }
       }
       break;
     }

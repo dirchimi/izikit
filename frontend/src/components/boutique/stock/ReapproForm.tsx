@@ -4,7 +4,8 @@ import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
-import { api } from '@/lib/api';
+import { createAdjustOffline } from '@/lib/offline/mutations';
+import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { useSupplierDebt } from './useSupplierDebt';
 
 const fieldClass =
@@ -13,8 +14,15 @@ const labelClass = 'text-foreground font-body text-xs font-semibold';
 
 /**
  * Réapprovisionnement (entrée de stock). Ajoute une quantité reçue au stock
- * existant via /api/products/[id]/adjust (mouvement type IN), met à jour le
- * prix d'achat si renseigné, trace une note. Ne recrée jamais le produit.
+ * existant (mouvement type IN), met à jour le prix d'achat si renseigné,
+ * trace une note. Ne recrée jamais le produit.
+ *
+ * Offline-first (Task 5.3) : écriture locale optimiste via
+ * `createAdjustOffline` + mise en file d'attente — la dette fournisseur
+ * « pris en prêt » (`supplierDebt`), elle, n'est PAS mirée dans une table
+ * locale (ce miroir Dexie n'en a pas) : elle voyage dans le payload de
+ * l'outbox et n'apparaît au panneau « à payer » (réseau, `/api/supplier-debts`)
+ * qu'une fois la synchro faite.
  */
 export default function ReapproForm({
   product,
@@ -45,16 +53,15 @@ export default function ReapproForm({
     }
     setSubmitting(true);
     try {
-      await api(`/api/products/${product.id}/adjust`, {
-        method: 'POST',
-        body: {
-          delta: q,
-          type: 'IN',
-          ...(buyPrice.trim() !== '' ? { buyPrice: Number(buyPrice) || 0 } : {}),
-          reason: note.trim() || t('stock.reappro.defaultReason'),
-          ...(supplierDebt ? { supplierDebt } : {}),
-        },
+      await createAdjustOffline({
+        productId: product.id,
+        delta: q,
+        type: 'IN',
+        ...(buyPrice.trim() !== '' ? { buyPrice: Number(buyPrice) || 0 } : {}),
+        reason: note.trim() || t('stock.reappro.defaultReason'),
+        ...(supplierDebt ? { supplierDebt } : {}),
       });
+      triggerDrain();
       toast(t('stock.reappro.success', { qty: q, name: product.name }), 'success');
       onSuccess();
     } catch {
