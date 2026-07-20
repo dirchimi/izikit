@@ -142,7 +142,9 @@ describe('POST /api/products/[id]/adjust', () => {
       expect.objectContaining({ data: expect.objectContaining({ type: 'IN', delta: 10 }) }),
     );
     expect(prismaMock.product.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ qty: 12, buyPrice: 900 }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ qty: { increment: 10 }, buyPrice: 900 }),
+      }),
     );
   });
 
@@ -235,5 +237,140 @@ describe('POST /api/products/[id]/adjust', () => {
         data: expect.objectContaining({ type: 'ADJUST', delta: -3, reason: 'Casse' }),
       }),
     );
+  });
+
+  it('écrit qty en delta atomique { increment } et non en valeur absolue', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 4200,
+      sellPrice: 6000,
+      qty: 10,
+      threshold: 5,
+    } as never);
+    await POST(makePost({ delta: 6 }), params('p1'));
+    expect(prismaMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ qty: { increment: 6 } }) }),
+    );
+  });
+});
+
+describe('POST /api/products/[id]/adjust — idempotence offline (clientOpId)', () => {
+  it('deux POST avec le même clientOpId : un seul mouvement/ajustement, 2e réponse mémoïsée à 200', async () => {
+    // --- 1er POST : aucune opération offline connue → exécution réelle ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 4,
+      name: 'Riz',
+      buyPrice: 4200,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    const updatedProduct = {
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 4200,
+      sellPrice: 6000,
+      qty: 10,
+      threshold: 5,
+    };
+    prismaMock.product.update.mockResolvedValueOnce(updatedProduct as never);
+
+    const first = await POST(makePost({ delta: 6, clientOpId: 'adjust-clientop-1' }), params('p1'));
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.product.qty).toBe(10);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ clientOpId: 'adjust-clientop-1' }),
+      }),
+    );
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ qty: { increment: 6 } }) }),
+    );
+
+    // Ce que withIdempotency a mémoïsé (JSON) pour ce clientOpId.
+    const memoized = { kind: 'OK', product: updatedProduct };
+
+    // --- 2e POST : même clientOpId → rejoué, résultat mémoïsé, aucune ré-exécution ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'adjust-clientop-1',
+      endpoint: 'adjust',
+      resultJson: memoized,
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makePost({ delta: 6, clientOpId: 'adjust-clientop-1' }),
+      params('p1'),
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.product.qty).toBe(10);
+
+    // Pas de double-ajustement : ni StockMovement, ni update de produit une
+    // seconde fois — le stock n'a été ajusté qu'UNE fois au total.
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('online inchangé : POST sans clientOpId → OfflineOperation jamais touchée', async () => {
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 4,
+    } as never);
+    prismaMock.stockMovement.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.update.mockResolvedValueOnce({
+      id: 'p1',
+      ref: 'P-1',
+      name: 'Riz',
+      category: 'Alim',
+      buyPrice: 4200,
+      sellPrice: 6000,
+      qty: 10,
+      threshold: 5,
+    } as never);
+
+    const res = await POST(makePost({ delta: 6 }), params('p1'));
+    expect(res.status).toBe(200);
+    expect(prismaMock.offlineOperation.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ clientOpId: expect.anything() }),
+      }),
+    );
+  });
+
+  it('un rejet (INSUFFICIENT_STOCK) sur un appel offline ne mémoïse RIEN : même statut/corps qu’avant, aucune OfflineOperation créée', async () => {
+    // Un rejet métier fait avorter la $transaction (rollback) → withIdempotency
+    // n'atteint jamais son `create`. Sans ce rollback, INSUFFICIENT_STOCK serait
+    // mémoïsé et rejouerait pour toujours, même après un restock ultérieur.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.product.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      qty: 2,
+    } as never);
+
+    const res = await POST(makePost({ delta: -5, clientOpId: 'adjust-reject-1' }), params('p1'));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('INSUFFICIENT_STOCK');
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.create).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
   });
 });
