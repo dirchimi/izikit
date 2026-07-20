@@ -178,3 +178,143 @@ describe('POST /api/receivables/[id]/repay', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /api/receivables/[id]/repay — idempotence offline (clientOpId)', () => {
+  it('deux POST avec le même clientOpId : une seule allocation/Repayment/Document, 2e réponse mémoïsée à 200', async () => {
+    // --- 1er POST : aucune opération offline connue → exécution réelle ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'HISSEIN',
+      phone: '+235 66 00 00 00',
+    } as never);
+    prismaMock.receivable.findMany.mockResolvedValueOnce([
+      { id: 'r1', amount: 6000, amountPaid: 0 },
+      { id: 'r2', amount: 4000, amountPaid: 0 },
+    ] as never);
+    prismaMock.receivable.update.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValueOnce({ id: 'rep-clientop-1' } as never);
+
+    const first = await POST(
+      makePost({ amount: 7000, method: 'cash', clientOpId: 'repay-clientop-1' }),
+      { params },
+    );
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.applied).toBe(7000);
+    expect(firstBody.remainingDebt).toBe(3000);
+    expect(prismaMock.repayment.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.repayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ clientOpId: 'repay-clientop-1' }),
+      }),
+    );
+    expect(prismaMock.document.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.receivable.update).toHaveBeenCalledTimes(2);
+
+    // Ce que withIdempotency a mémoïsé (JSON) pour ce clientOpId.
+    const memoized = {
+      kind: 'OK',
+      applied: firstBody.applied,
+      remainingDebt: firstBody.remainingDebt,
+    };
+
+    // --- 2e POST : même clientOpId → rejoué, résultat mémoïsé, aucune ré-exécution ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'repay-clientop-1',
+      endpoint: 'repay',
+      resultJson: memoized,
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makePost({ amount: 7000, method: 'cash', clientOpId: 'repay-clientop-1' }),
+      { params },
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.applied).toBe(7000);
+    expect(secondBody.remainingDebt).toBe(3000);
+
+    // Pas de double-allocation : ni Repayment, ni Document, ni update de créance
+    // une seconde fois.
+    expect(prismaMock.repayment.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.document.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.receivable.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('online inchangé : POST sans clientOpId/id → OfflineOperation jamais touchée', async () => {
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'OUMAR',
+      phone: null,
+    } as never);
+    prismaMock.receivable.findMany.mockResolvedValueOnce([
+      { id: 'r1', amount: 2000, amountPaid: 0 },
+    ] as never);
+    prismaMock.receivable.update.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValue({ id: 'rep-online' } as never);
+
+    const res = await POST(makePost({ amount: 2000, method: 'mobile' }), { params });
+    expect(res.status).toBe(200);
+    expect(prismaMock.offlineOperation.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+    // Chemin online : aucun clientOpId à porter sur le Repayment.
+    expect(prismaMock.repayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ clientOpId: expect.anything() }),
+      }),
+    );
+  });
+
+  it('un rejet (NO_DEBT) sur un appel offline ne mémoïse RIEN : aucune OfflineOperation créée', async () => {
+    // Un rejet métier fait avorter la $transaction (rollback) → withIdempotency
+    // n'atteint jamais son `create`. Sans ce rollback, NO_DEBT serait mémoïsé
+    // et rejouerait pour toujours, même après l'ouverture d'une nouvelle créance.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'BECHIR',
+      phone: null,
+    } as never);
+    prismaMock.receivable.findMany.mockResolvedValueOnce([] as never);
+
+    const res = await POST(
+      makePost({ amount: 1000, method: 'cash', clientOpId: 'repay-reject-1' }),
+      { params },
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('NO_DEBT');
+    expect(prismaMock.repayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.document.create).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+  });
+
+  it("utilise l'id client fourni verbatim comme id du Repayment", async () => {
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      name: 'FATIME',
+      phone: null,
+    } as never);
+    prismaMock.receivable.findMany.mockResolvedValueOnce([
+      { id: 'r1', amount: 1000, amountPaid: 0 },
+    ] as never);
+    prismaMock.receivable.update.mockResolvedValue({} as never);
+    prismaMock.repayment.create.mockResolvedValueOnce({ id: 'rep-client-id-1' } as never);
+
+    const res = await POST(makePost({ amount: 1000, method: 'cash', id: 'rep-client-id-1' }), {
+      params,
+    });
+    expect(res.status).toBe(200);
+    expect(prismaMock.repayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ id: 'rep-client-id-1', clientOpId: 'rep-client-id-1' }),
+      }),
+    );
+  });
+});
