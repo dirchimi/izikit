@@ -70,19 +70,36 @@ const Body = z
   });
 
 // Seul le SUCCÈS traverse withIdempotency (et est donc mémoïsé). Un rejet métier
-// (stock insuffisant, client manquant, ventilation incohérente…) est levé comme
-// SaleRejection : il fait AVORTER la $transaction (rollback complet — aucune Sale,
-// aucun client matérialisé, aucune ligne OfflineOperation). Sans ce rollback, un
-// rejet transitoire (ex. stock épuisé par un autre appareil au moment du sync)
-// serait mémoïsé pour ce clientOpId et renverrait la même erreur À JAMAIS, même
-// après réapprovisionnement — la vente réellement conclue offline ne pourrait
-// plus jamais être enregistrée.
+// de VALIDATION (produit inconnu, client manquant, ventilation incohérente…) est
+// levé comme SaleRejection : il fait AVORTER la $transaction (rollback complet —
+// aucune Sale, aucun client matérialisé, aucune ligne OfflineOperation).
+//
+// Le stock insuffisant N'EST PLUS un rejet (Task 4.1). En offline-first, chaque
+// vente est déjà contrôlée contre le stock LOCAL avant d'être mise en file
+// (createSaleOffline lève INSUFFICIENT_STOCK_LOCAL). Si une vente en file trouve,
+// au moment du sync, un stock serveur insuffisant, c'est qu'un AUTRE appareil a
+// vendu ce stock pendant que celui-ci était offline — mais la marchandise a DÉJÀ
+// quitté la boutique (la vente a réellement eu lieu). La refuser PERDRAIT une
+// vente réelle. On ENREGISTRE donc la vente et on SIGNALE l'écart (stockConflicts)
+// au lieu de rejeter, en bornant le stock à 0 (jamais négatif). Comme c'est
+// désormais un succès (kind:'OK' avec stockConflicts), le résultat est mémoïsé :
+// un rejeu renvoie la même vente + les mêmes stockConflicts.
+type StockConflict = {
+  productId: string;
+  name: string;
+  requested: number;
+  available: number;
+  shortfall: number;
+};
 type CheckoutResult = {
   kind: 'OK';
   saleId: string;
   number: string;
   total: number;
   publicToken: string;
+  // Toujours présent (tableau vide si aucun conflit) : la mémoïsation JSON garde
+  // ainsi une forme stable, identique entre exécution fraîche et rejeu.
+  stockConflicts: StockConflict[];
 };
 
 // Rejet métier typé. `payload`/`status` reproduisent à l'octet près la réponse
@@ -261,6 +278,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                     (neededByProduct.get(item.productId) ?? 0) + item.qty,
                   );
                 }
+                // Task 4.1 : le stock insuffisant N'EST PLUS un rejet. On collecte
+                // l'écart par produit (stockConflicts) ; la vente est enregistrée et le
+                // décrément sera borné à 0 plus bas. PRODUCT_NOT_FOUND reste un rejet
+                // dur (validation réelle, pas une course de stock).
+                const stockConflicts: StockConflict[] = [];
                 for (const [productId, needed] of neededByProduct) {
                   const p = byId.get(productId);
                   if (!p)
@@ -269,10 +291,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                       404,
                     );
                   if (needed > p.qty)
-                    throw new SaleRejection(
-                      { error: 'INSUFFICIENT_STOCK', message: 'Stock insuffisant', productId },
-                      409,
-                    );
+                    stockConflicts.push({
+                      productId,
+                      name: p.name,
+                      requested: needed,
+                      available: p.qty,
+                      shortfall: needed - p.qty,
+                    });
                 }
 
                 // Résolution du client (création à la volée si nom fourni sans id).
@@ -394,17 +419,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 // par ligne : deux lignes du même article (double scan) donnent un seul
                 // StockMovement dont `clientOpId` = `${saleId}:${productId}` reste unique
                 // (la colonne est @unique — un mouvement par ligne collisionnerait).
+                //
+                // Task 4.1 — clamp anti-négatif : on décrémente de min(needed, dispo) et
+                // on enregistre le mouvement du MÊME montant clampé. Le stock atterrit à
+                // max(0, dispo − needed) sans jamais passer sous 0, et `qty = Σ delta`
+                // reste vrai (mouvement clampé = décrément réel). L'écart non couvert est
+                // déjà tracé dans stockConflicts. La vente/créance, elles, reflètent la
+                // quantité RÉELLEMENT vendue (marchandise sortie), pas le stock résiduel.
                 for (const [productId, needed] of neededByProduct) {
+                  const available = byId.get(productId)?.qty ?? 0;
+                  const decrementBy = Math.min(needed, available);
                   await tx.product.update({
                     where: { id: productId },
-                    data: { qty: { decrement: needed } },
+                    data: { qty: { decrement: decrementBy } },
                   });
                   await tx.stockMovement.create({
                     data: {
                       organizationId: orgId,
                       productId,
                       type: 'OUT',
-                      delta: -needed,
+                      delta: -decrementBy,
                       reason: 'sale',
                       createdById: userSub,
                       clientOpId: `${sale.id}:${productId}`,
@@ -426,7 +460,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   });
                 }
 
-                return { kind: 'OK', saleId: sale.id, number, total, publicToken };
+                return { kind: 'OK', saleId: sale.id, number, total, publicToken, stockConflicts };
               },
             ),
           { isolationLevel: 'Serializable' },
@@ -474,6 +508,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           total: result.total,
           publicToken: result.publicToken,
         },
+        // Task 4.1 — écarts de stock détectés au sync (tableau vide si aucun). Le
+        // POS affiche une alerte de réconciliation sans bloquer la vente. Sur un
+        // rejeu, ce tableau provient du resultJson mémoïsé → identique à l'origine.
+        stockConflicts: result.stockConflicts,
       },
       { status: replayed ? 200 : 201, headers: { 'x-request-id': ctx.requestId } },
     );

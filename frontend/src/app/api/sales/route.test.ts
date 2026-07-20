@@ -77,6 +77,8 @@ describe('POST /api/sales (checkout)', () => {
     const body = await res.json();
     expect(body.sale.number).toBe('V-0006');
     expect(body.sale.total).toBe(13500);
+    // Task 4.1 — stock suffisant : aucun conflit (convention : tableau vide, jamais absent).
+    expect(body.stockConflicts).toEqual([]);
     // Jeton du lien public de reçu : généré, non vide, et renvoyé au client.
     expect(typeof body.sale.publicToken).toBe('string');
     expect(body.sale.publicToken.length).toBeGreaterThan(0);
@@ -141,24 +143,49 @@ describe('POST /api/sales (checkout)', () => {
     );
   });
 
-  it('409 INSUFFICIENT_STOCK si la quantité dépasse le stock', async () => {
+  it('Task 4.1 — stock insuffisant au sync : enregistre la vente + signale le conflit (pas de rejet)', async () => {
+    // La marchandise a déjà quitté la boutique (vendue offline) ; un autre
+    // appareil a épuisé le stock serveur entre-temps. On enregistre la vente et
+    // on borne le stock à 0 au lieu de refuser (perte d'une vente réelle).
     prismaMock.product.findMany.mockResolvedValueOnce([
-      { id: 'p1', name: 'Riz', sellPrice: 6000, qty: 1 },
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 1 },
     ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
     const res = await POST(makePost({ method: 'cash', items: [{ productId: 'p1', qty: 5 }] }));
-    expect(res.status).toBe(409);
+    // La vente EST créée (succès), pas un 409.
+    expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.error).toBe('INSUFFICIENT_STOCK');
-    expect(body.productId).toBe('p1');
-    expect(prismaMock.sale.create).not.toHaveBeenCalled();
+    // Total = quantité réellement vendue × prix (5 × 6000), pas le stock résiduel.
+    expect(body.sale.total).toBe(30000);
+    // Le conflit est signalé avec l'écart exact.
+    expect(body.stockConflicts).toEqual([
+      { productId: 'p1', name: 'Riz', requested: 5, available: 1, shortfall: 4 },
+    ]);
+    // Stock plancher 0 : décrément clampé à min(5, 1) = 1 (jamais négatif).
+    expect(prismaMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' }, data: { qty: { decrement: 1 } } }),
+    );
+    // Mouvement OUT du MÊME montant clampé (−1) → qty = Σ delta reste vrai.
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'OUT', delta: -1 }) }),
+    );
   });
 
-  it('409 si deux lignes du MÊME produit dépassent le stock une fois cumulées (double scan)', async () => {
-    // Stock = 5. Deux lignes de 3 → 3 ≤ 5 ligne par ligne, mais 6 > 5 cumulé.
-    // Sans agrégation, la vente passait et le stock tombait à −1.
+  it('Task 4.1 — double scan du même produit au-delà du stock : enregistre + signale (delta clampé, agrégé)', async () => {
+    // Stock = 5. Deux lignes de 3 → 6 cumulé > 5. La vente est enregistrée, le
+    // conflit signalé (shortfall 1), un seul mouvement clampé à −5.
     prismaMock.product.findMany.mockResolvedValueOnce([
       { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 5 },
     ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
     const res = await POST(
       makePost({
         method: 'cash',
@@ -168,10 +195,21 @@ describe('POST /api/sales (checkout)', () => {
         ],
       }),
     );
-    expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe('INSUFFICIENT_STOCK');
-    expect(prismaMock.sale.create).not.toHaveBeenCalled();
-    expect(prismaMock.product.update).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.sale.total).toBe(36000); // 6 × 6000 (quantité réellement vendue)
+    expect(body.stockConflicts).toEqual([
+      { productId: 'p1', name: 'Riz', requested: 6, available: 5, shortfall: 1 },
+    ]);
+    // Un seul décrément agrégé, clampé à min(6, 5) = 5 (stock plancher 0).
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' }, data: { qty: { decrement: 5 } } }),
+    );
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ delta: -5 }) }),
+    );
   });
 
   it('accepte deux lignes du même produit si le cumul tient dans le stock', async () => {
@@ -210,6 +248,23 @@ describe('POST /api/sales (checkout)', () => {
     const res = await POST(makePost({ method: 'credit', items: [{ productId: 'p1', qty: 1 }] }));
     expect(res.status).toBe(422);
     expect((await res.json()).error).toBe('CREDIT_NEEDS_CUSTOMER');
+    expect(prismaMock.sale.create).not.toHaveBeenCalled();
+  });
+
+  it('Task 4.1 — PAYMENT_MISMATCH rejette toujours (validation réelle non affaiblie)', async () => {
+    // La ventilation (1) ne couvre pas le total NET (6000) → rejet dur 422,
+    // aucune vente créée. Le passage record+flag ne touche QUE le stock.
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    const res = await POST(
+      makePost({
+        items: [{ productId: 'p1', qty: 1 }],
+        payments: [{ method: 'cash', amount: 1 }],
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('PAYMENT_MISMATCH');
     expect(prismaMock.sale.create).not.toHaveBeenCalled();
   });
 
@@ -451,61 +506,85 @@ describe('POST /api/sales — idempotence offline (id client + clientOpId)', () 
     );
   });
 
-  it('un rejet (stock insuffisant) ne mémoïse RIEN : aucune OfflineOperation créée', async () => {
-    // Vente offline (clientOpId via `id`) qui échoue au contrôle de stock.
-    // Le rejet est levé → la $transaction avorte (rollback) → withIdempotency
-    // n'atteint jamais son `create`. Sans ce rollback, l'échec serait mémoïsé
-    // et rejouerait INSUFFICIENT pour toujours, même après réapprovisionnement.
+  it('un rejet de validation (crédit sans client) ne mémoïse RIEN : aucune OfflineOperation créée', async () => {
+    // Task 4.1 — le stock insuffisant n'est plus un rejet ; on couvre ici
+    // l'invariant « rollback ⇒ pas de mémoïsation » avec une rejection qui LÈVE
+    // toujours (CREDIT_NEEDS_CUSTOMER). Le rejet fait avorter la $transaction →
+    // withIdempotency n'atteint jamais son `create`. Sans ce rollback, l'échec
+    // serait mémoïsé et rejouerait la même erreur pour toujours.
     prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
     prismaMock.product.findMany.mockResolvedValueOnce([
-      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 0 },
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
     ] as never);
 
     const res = await POST(
-      makePost({ id: 'sale-reject-1', method: 'cash', items: [{ productId: 'p1', qty: 1 }] }),
+      makePost({ id: 'sale-reject-1', method: 'credit', items: [{ productId: 'p1', qty: 1 }] }),
     );
-    expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe('INSUFFICIENT_STOCK');
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('CREDIT_NEEDS_CUSTOMER');
     // Le rejet ne doit persister NI la vente NI une ligne d'idempotence.
     expect(prismaMock.sale.create).not.toHaveBeenCalled();
     expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
   });
 
-  it('rejet non mémoïsé : le MÊME clientOpId réussit une fois le stock réapprovisionné', async () => {
-    // --- 1er POST : stock 0 → INSUFFICIENT, rien de mémoïsé (rollback) ---
-    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
-    prismaMock.product.findMany.mockResolvedValueOnce([
-      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 0 },
-    ] as never);
-
-    const first = await POST(
-      makePost({ id: 'sale-retry-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
-    );
-    expect(first.status).toBe(409);
-    expect((await first.json()).error).toBe('INSUFFICIENT_STOCK');
-    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
-
-    // --- 2e POST : MÊME clientOpId, stock désormais suffisant → 201 ---
-    // findUnique renvoie encore null (le rejet n'a rien mémoïsé) : fn ré-exécute
-    // et, le stock étant reconstitué, la vente est enfin enregistrée.
+  it('Task 4.1 — rejeu idempotent d’une vente en conflit de stock : même vente + mêmes stockConflicts, pas de double décrément', async () => {
+    // --- 1er POST : stock insuffisant → vente enregistrée + conflit, mémoïsé ---
     prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
     prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
     prismaMock.product.findMany.mockResolvedValueOnce([
-      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 1 },
     ] as never);
     prismaMock.sale.count.mockResolvedValueOnce(0);
-    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-retry-1' } as never);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-conflict-1' } as never);
     prismaMock.product.update.mockResolvedValue({} as never);
     prismaMock.stockMovement.create.mockResolvedValue({} as never);
 
-    const second = await POST(
-      makePost({ id: 'sale-retry-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    const first = await POST(
+      makePost({ id: 'sale-conflict-1', method: 'cash', items: [{ productId: 'p1', qty: 5 }] }),
     );
-    expect(second.status).toBe(201);
-    const body = await second.json();
-    expect(body.sale.id).toBe('sale-retry-1');
-    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(first.status).toBe(201);
+    const firstBody = await first.json();
+    expect(firstBody.sale.id).toBe('sale-conflict-1');
+    expect(firstBody.stockConflicts).toEqual([
+      { productId: 'p1', name: 'Riz', requested: 5, available: 1, shortfall: 4 },
+    ]);
+    // Le conflit est désormais un SUCCÈS → il EST mémoïsé (contrairement à un rejet).
     expect(prismaMock.offlineOperation.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+
+    // Ce que withIdempotency a mémoïsé (JSON) pour ce clientOpId — conflit inclus.
+    const memoized = {
+      kind: 'OK',
+      saleId: 'sale-conflict-1',
+      number: firstBody.sale.number,
+      total: firstBody.sale.total,
+      publicToken: firstBody.sale.publicToken,
+      stockConflicts: firstBody.stockConflicts,
+    };
+
+    // --- 2e POST : même id → rejoué, résultat mémoïsé, aucune ré-exécution ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'sale-conflict-1',
+      endpoint: 'sales',
+      resultJson: memoized,
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makePost({ id: 'sale-conflict-1', method: 'cash', items: [{ productId: 'p1', qty: 5 }] }),
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.sale.id).toBe('sale-conflict-1');
+    // Les mêmes stockConflicts sont restitués depuis le resultJson mémoïsé.
+    expect(secondBody.stockConflicts).toEqual(firstBody.stockConflicts);
+    // Aucun double décrément : Sale/update/mouvement ne repassent pas.
+    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
   });
 
   it('client créé offline : utilise customer.id fourni verbatim quand introuvable en base', async () => {
