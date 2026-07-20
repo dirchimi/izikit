@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
 import SidebarNav from './SidebarNav';
@@ -13,6 +13,7 @@ import { useApi } from '@/lib/useApi';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useT } from '@/contexts/LocaleContext';
 import { authGateState } from '@/lib/offline/auth-gate';
+import { installSyncTriggers } from '@/lib/offline/sync-triggers';
 
 interface BoutiqueHeaderData {
   organization: { name: string };
@@ -48,6 +49,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { data: boutique } = useApi<BoutiqueHeaderData>('/api/org/current');
   const shopName = boutique?.organization.name ?? 'Sahilley';
   const shopLogo = boutique?.settings?.logoUrl ?? null;
+
+  // Global outbox-drain triggers (Task 2.3) — mounted for the app's
+  // lifetime regardless of the auth-gate state below (unconditional hook,
+  // same rule as the other hooks above).
+  useEffect(() => installSyncTriggers(), []);
 
   const gate = authGateState(loading, user);
   if (gate !== 'ready') {
