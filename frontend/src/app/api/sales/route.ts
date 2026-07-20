@@ -511,7 +511,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // Task 4.1 — écarts de stock détectés au sync (tableau vide si aucun). Le
         // POS affiche une alerte de réconciliation sans bloquer la vente. Sur un
         // rejeu, ce tableau provient du resultJson mémoïsé → identique à l'origine.
-        stockConflicts: result.stockConflicts,
+        // Fallback [] : un rejeu mémoïsé par du code pré-Task-4.1 n'a pas ce champ
+        // dans son resultJson (undefined) — le contrat "toujours un tableau" doit
+        // tenir même sur ces vieilles entrées mémoïsées.
+        stockConflicts: result.stockConflicts ?? [],
       },
       { status: replayed ? 200 : 201, headers: { 'x-request-id': ctx.requestId } },
     );

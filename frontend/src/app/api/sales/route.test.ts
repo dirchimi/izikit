@@ -416,6 +416,38 @@ describe('POST /api/sales — idempotence offline (id client + clientOpId)', () 
     expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
   });
 
+  it('rejeu d’un resultJson mémoïsé pré-Task-4.1 (sans clé stockConflicts) → réponse stockConflicts = []', async () => {
+    // Simule une OfflineOperation mémoïsée par du code antérieur à Task 4.1 : le
+    // resultJson n'a jamais eu de champ stockConflicts (undefined, pas [] ni absent
+    // du JSON stocké). Le contrat "toujours un tableau" doit tenir quand même.
+    const legacyMemoized = {
+      kind: 'OK',
+      saleId: 'sale-legacy-1',
+      number: 'V-0001',
+      total: 12000,
+      publicToken: 'tok-legacy-1',
+      // pas de stockConflicts ici — reproduit une mémoïsation pré-Task-4.1
+    };
+
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op-legacy',
+      organizationId: 'org1',
+      clientOpId: 'sale-legacy-1',
+      endpoint: 'sales',
+      resultJson: legacyMemoized,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(
+      makePost({ id: 'sale-legacy-1', method: 'cash', items: [{ productId: 'p1', qty: 1 }] }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sale.id).toBe('sale-legacy-1');
+    // Le contrat "toujours un tableau" tient même sur une mémoïsation legacy sans la clé.
+    expect(body.stockConflicts).toEqual([]);
+  });
+
   it('online inchangé : POST sans id → Sale créée, numéro V- serveur, aucune OfflineOperation', async () => {
     prismaMock.product.findMany.mockResolvedValueOnce([
       { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
