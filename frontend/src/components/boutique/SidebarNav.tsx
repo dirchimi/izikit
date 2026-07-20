@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
@@ -10,6 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useApi } from '@/lib/useApi';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import { useSyncStatus } from '@/lib/offline/useSyncStatus';
+import SyncIndicator, { SyncCountBadge } from './sync/SyncIndicator';
 
 interface NavItem {
   icon: string;
@@ -56,6 +59,7 @@ const navSections: NavSection[] = [
       { icon: 'package', key: 'nav.stock', href: '/stock' },
       { icon: 'hand-coins', key: 'nav.creances', href: '/creances' },
       { icon: 'wallet', key: 'nav.depenses', href: '/depenses' },
+      { icon: 'refresh-cw', key: 'nav.sync', href: '/synchronisation' },
     ],
   },
   {
@@ -82,12 +86,14 @@ function NavLink({
   href,
   active,
   onNavigate,
+  badge,
 }: {
   icon: string;
   label: string;
   href: string;
   active: boolean;
   onNavigate: () => void;
+  badge?: ReactNode;
 }) {
   return (
     <Link
@@ -101,7 +107,8 @@ function NavLink({
       }`}
     >
       <Icon i={icon} size={16} />
-      {label}
+      <span className="flex-1 truncate">{label}</span>
+      {badge}
     </Link>
   );
 }
@@ -113,6 +120,8 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   const { logout, loggingOut } = useAuth();
   const confirm = useConfirm();
   const online = useOnlineStatus();
+  // Compteurs live pour le badge de sync attaché à l'item de nav ci-dessous.
+  const { pendingCount, conflicts } = useSyncStatus();
   // Charge (et provisionne au 1er accès) la boutique courante.
   const { data: boutique } = useApi<BoutiqueCurrent>('/api/org/current');
   // Sonde admin : 403 pour les non-admins → `data` reste null → lien masqué.
@@ -167,6 +176,9 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
         </span>
       </div>
 
+      {/* Statut sync + bouton « Synchroniser maintenant » (Task 4.3) */}
+      <SyncIndicator />
+
       {/* Nav (sections) — compacte, sans défilement en usage normal */}
       <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pt-2 pb-2">
         {visibleSections.map((section, si) => (
@@ -184,6 +196,11 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
                 href={item.href}
                 active={isActive(pathname, item.href)}
                 onNavigate={onNavigate}
+                badge={
+                  item.href === '/synchronisation' ? (
+                    <SyncCountBadge pendingCount={pendingCount} conflicts={conflicts} />
+                  ) : undefined
+                }
               />
             ))}
           </div>

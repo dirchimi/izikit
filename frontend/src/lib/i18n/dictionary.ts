@@ -161,6 +161,36 @@ const messages: Record<string, Msg> = {
   'sync.kind.adjust': { fr: 'Ajustement de stock', en: 'Stock adjustment', ar: 'تعديل مخزون' },
   'sync.kind.customer': { fr: 'Client', en: 'Customer', ar: 'زبون' },
   'sync.kind.cancel': { fr: 'Annulation de vente', en: 'Sale cancellation', ar: 'إلغاء بيع' },
+  // ── SyncIndicator — badge + bouton « Synchroniser maintenant » (Task 4.3) ──
+  'nav.sync': { fr: 'Synchronisation', en: 'Sync', ar: 'المزامنة' },
+  'sync.badge.pending': {
+    fr: '{n} à synchroniser',
+    en: '{n} to sync',
+    ar: '{n} بانتظار المزامنة',
+  },
+  'sync.badge.conflict': {
+    fr: '{n} écart(s) à traiter',
+    en: '{n} mismatch(es) to review',
+    ar: '{n} فرق يحتاج معالجة',
+  },
+  'sync.status.syncing': { fr: 'Synchronisation…', en: 'Syncing…', ar: 'جارٍ المزامنة…' },
+  'sync.status.offline': {
+    fr: 'Hors ligne — en attente de connexion',
+    en: 'Offline — waiting for connection',
+    ar: 'غير متصل — بانتظار الاتصال',
+  },
+  'sync.upToDate': { fr: 'À jour', en: 'Up to date', ar: 'محدّث' },
+  'sync.lastSynced': {
+    fr: 'Dernière sync : {time}',
+    en: 'Last synced: {time}',
+    ar: 'آخر مزامنة: {time}',
+  },
+  'sync.button.syncNow': {
+    fr: 'Synchroniser maintenant',
+    en: 'Sync now',
+    ar: 'مزامنة الآن',
+  },
+  'sync.button.syncing': { fr: 'Synchronisation…', en: 'Syncing…', ar: 'جارٍ المزامنة…' },
   'lang.soon': {
     fr: 'العربية — bientôt disponible.',
     en: 'Arabic — coming soon.',

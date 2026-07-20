@@ -7,6 +7,7 @@ import SidebarNav from './SidebarNav';
 import BottomNav from './BottomNav';
 import SubscriptionBanner from './SubscriptionBanner';
 import GlobalBanner from './GlobalBanner';
+import SyncIndicator from './sync/SyncIndicator';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import OfflineBanner from '@/components/pwa/OfflineBanner';
 import { useApi } from '@/lib/useApi';
@@ -137,6 +138,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <span className="font-headings text-sidebar-foreground truncate text-base font-bold tracking-tight">
               {shopName}
             </span>
+          </div>
+
+          {/* Statut de synchronisation — visible sans ouvrir le tiroir (Task 4.3) */}
+          <div className="ms-auto">
+            <SyncIndicator compact />
           </div>
         </header>
 
