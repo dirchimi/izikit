@@ -175,15 +175,20 @@ export interface OutboxRow {
    * order for `drainOutbox()` independent of device clocks. */
   seq?: number;
   status: OutboxStatus;
-  /** Mutation kind, e.g. 'sale' | 'expense' | 'repay' | 'adjust' | 'customer'. */
+  /** Mutation kind, e.g. 'sale' | 'expense' | 'repay' | 'adjust' | 'customer'
+   * | 'cancel' (see `OutboxKind` in `outbox.ts` for the exact union). */
   kind: string;
   /** The request payload to replay (shape depends on `kind`). */
   payload: unknown;
   /** The clientOpId/entity id this op carries — same value the server-side
    * `withIdempotency` dedups on. */
   opId: string;
+  /** The API route this op replays against, e.g. `/api/sales` — what
+   * `sync-engine.ts` (Task 2.2) POSTs the `payload` to. */
+  endpoint: string;
   createdAt: string; // ISO
   retryAt?: string; // ISO — set by `markError` for backoff
+  /** Failure/conflict reason, set by `markError`/`markConflict`. */
   error?: string;
 }
 
