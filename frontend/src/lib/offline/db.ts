@@ -195,11 +195,16 @@ export interface SessionRow {
   /** Fixed key — this table only ever holds one row (the current session). */
   id: 'current';
   userId: string;
-  organizationId: string;
-  role: string;
-  name: string;
-  email: string;
-  savedAt: string; // ISO
+  /** `/api/auth/me` doesn't return org/role today, so these stay `null`
+   * until a caller has them to save — the snapshot is for identity/boot,
+   * not authorization (see `lib/offline/session.ts`). */
+  orgId: string | null;
+  role: string | null;
+  name: string | null;
+  email: string | null;
+  /** Epoch ms (not ISO, unlike the other tables) — `session.ts` compares it
+   * against `Date.now()` directly for the 7-day sliding-window expiry. */
+  savedAt: number;
 }
 
 // ---------------------------------------------------------------------------
