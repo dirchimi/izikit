@@ -190,7 +190,23 @@ async function drainPending(): Promise<DrainResult> {
     try {
       response = await api(row.endpoint, { method: 'POST', body: row.payload });
     } catch (err) {
-      if (!(err instanceof ApiError)) throw err;
+      if (!(err instanceof ApiError)) {
+        // Non-ApiError (e.g. a raw SyntaxError from api.ts's unawaited
+        // `response.json()` on a truncated/malformed 2xx body) bypasses
+        // api.ts's ApiError(0, ...) wrapping entirely. Treat it the same as
+        // the network-stop branch below: reset the row to `pending` (never
+        // leave it `syncing` — `listPending()` only returns `pending` rows,
+        // so a row stuck at `syncing` becomes invisible to every future
+        // drain, orphaned forever, and later `seq` rows would then process
+        // ahead of it, breaking FIFO) and STOP the loop gracefully rather
+        // than rethrowing (a rejecting `drainOutbox()` would break the
+        // Task 2.3 trigger loop). Retrying on the next drain is safe: every
+        // mutation endpoint is idempotent via the client id/clientOpId in
+        // the payload (PHASE 0) — if the server already applied it, the
+        // retry dedup-returns the existing entity.
+        await db.outbox.update(seq, { status: 'pending' });
+        break;
+      }
 
       if (err.status === 0) {
         // Offline mid-drain — see module docblock for why this resets to
@@ -213,7 +229,14 @@ async function drainPending(): Promise<DrainResult> {
     }
 
     await markDone(seq);
-    await applySyncSuccess(row, response);
+    try {
+      await applySyncSuccess(row, response);
+    } catch (patchErr) {
+      // The server already accepted the write (row is correctly `done`) —
+      // a failed LOCAL cosmetic patch (e.g. a future kind added without a
+      // guarded local-table lookup) must not abort the drain.
+      console.warn('[sync-engine] applySyncSuccess failed for row', row.opId, patchErr);
+    }
     done++;
   }
 

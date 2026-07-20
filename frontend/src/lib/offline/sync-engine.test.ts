@@ -179,4 +179,66 @@ describe('drainOutbox', () => {
 
     expect(mockedApi).toHaveBeenCalledTimes(1);
   });
+
+  it('a non-ApiError (e.g. a raw SyntaxError from a malformed 2xx body) resets the row to pending and stops the drain without rejecting', async () => {
+    await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+    await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });
+    await db.sales.bulkPut([makeSaleRow('s1'), makeSaleRow('s2')]);
+
+    mockedApi.mockRejectedValueOnce(new SyntaxError('Unexpected end of JSON input'));
+
+    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+
+    // op #2 was never POSTed — the loop stopped after the non-ApiError.
+    expect(mockedApi).toHaveBeenCalledTimes(1);
+
+    // Row #1 is back to `pending` (not stuck at `syncing`), so it is visible
+    // to a follow-up listPending() and will be retried, in order, next drain.
+    const pending = await listPending();
+    expect(pending.map((r) => r.opId)).toEqual(['s1', 's2']);
+
+    const rows = await db.outbox.toArray();
+    const s1 = rows.find((r) => r.opId === 's1');
+    expect(s1?.status).toBe('pending');
+  });
+
+  it('applySyncSuccess throwing does not abort the drain — the row stays done and later rows still process', async () => {
+    await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+    await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });
+    await db.sales.bulkPut([makeSaleRow('s1'), makeSaleRow('s2')]);
+
+    mockedApi
+      .mockResolvedValueOnce({
+        sale: { id: 's1', number: 'V-0001', total: 100, publicToken: null },
+      })
+      .mockResolvedValueOnce({
+        sale: { id: 's2', number: 'V-0002', total: 100, publicToken: null },
+      });
+
+    // First call (row s1's patch) throws; subsequent calls (row s2's patch)
+    // fall through to the real Dexie `update` untouched.
+    const updateSpy = vi.spyOn(db.sales, 'update').mockImplementationOnce(() => {
+      throw new Error('local patch failed');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = await drainOutbox();
+
+    expect(result).toEqual({ done: 2, conflicts: 0, errors: 0 });
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[sync-engine] applySyncSuccess failed for row',
+      's1',
+      expect.any(Error),
+    );
+
+    // Both rows are `done` in the outbox — the server accepted both writes,
+    // even though row #1's local cosmetic patch threw.
+    const rows = await db.outbox.toArray();
+    const byOpId = Object.fromEntries(rows.map((r) => [r.opId, r]));
+    expect(byOpId.s1?.status).toBe('done');
+    expect(byOpId.s2?.status).toBe('done');
+
+    updateSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
 });
