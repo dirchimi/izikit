@@ -15,28 +15,18 @@ import { useApi } from '@/lib/useApi';
 import { onSaleChange, onDocumentChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { getRole, pullResource } from '@/lib/offline/pull';
+import { createCancelOffline } from '@/lib/offline/mutations';
+import { triggerDrain } from '@/lib/offline/sync-triggers';
+import { aggregateSales } from '@/lib/offline/sales-adapters';
+import { documentRowToApi } from '@/lib/offline/documents-adapters';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
 import PdfPreviewModal from '@/components/boutique/documents/PdfPreviewModal';
 import type { ApiDocument } from '@/components/boutique/documents/types';
 
 type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
-interface ApiSale {
-  id: string;
-  number: string;
-  method: ApiMethod;
-  total: number;
-  discount: number;
-  cashAmount: number;
-  mobileAmount: number;
-  creditAmount: number;
-  status: string; // ACTIVE | CANCELLED
-  createdAt: string;
-  sellerId: string | null;
-  sellerName: string | null;
-  customerName: string | null;
-  customerPhone: string | null;
-  items: { name: string; qty: number; unitPrice: number }[];
-}
 
 type Period = 'all' | 'today' | 'date';
 type MethodFilter = 'CASH' | 'MOBILE' | 'CREDIT' | 'all';
@@ -87,28 +77,45 @@ export default function VentesManager() {
   const [pdfDoc, setPdfDoc] = useState<ApiDocument | null>(null);
   const [invoicing, setInvoicing] = useState<string | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{ sales: ApiSale[] }>('/api/sales', {
-    pollMs: 20_000,
-  });
-  const sales = data?.sales ?? [];
+  // Offline-first (Task 5.5) : lecture locale (Dexie) au lieu du réseau — le
+  // miroir est alimenté par pullAll() (voir AppShell) et par
+  // createCancelOffline() plus bas pour les annulations saisies hors ligne.
+  // `error`/`refresh` n'existent pas côté local (une lecture Dexie ne peut pas
+  // « échouer » comme un fetch réseau) — AsyncState gère déjà ce cas (voir
+  // StockManager/DepensesManager, même schéma).
+  const { data: saleRows, loading } = useLocalResource(() => db.sales.toArray(), [], []);
+  const { data: itemRows } = useLocalResource(() => db.saleItems.toArray(), [], []);
+  const { data: customerRows } = useLocalResource(() => db.customers.toArray(), [], []);
+  const sales = useMemo(
+    () => aggregateSales(saleRows, itemRows, customerRows),
+    [saleRows, itemRows, customerRows],
+  );
 
   // Le bouton « Annuler » n'est visible que pour le Patron (OWNER) et le
   // Manager (ADMIN) — le serveur applique la même règle (défense en profondeur).
+  // Offline-first (Task 5.5) : /api/org/current échoue hors ligne — on préfère
+  // le rôle en direct quand disponible, sinon on retombe sur meta.role
+  // (alimenté par le dernier pullAll()) pour qu'un ADMIN/OWNER ne perde pas
+  // l'accès juste parce que le réseau est coupé (comme StockManager).
   const { data: org } = useApi<{ role: string; organization: { name: string } }>(
     '/api/org/current',
   );
-  const canCancel = org?.role === 'OWNER' || org?.role === 'ADMIN';
+  const { data: localRole } = useLocalResource(() => getRole(), [], null);
+  const effectiveRole = org?.role ?? localRole;
+  const canCancel = effectiveRole === 'OWNER' || effectiveRole === 'ADMIN';
   const orgName = org?.organization.name ?? 'Boutique';
 
   // Factures déjà émises → on peut ouvrir le PDF au lieu de re-générer.
-  const { data: docData } = useApi<{ documents: ApiDocument[] }>('/api/documents');
+  // Offline-first (Task 5.5) : lues depuis le miroir local (db.documents).
+  const { data: docRows } = useLocalResource(() => db.documents.toArray(), [], []);
   const factureBySaleId = useMemo(() => {
     const map = new Map<string, ApiDocument>();
-    for (const d of docData?.documents ?? []) {
+    for (const row of docRows) {
+      const d = documentRowToApi(row);
       if (d.type === 'FACTURE' && d.saleId) map.set(d.saleId, d);
     }
     return map;
-  }, [docData]);
+  }, [docRows]);
 
   function docTitle(doc: ApiDocument): string {
     return `${t('documents.kind.facture')} ${doc.number}`;
@@ -133,6 +140,10 @@ export default function VentesManager() {
       });
       toast(t('documents.invoiceCreated', { num: document.number }), 'success');
       onDocumentChange();
+      // Offline-first (Task 5.5): the invoice list now reads from the local
+      // Dexie mirror — refresh just that resource (best-effort) so the FACTURE
+      // shows up immediately instead of waiting for the next pullAll().
+      void pullResource('documents');
       setPdfDoc(document);
     } catch (err) {
       const code = err instanceof ApiError ? err.code : '';
@@ -152,6 +163,19 @@ export default function VentesManager() {
     setCancelReason('');
   }
 
+  /** `createCancelOffline` throws plain `Error`s whose `.message` carries a
+   * stable code (SALE_NOT_FOUND / ALREADY_CANCELLED) — same convention as the
+   * other offline mutations. CANCEL_WINDOW_EXPIRED is a server-side rule (the
+   * offline op forwards to the outbox and, if refused, surfaces on the sync
+   * screen) — mapped here too for defensiveness. */
+  function cancelError(err: unknown): string {
+    const code = err instanceof Error ? err.message : '';
+    if (code === 'ALREADY_CANCELLED') return t('ventes.cancel.already');
+    if (code === 'SALE_NOT_FOUND') return t('ventes.cancel.notFound');
+    if (code === 'CANCEL_WINDOW_EXPIRED') return t('ventes.cancel.tooLate');
+    return t('async.error');
+  }
+
   async function confirmCancel() {
     if (!cancelTarget) return;
     if (cancelReason.trim() === '') {
@@ -160,20 +184,16 @@ export default function VentesManager() {
     }
     setCancelling(true);
     try {
-      await api(`/api/sales/${cancelTarget.id}/cancel`, {
-        method: 'POST',
-        body: { reason: cancelReason.trim() },
-      });
+      // Offline-first (Task 5.5): annulation optimiste locale (re-crédit stock +
+      // reversal créance + vente CANCELLED) puis enqueue vers le serveur.
+      await createCancelOffline({ saleId: cancelTarget.id, reason: cancelReason.trim() });
+      triggerDrain();
       toast(t('ventes.cancel.success', { number: cancelTarget.number }), 'success');
       closeCancel();
       // Annulation → stock rendu, ventes/dashboard/créances/documents/rapports.
       onSaleChange();
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
-      toast(
-        code === 'CANCEL_WINDOW_EXPIRED' ? t('ventes.cancel.tooLate') : t('async.error'),
-        'error',
-      );
+      toast(cancelError(err), 'error');
     } finally {
       setCancelling(false);
     }
@@ -396,8 +416,7 @@ export default function VentesManager() {
         {/* Table */}
         <AsyncState
           loading={loading}
-          error={error}
-          onRetry={refresh}
+          error={null}
           isEmpty={sales.length === 0}
           emptyLabel={t('ventes.emptyAll')}
           emptyIcon="receipt"

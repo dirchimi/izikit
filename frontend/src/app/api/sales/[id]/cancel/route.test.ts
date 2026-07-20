@@ -228,3 +228,89 @@ describe('POST /api/sales/[id]/cancel', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('POST /api/sales/[id]/cancel — idempotence offline (clientOpId, rejeu)', () => {
+  function makeCancelReq(body: Record<string, unknown>): NextRequest {
+    return new NextRequest('http://test/api/sales/s1/cancel', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': 'tok',
+        cookie: 'app-csrf=tok',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('deux POST même clientOpId : annulée une fois, stock re-crédité une fois, 2e réponse 200 (pas 409)', async () => {
+    // 1er POST : opération offline inconnue → exécute l'annulation.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.sale.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      number: 'V-0007',
+      status: 'ACTIVE',
+      createdAt: new Date(),
+      items: [{ productId: 'p1', qty: 2 }],
+      receivable: null,
+    } as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([{ id: 'p1' }] as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+    prismaMock.sale.update.mockResolvedValueOnce({} as never);
+
+    const first = await POST(
+      makeCancelReq({ reason: 'erreur de saisie', clientOpId: 'cop-1' }),
+      params('s1'),
+    );
+    expect(first.status).toBe(200);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.sale.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.offlineOperation.create).toHaveBeenCalledTimes(1);
+
+    // 2e POST : même clientOpId → résultat OK mémoïsé renvoyé, aucune ré-exécution.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'cop-1',
+      endpoint: 'cancel',
+      resultJson: { kind: 'OK', number: 'V-0007' },
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makeCancelReq({ reason: 'erreur de saisie', clientOpId: 'cop-1' }),
+      params('s1'),
+    );
+    expect(second.status).toBe(200); // rejeu = succès, PAS un 409
+    const body = await second.json();
+    expect(body.sale.status).toBe('CANCELLED');
+    expect(body.sale.number).toBe('V-0007');
+
+    // Pas de double re-crédit : stock/vente touchés une seule fois au total.
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.sale.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.offlineOperation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('online inchangé : POST sans clientOpId → annulée, aucune OfflineOperation touchée', async () => {
+    prismaMock.sale.findUnique.mockResolvedValueOnce({
+      organizationId: 'org1',
+      number: 'V-0008',
+      status: 'ACTIVE',
+      createdAt: new Date(),
+      items: [{ productId: 'p1', qty: 1 }],
+      receivable: null,
+    } as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([{ id: 'p1' }] as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+    prismaMock.sale.update.mockResolvedValueOnce({} as never);
+
+    const res = await POST(makeReq(), params('s1'));
+    expect(res.status).toBe(200);
+    // clientOpId null → chemin online pur : la table d'idempotence n'est jamais touchée.
+    expect(prismaMock.offlineOperation.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+  });
+});

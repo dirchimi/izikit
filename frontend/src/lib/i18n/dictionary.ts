@@ -1713,6 +1713,16 @@ const messages: Record<string, Msg> = {
     en: 'Cannot cancel: more than 24h old.',
     ar: 'يتعذّر الإلغاء: مرّ أكثر من 24 ساعة.',
   },
+  'ventes.cancel.already': {
+    fr: 'Cette vente est déjà annulée.',
+    en: 'This sale is already cancelled.',
+    ar: 'عملية البيع هذه ملغاة بالفعل.',
+  },
+  'ventes.cancel.notFound': {
+    fr: 'Vente introuvable.',
+    en: 'Sale not found.',
+    ar: 'عملية البيع غير موجودة.',
+  },
   'ventes.empty': {
     fr: 'Aucune vente ne correspond à ces filtres.',
     en: 'No sale matches these filters.',

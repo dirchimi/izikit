@@ -16,6 +16,7 @@ import {
   createCustomerOffline,
   createRepayOffline,
   createAdjustOffline,
+  createCancelOffline,
 } from './mutations';
 
 const ORG = 'org-1';
@@ -823,5 +824,159 @@ describe('createAdjustOffline', () => {
     expect(p?.qty).toBe(10);
     expect(await db.stockMovements.count()).toBe(0);
     expect(await db.outbox.count()).toBe(0);
+  });
+});
+
+describe('createCancelOffline', () => {
+  const SALE = 'sale-1';
+
+  beforeEach(reset);
+
+  async function seedCancellableSale(opts?: { withCredit?: boolean }): Promise<void> {
+    await db.products.bulkPut([product({ id: 'p1', qty: 8 }), product({ id: 'p2', qty: 3 })]);
+    await db.sales.put({
+      id: SALE,
+      organizationId: ORG,
+      number: '#L1',
+      method: opts?.withCredit ? 'CREDIT' : 'CASH',
+      total: 1000,
+      discount: 0,
+      cashAmount: opts?.withCredit ? 0 : 1000,
+      mobileAmount: 0,
+      creditAmount: opts?.withCredit ? 1000 : 0,
+      status: 'ACTIVE',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      synced: false,
+      ...(opts?.withCredit ? { customerId: 'cust-1' } : {}),
+    });
+    await db.saleItems.bulkPut([
+      {
+        id: 'it1',
+        saleId: SALE,
+        productId: 'p1',
+        name: 'Riz',
+        qty: 2,
+        unitPrice: 500,
+        buyPrice: 300,
+      },
+      {
+        id: 'it2',
+        saleId: SALE,
+        productId: 'p2',
+        name: 'Huile',
+        qty: 1,
+        unitPrice: 500,
+        buyPrice: 400,
+      },
+    ]);
+    if (opts?.withCredit) {
+      await db.receivables.put({
+        id: 'r1',
+        organizationId: ORG,
+        customerId: 'cust-1',
+        saleId: SALE,
+        amount: 1000,
+        amountPaid: 0,
+        status: 'OPEN',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      });
+    }
+  }
+
+  it('cancels a credit sale: restocks 2 products, writes 2 IN movements, reverses the receivable, one outbox row', async () => {
+    await seedCancellableSale({ withCredit: true });
+
+    const res = await createCancelOffline({ saleId: SALE, reason: 'erreur de saisie' });
+
+    // clientOpId (res.id) MUST differ from the sale id — else it would collide
+    // with the sale's own create op's memoized result server-side.
+    expect(res.id).not.toBe(SALE);
+
+    // sale CANCELLED locally (unsynced)
+    const sale = await db.sales.get(SALE);
+    expect(sale?.status).toBe('CANCELLED');
+    expect(sale?.cancelReason).toBe('erreur de saisie');
+    expect(sale?.synced).toBe(false);
+    expect(typeof sale?.cancelledAt).toBe('string');
+
+    // stock re-credited per line
+    expect((await db.products.get('p1'))?.qty).toBe(10); // 8 + 2
+    expect((await db.products.get('p2'))?.qty).toBe(4); // 3 + 1
+
+    // two IN movements, unsynced, clientOpId = `${res.id}:${productId}`
+    const movements = await db.stockMovements.toArray();
+    expect(movements).toHaveLength(2);
+    for (const m of movements) {
+      expect(m.type).toBe('IN');
+      expect(m.synced).toBe(false);
+      expect(m.organizationId).toBe(ORG);
+      expect(m.clientOpId).toBe(`${res.id}:${m.productId}`);
+    }
+    expect(movements.find((m) => m.productId === 'p1')?.delta).toBe(2);
+    expect(movements.find((m) => m.productId === 'p2')?.delta).toBe(1);
+
+    // receivable reversed (status CANCELLED, amount intact — never zeroed)
+    const r1 = await db.receivables.get('r1');
+    expect(r1?.status).toBe('CANCELLED');
+    expect(r1?.amount).toBe(1000);
+
+    // one outbox row: kind cancel, endpoint carries the sale id, payload has
+    // clientOpId (= res.id) + reason.
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('cancel');
+    expect(outbox[0]?.endpoint).toBe(`/api/sales/${SALE}/cancel`);
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.reason).toBe('erreur de saisie');
+  });
+
+  it('a cash sale (no receivable) touches no receivable and restocks', async () => {
+    await seedCancellableSale();
+
+    await createCancelOffline({ saleId: SALE, reason: 'x' });
+
+    expect(await db.receivables.count()).toBe(0);
+    expect((await db.products.get('p1'))?.qty).toBe(10);
+    expect((await db.products.get('p2'))?.qty).toBe(4);
+    expect((await db.sales.get(SALE))?.status).toBe('CANCELLED');
+  });
+
+  it('skips a line whose product was deleted locally (no crash), restocks the others only', async () => {
+    await seedCancellableSale();
+    await db.products.delete('p2'); // product gone from the mirror
+
+    await createCancelOffline({ saleId: SALE, reason: 'x' });
+
+    // p1 restocked; p2 line skipped entirely (no re-credit, no movement) —
+    // mirrors the server's `existingIds` filter.
+    expect((await db.products.get('p1'))?.qty).toBe(10);
+    const movements = await db.stockMovements.toArray();
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.productId).toBe('p1');
+  });
+
+  it('throws SALE_NOT_FOUND and writes nothing when the sale is absent', async () => {
+    await expect(createCancelOffline({ saleId: 'ghost', reason: 'x' })).rejects.toThrow(
+      'SALE_NOT_FOUND',
+    );
+
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws ALREADY_CANCELLED and writes nothing when the sale is already cancelled', async () => {
+    await seedCancellableSale();
+    await db.sales.update(SALE, { status: 'CANCELLED' });
+
+    await expect(createCancelOffline({ saleId: SALE, reason: 'x' })).rejects.toThrow(
+      'ALREADY_CANCELLED',
+    );
+
+    // Nothing written, stock untouched (no double re-credit).
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+    expect((await db.products.get('p1'))?.qty).toBe(8);
   });
 });

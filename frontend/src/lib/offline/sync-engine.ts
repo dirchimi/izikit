@@ -84,6 +84,17 @@ function extractProductId(endpoint: string): string | undefined {
   return match?.[1];
 }
 
+/** Parses the sale id out of an `/api/sales/<id>/cancel` endpoint string — the
+ * fallback the `cancel` case of `applySyncSuccess` uses when the response body
+ * carries no `sale.id` (e.g. a memoized replay, or the SALE_ALREADY_CANCELLED
+ * success branch which has no useful body). The `cancel` op's `opId` is a FRESH
+ * clientOpId (NOT the sale id — see `mutations.ts`'s `createCancelOffline`), so
+ * the sale row can't be keyed by `row.opId`; the sale id lives in the endpoint. */
+function extractCancelSaleId(endpoint: string): string | undefined {
+  const match = /^\/api\/sales\/([^/]+)\/cancel$/.exec(endpoint);
+  return match?.[1];
+}
+
 function isStockConflictPayload(value: unknown): value is StockConflictPayload {
   return (
     isRecord(value) &&
@@ -278,8 +289,20 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
     case 'cancel': {
       // POST /api/sales/[id]/cancel → { ok, sale: { id, number, status } }.
       // The optimistic local status flip to CANCELLED happens in
-      // `mutations.ts` (PHASE 5.5); here we only confirm the round-trip.
-      await db.sales.update(row.opId, { synced: true });
+      // `mutations.ts` (Task 5.5); here we only confirm the round-trip by
+      // flipping the local sale row `synced: true`. The sale row is keyed by
+      // the SALE id, which is NOT `row.opId` (the cancel op carries a fresh
+      // clientOpId) — read it from the response `sale.id`, falling back to the
+      // sale id embedded in the endpoint (`/api/sales/<id>/cancel`) when the
+      // body is absent (memoized replay / the SALE_ALREADY_CANCELLED success
+      // branch). Guarded: Dexie's `update` is a no-op if the row is gone.
+      const sale = isRecord(body.sale) ? body.sale : undefined;
+      const saleId =
+        (sale && typeof sale.id === 'string' ? sale.id : undefined) ??
+        extractCancelSaleId(row.endpoint);
+      if (saleId) {
+        await db.sales.update(saleId, { synced: true });
+      }
       break;
     }
     default:
@@ -361,6 +384,24 @@ async function drainPending(): Promise<DrainResult> {
       if (err.status === 409 && STOCK_CONFLICT_CODES.has(err.code)) {
         await markConflict(seq, err.code || 'conflict');
         conflicts++;
+        continue;
+      }
+
+      // A `cancel` op that 409s with SALE_ALREADY_CANCELLED is NOT a failure:
+      // the desired end-state (the sale is cancelled server-side) is already
+      // achieved — this is a dropped-ack replay of a genuine cancel. Treat it
+      // as success (markDone), same as a clean 200, and flip the local sale
+      // row `synced: true`. Scoped narrowly to `kind === 'cancel'` + this exact
+      // code so a real conflict (e.g. CANCEL_WINDOW_EXPIRED, another 409) still
+      // falls through to `markError` below.
+      if (row.kind === 'cancel' && err.status === 409 && err.code === 'SALE_ALREADY_CANCELLED') {
+        await markDone(seq);
+        try {
+          await applySyncSuccess(row, undefined);
+        } catch (patchErr) {
+          console.warn('[sync-engine] applySyncSuccess failed for row', row.opId, patchErr);
+        }
+        done++;
         continue;
       }
 

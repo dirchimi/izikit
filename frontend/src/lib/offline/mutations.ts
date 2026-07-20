@@ -761,3 +761,115 @@ export async function createAdjustOffline(input: CreateAdjustInput): Promise<Adj
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// createCancelOffline (Task 5.5) — the `cancel` mirror of the mutations above.
+// Money-adjacent: cancelling a sale must (a) re-credit the sold quantities to
+// local stock, (b) reverse the linked credit receivable, and (c) mark the sale
+// CANCELLED — the exact same three effects the server route applies inside its
+// Serializable transaction (`/api/sales/[id]/cancel`), replayed optimistically
+// against the Dexie mirror so the shopkeeper sees the reversal immediately
+// offline. The server stays authoritative at sync: the enqueued `cancel` op
+// carries a FRESH `clientOpId` (NOT the sale id — the sale's own create op
+// already reserved `clientOpId === saleId` server-side, so reusing it would
+// collide with that memoized result and never run the cancel) and the route
+// is replay-safe via `withIdempotency` (Change A).
+//
+// The endpoint URL uses the sale's LOCAL id, which IS the id the server knows:
+// `createSaleOffline` sends `{ id, clientOpId: id }` to `/api/sales`, and the
+// server creates the Sale row with that client id (Phase 0), so
+// `/api/sales/${saleId}/cancel` resolves to the same row server-side whether or
+// not the sale itself has synced yet (FIFO guarantees the create drains first).
+//
+// Deliberately does NOT replicate the server's 24h `CANCEL_WINDOW_EXPIRED`
+// guard or the "credit already repaid" refusal locally: those are server-side
+// business rules (the device may have a stale clock / stale amountPaid), so an
+// offline cancel that the server ultimately rejects surfaces on the sync screen
+// as a failed op rather than being silently swallowed here.
+// ---------------------------------------------------------------------------
+
+export interface CancelSaleInput {
+  saleId: string;
+  reason: string;
+}
+
+/**
+ * Cancels a sale locally (optimistic) and enqueues it for the server.
+ *
+ * @throws Error('SALE_NOT_FOUND') the sale isn't in the local mirror
+ * @throws Error('ALREADY_CANCELLED') the sale is already CANCELLED locally
+ *   (nothing to do — a re-credit would double the restock)
+ */
+export async function createCancelOffline(input: CancelSaleInput): Promise<{ id: string }> {
+  const id = newId();
+  const now = new Date().toISOString();
+
+  return db.transaction(
+    'rw',
+    [db.sales, db.saleItems, db.products, db.stockMovements, db.receivables, db.outbox],
+    async (): Promise<{ id: string }> => {
+      const sale = await db.sales.get(input.saleId);
+      if (!sale) throw new Error('SALE_NOT_FOUND');
+      if (sale.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
+
+      const orgId = sale.organizationId;
+
+      // 1) Re-credit the sold quantities to local stock, one IN movement per
+      //    line — mirrors the server's per-line restock. Lines whose product is
+      //    gone from the local mirror (deleted) or have a non-positive qty are
+      //    skipped, same as the server (`existingIds` / `qty <= 0`).
+      const items = await db.saleItems.where('saleId').equals(input.saleId).toArray();
+      for (const it of items) {
+        if (!it.productId || it.qty <= 0) continue;
+        const product = await db.products.get(it.productId);
+        // Product deleted from the local mirror → skip the whole line (no
+        // re-credit, no movement), mirroring the server's `existingIds` filter.
+        if (!product) continue;
+        await db.products.update(it.productId, { qty: product.qty + it.qty });
+        const movement: StockMovementRow = {
+          id: newId(),
+          organizationId: orgId,
+          productId: it.productId,
+          type: 'IN',
+          delta: it.qty,
+          reason: `annulation vente ${sale.number}`,
+          clientOpId: `${id}:${it.productId}`,
+          createdAt: now,
+          synced: false,
+        };
+        await db.stockMovements.add(movement);
+      }
+
+      // 2) Reverse the linked receivable(s): a cancelled credit sale is no
+      //    longer a debt → status CANCELLED (the app excludes CANCELLED from
+      //    every debtor aggregation, see `creances-adapters.ts`). The amount is
+      //    left intact (never zeroed), matching the server's own
+      //    `receivable.update({ status: 'CANCELLED' })`. `saleId` is not a Dexie
+      //    index, so this is a table `.filter()` scan (small local table).
+      const receivables = await db.receivables.filter((r) => r.saleId === input.saleId).toArray();
+      for (const r of receivables) {
+        await db.receivables.update(r.id, { status: 'CANCELLED', updatedAt: now });
+      }
+
+      // 3) Mark the sale CANCELLED locally (unsynced) — kept in history, barred.
+      await db.sales.update(input.saleId, {
+        status: 'CANCELLED',
+        cancelReason: input.reason,
+        cancelledAt: now,
+        synced: false,
+      });
+
+      // 4) Enqueue the cancel op. `opId`/`clientOpId` is the FRESH `id` (see the
+      //    module docblock for why it must differ from the sale id). Inside the
+      //    tx so a rollback also drops the queue row.
+      await enqueue({
+        kind: 'cancel',
+        endpoint: `/api/sales/${input.saleId}/cancel`,
+        opId: id,
+        payload: { clientOpId: id, reason: input.reason },
+      });
+
+      return { id };
+    },
+  );
+}

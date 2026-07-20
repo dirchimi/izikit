@@ -411,6 +411,74 @@ describe('drainOutbox', () => {
     warnSpy.mockRestore();
   });
 
+  describe('Task 5.5 — cancel replay treated as success', () => {
+    it('a cancel row 409 SALE_ALREADY_CANCELLED → markDone (success), local sale flipped synced:true', async () => {
+      // The sale is already CANCELLED locally (optimistic flip in mutations.ts);
+      // the cancel op carries a FRESH opId (not the sale id), and the sale id
+      // lives in the endpoint.
+      await db.sales.put({ ...makeSaleRow('sc1'), status: 'CANCELLED', synced: false });
+      await enqueue({
+        kind: 'cancel',
+        payload: { clientOpId: 'cancel-op-1', reason: 'erreur' },
+        opId: 'cancel-op-1',
+        endpoint: '/api/sales/sc1/cancel',
+      });
+
+      mockedApi.mockRejectedValueOnce(
+        new ApiError(409, 'déjà annulée', { error: 'SALE_ALREADY_CANCELLED' }),
+      );
+
+      const result = await drainOutbox();
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+      const rows = await db.outbox.toArray();
+      expect(rows[0]?.status).toBe('done'); // NOT 'error'
+
+      const sale = await db.sales.get('sc1');
+      expect(sale?.synced).toBe(true);
+    });
+
+    it('a cancel row 409 with a DIFFERENT code (CANCEL_WINDOW_EXPIRED) still marks error', async () => {
+      await enqueue({
+        kind: 'cancel',
+        payload: { clientOpId: 'cancel-op-2', reason: 'x' },
+        opId: 'cancel-op-2',
+        endpoint: '/api/sales/sc2/cancel',
+      });
+
+      mockedApi.mockRejectedValueOnce(
+        new ApiError(409, 'trop tard', { error: 'CANCEL_WINDOW_EXPIRED' }),
+      );
+
+      const result = await drainOutbox();
+      expect(result).toEqual({ done: 0, conflicts: 0, errors: 1 });
+
+      const rows = await db.outbox.toArray();
+      expect(rows[0]?.status).toBe('error');
+      expect(rows[0]?.error).toBe('CANCEL_WINDOW_EXPIRED');
+    });
+
+    it('the success path patches the local sale by the endpoint sale id when the response carries no sale.id', async () => {
+      await db.sales.put({ ...makeSaleRow('sc3'), status: 'CANCELLED', synced: false });
+      await enqueue({
+        kind: 'cancel',
+        payload: { clientOpId: 'cancel-op-3', reason: 'x' },
+        opId: 'cancel-op-3',
+        endpoint: '/api/sales/sc3/cancel',
+      });
+
+      // A clean 200 whose body carries the sale id — the normal round-trip.
+      mockedApi.mockResolvedValueOnce({
+        ok: true,
+        sale: { id: 'sc3', number: 'V-0003', status: 'CANCELLED' },
+      });
+
+      const result = await drainOutbox();
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect((await db.sales.get('sc3'))?.synced).toBe(true);
+    });
+  });
+
   describe('Task 4.2 — stock-conflict capture', () => {
     it('a sale response carrying stockConflicts upserts one conflict row per entry', async () => {
       await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
