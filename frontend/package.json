@@ -23,6 +23,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.52.0",
@@ -33,6 +34,7 @@
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
+    "dexie": "^4.4.4",
     "heic-convert": "^2.1.0",
     "jose": "^6.2.3",
     "lucide-react": "^1.21.0",
@@ -54,7 +56,9 @@
     "@types/react-dom": "^19.2.0",
     "autoprefixer": "^10.4.20",
     "eslint-config-next": "^16.2.6",
+    "fake-indexeddb": "^6.2.5",
     "fast-glob": "^3.3.3",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.0",
     "prisma": "^5.22.0",
     "tailwindcss": "^4.3.0",
