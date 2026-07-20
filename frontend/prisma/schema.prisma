@@ -116,6 +116,7 @@ model Organization {
   expenses  Expense[]
   documents Document[]
   subPayments SubscriptionPayment[]
+  offlineOperations OfflineOperation[]
   // ── Abonnement (Phase 8 — SaaS billing, gestion manuelle v1) ──────────────
   // Le STATUT (essai / actif / expiré) n'est jamais stocké : il est DÉRIVÉ de
   // ces trois champs par lib/subscription/status.ts, ce qui évite toute dérive.
@@ -180,6 +181,7 @@ model StockMovement {
   delta          Int // variation signée de quantité
   reason         String?
   createdById    String? // utilisateur à l'origine du mouvement
+  clientOpId     String?  @unique // idempotency key offline-first (Task 0.1)
   createdAt      DateTime @default(now())
 
   @@index([organizationId])
@@ -314,10 +316,27 @@ model Repayment {
   method         String // CASH | MOBILE
   note           String?
   createdById    String?
+  clientOpId     String?  @unique // idempotency key offline-first (Task 0.1)
   createdAt      DateTime @default(now())
 
   @@index([organizationId])
   @@index([customerId])
+}
+
+// Journal d'idempotence offline-first (Task 0.1). Chaque écriture offline
+// porte un `clientOpId` généré côté client qui sert de clé d'idempotence :
+// un rejeu (retry réseau, double-sync) trouve la ligne existante via l'unique
+// sur `clientOpId` et renvoie `resultJson` au lieu de ré-exécuter l'opération.
+model OfflineOperation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientOpId     String       @unique
+  endpoint       String
+  resultJson     Json
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
 }
 
 // Dépense de la boutique (Phase 5). `number` séquentiel par boutique (D-0001).
