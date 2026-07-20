@@ -654,6 +654,83 @@ describe('POST /api/sales — idempotence offline (id client + clientOpId)', () 
   });
 });
 
+describe('POST /api/sales — Task 6.2 : createdAt client borné (offline entry time)', () => {
+  function saleCreateData(): { createdAt?: Date } {
+    const call = prismaMock.sale.create.mock.calls[0]?.[0] as { data: { createdAt?: Date } };
+    return call.data;
+  }
+
+  it('createdAt valide (passé récent) : repris tel quel sur Sale.createdAt', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // hier
+    const res = await POST(
+      makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }], createdAt: past }),
+    );
+    expect(res.status).toBe(201);
+    expect(saleCreateData().createdAt?.toISOString()).toBe(past);
+  });
+
+  it('createdAt dans le futur : repli sur now() (pas la valeur future)', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // +1h
+    const res = await POST(
+      makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }], createdAt: future }),
+    );
+    expect(res.status).toBe(201);
+    const createdAt = saleCreateData().createdAt;
+    expect(createdAt).toBeDefined();
+    expect(createdAt).not.toEqual(new Date(future));
+    expect(Math.abs((createdAt as Date).getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it('createdAt trop ancien (> 30j) : repli sur now()', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const ancient = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(); // 45j
+    const res = await POST(
+      makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }], createdAt: ancient }),
+    );
+    expect(res.status).toBe(201);
+    const createdAt = saleCreateData().createdAt;
+    expect(createdAt).toBeDefined();
+    expect(Math.abs((createdAt as Date).getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it('sans createdAt (online) : la clé est omise, @default(now()) du schéma s’applique — comportement inchangé', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(makePost({ method: 'cash', items: [{ productId: 'p1', qty: 1 }] }));
+    expect(res.status).toBe(201);
+    expect('createdAt' in saleCreateData()).toBe(false);
+  });
+});
+
 describe('GET /api/sales', () => {
   it('liste les ventes récentes avec lignes et client', async () => {
     prismaMock.sale.findMany.mockResolvedValueOnce([

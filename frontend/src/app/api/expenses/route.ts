@@ -20,6 +20,7 @@ import { withIdempotency } from '@/lib/server/idempotency';
 import { onExpenseCreated } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { resolveClientCreatedAt } from '@/lib/server/time/client-entry-timestamp';
 
 const Body = z.object({
   // Offline-first (Task 0.4) : identifiants générés côté client, tous
@@ -30,6 +31,14 @@ const Body = z.object({
   amount: z.number().int().positive(),
   category: z.string().trim().min(1).max(40),
   note: z.string().trim().max(300).optional(),
+  // Offline-first (Task 6.2) : horodatage de SAISIE côté client (ISO), pour
+  // qu'une dépense saisie hors-ligne garde sa vraie heure au lieu de celle du
+  // sync. Optionnel — un appelant online l'omet, comportement inchangé
+  // (`Expense.createdAt`/`occurredAt` gardent leur `@default(now())`). Borné
+  // côté serveur, voir `resolveClientCreatedAt` (repli sur `now()` hors
+  // bornes, jamais un rejet). Appliqué aux DEUX colonnes (`createdAt` ET
+  // `occurredAt`) faute d'un champ `occurredAt` métier distinct dans ce Body.
+  createdAt: z.string().optional(),
 });
 
 const EXPENSE_SELECT = {
@@ -122,6 +131,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const { id, label, amount, category, note } = parsed.data;
+    // `null` = l'appelant a omis `createdAt` → on n'ajoute PAS la clé dans les
+    // données Prisma plus bas, laissant `@default(now())` s'appliquer (chemin
+    // online inchangé à l'octet près). Sinon : Date bornée (ou repli `now()`
+    // explicite si hors bornes/invalide — jamais un rejet de la dépense).
+    const clientCreatedAt = resolveClientCreatedAt(parsed.data.createdAt);
 
     // Clé d'idempotence offline : `clientOpId` explicite sinon l'`id` client de
     // la dépense. `null` (aucun des deux) = chemin online pur, rien n'est mémoïsé.
@@ -150,6 +164,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 category,
                 ...(note ? { note } : {}),
                 createdById: org.userSub,
+                // Task 6.2 — offline entry time (bounded), applied to BOTH
+                // columns absent a distinct business "occurredAt" field in
+                // this Body; omitted → DB default(now()) on both.
+                ...(clientCreatedAt
+                  ? { createdAt: clientCreatedAt, occurredAt: clientCreatedAt }
+                  : {}),
               },
               select: EXPENSE_SELECT,
             });

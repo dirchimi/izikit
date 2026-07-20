@@ -119,6 +119,10 @@ describe('createSaleOffline', () => {
       { productId: 'p1', qty: 2, wholesale: false },
       { productId: 'p2', qty: 1, wholesale: false },
     ]);
+    // Task 6.2 — the payload forwards the SAME entry timestamp stamped on the
+    // local sale row, so the server honors the true offline entry time
+    // instead of stamping its own clock whenever the sync eventually happens.
+    expect(payload.createdAt).toBe(sale?.createdAt);
   });
 
   it('aggregates duplicate lines of the same product into one movement (double scan)', async () => {
@@ -383,6 +387,10 @@ describe('createExpenseOffline', () => {
     expect(payload.label).toBe('Loyer');
     expect(payload.amount).toBe(30000);
     expect(payload.category).toBe('Loyer');
+    // Task 6.2 — the payload forwards the SAME entry timestamp stamped on the
+    // local expense row, so the server honors the true offline entry time
+    // instead of stamping its own clock whenever the sync eventually happens.
+    expect(payload.createdAt).toBe(expense?.createdAt);
   });
 
   it('defaults category when omitted and increments the provisional number across expenses', async () => {

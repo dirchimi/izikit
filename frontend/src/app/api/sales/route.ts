@@ -23,6 +23,7 @@ import { withIdempotency } from '@/lib/server/idempotency';
 import { onSaleCommitted } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { resolveClientCreatedAt } from '@/lib/server/time/client-entry-timestamp';
 
 const Body = z
   .object({
@@ -64,6 +65,12 @@ const Body = z
       .optional(),
     // Remise globale accordée sur la vente (FCFA). Bornée [0, brut] côté serveur.
     discount: z.number().int().nonnegative().optional(),
+    // Offline-first (Task 6.2) : horodatage de SAISIE côté client (ISO), pour
+    // qu'une vente faite hors-ligne garde sa vraie heure au lieu de celle du
+    // sync. Optionnel — un appelant online l'omet, comportement inchangé
+    // (`Sale.createdAt` garde son `@default(now())`). Borné côté serveur, voir
+    // `resolveClientCreatedAt` (repli sur `now()` hors bornes, jamais un rejet).
+    createdAt: z.string().optional(),
   })
   .refine((d) => d.method !== undefined || (d.payments?.length ?? 0) > 0, {
     message: 'method_or_payments_required',
@@ -228,6 +235,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const customerInput = body.customer;
     const paymentsInput = body.payments;
     const legacyMethod = body.method;
+    // `null` = l'appelant a omis `createdAt` → on n'ajoute PAS la clé dans les
+    // données Prisma plus bas, laissant `@default(now())` s'appliquer (chemin
+    // online inchangé à l'octet près). Sinon : Date bornée (ou repli `now()`
+    // explicite si hors bornes/invalide — jamais un rejet de la vente).
+    const clientCreatedAt = resolveClientCreatedAt(body.createdAt);
 
     // Clé d'idempotence offline : `clientOpId` explicite sinon l'`id` client de
     // la vente. `null` (aucun des deux) = chemin online pur, rien n'est mémoïsé.
@@ -398,6 +410,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                     creditAmount,
                     publicToken,
                     createdById: userSub,
+                    // Task 6.2 — offline entry time (bounded), absent → DB default(now()).
+                    ...(clientCreatedAt ? { createdAt: clientCreatedAt } : {}),
                     ...(customerId ? { customerId } : {}),
                     items: {
                       create: items.map((item) => {

@@ -126,6 +126,101 @@ describe('POST /api/expenses', () => {
   });
 });
 
+describe('POST /api/expenses — Task 6.2 : createdAt client borné (offline entry time)', () => {
+  function expenseCreateData(): { createdAt?: Date; occurredAt?: Date } {
+    const call = prismaMock.expense.create.mock.calls[0]?.[0] as {
+      data: { createdAt?: Date; occurredAt?: Date };
+    };
+    return call.data;
+  }
+
+  it('createdAt valide (passé récent) : repris tel quel sur createdAt ET occurredAt', async () => {
+    prismaMock.expense.count.mockResolvedValueOnce(0);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'e1',
+      number: 'D-0001',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: null,
+      occurredAt: new Date(),
+    } as never);
+
+    const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(); // avant-hier
+    const res = await POST(
+      makePost({ label: 'Transport', amount: 3000, category: 'Transport', createdAt: past }),
+    );
+    expect(res.status).toBe(201);
+    const data = expenseCreateData();
+    expect(data.createdAt?.toISOString()).toBe(past);
+    expect(data.occurredAt?.toISOString()).toBe(past);
+  });
+
+  it('createdAt dans le futur : repli sur now() (pas la valeur future)', async () => {
+    prismaMock.expense.count.mockResolvedValueOnce(0);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'e1',
+      number: 'D-0001',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: null,
+      occurredAt: new Date(),
+    } as never);
+
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const res = await POST(
+      makePost({ label: 'Transport', amount: 3000, category: 'Transport', createdAt: future }),
+    );
+    expect(res.status).toBe(201);
+    const data = expenseCreateData();
+    expect(data.createdAt).toBeDefined();
+    expect(data.createdAt).not.toEqual(new Date(future));
+    expect(Math.abs((data.createdAt as Date).getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it('createdAt trop ancien (> 30j) : repli sur now()', async () => {
+    prismaMock.expense.count.mockResolvedValueOnce(0);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'e1',
+      number: 'D-0001',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: null,
+      occurredAt: new Date(),
+    } as never);
+
+    const ancient = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    const res = await POST(
+      makePost({ label: 'Transport', amount: 3000, category: 'Transport', createdAt: ancient }),
+    );
+    expect(res.status).toBe(201);
+    const data = expenseCreateData();
+    expect(data.createdAt).toBeDefined();
+    expect(Math.abs((data.createdAt as Date).getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it('sans createdAt (online) : les clés sont omises, @default(now()) du schéma s’applique — comportement inchangé', async () => {
+    prismaMock.expense.count.mockResolvedValueOnce(0);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'e1',
+      number: 'D-0001',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: null,
+      occurredAt: new Date(),
+    } as never);
+
+    const res = await POST(makePost({ label: 'Transport', amount: 3000, category: 'Transport' }));
+    expect(res.status).toBe(201);
+    const data = expenseCreateData();
+    expect('createdAt' in data).toBe(false);
+    expect('occurredAt' in data).toBe(false);
+  });
+});
+
 describe('POST /api/expenses — idempotence offline (id client + clientOpId)', () => {
   it('deux POST avec le même id : une seule dépense créée, 2e réponse = 200, même dépense', async () => {
     // --- 1er POST : crée la dépense (aucune opération offline connue) ---

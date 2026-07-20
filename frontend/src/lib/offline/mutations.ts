@@ -306,10 +306,15 @@ export async function createSaleOffline(input: CreateSaleInput): Promise<Provisi
 
       // 8. Enqueue the outbox op — same shape the online POST sends, plus
       // `id`/`clientOpId`. Inside the tx so a rollback also drops the queue row.
+      // Task 6.2 — also forward the local `createdAt` (the TRUE entry time,
+      // stamped at step start, above) so the server honors it instead of
+      // stamping its own clock at whatever later moment the sync happens
+      // (`/api/sales`'s `createdAt` Body field, bounded server-side).
       const inputDiscount = input.discount ?? 0;
       const payload: Record<string, unknown> = {
         id,
         clientOpId: id,
+        createdAt,
         ...(input.payments ? { payments: input.payments } : { method: input.method ?? 'cash' }),
         ...(inputDiscount > 0 ? { discount: inputDiscount } : {}),
         items: input.items,
@@ -423,13 +428,17 @@ export async function createExpenseOffline(input: CreateExpenseInput): Promise<P
       // `id`/`clientOpId`. `category` is always sent (server requires it,
       // non-optional); `occurredAt` only when the caller explicitly gave one
       // (the server ignores unknown Body keys, so this is harmless either
-      // way — see the field's doc comment above).
+      // way — see the field's doc comment above). Task 6.2 — `createdAt` is
+      // ALWAYS forwarded (the local row's true entry time, stamped above) so
+      // `/api/expenses` honors it instead of stamping its own clock at sync
+      // time, bounded server-side (see `resolveClientCreatedAt`).
       const payload: Record<string, unknown> = {
         id,
         clientOpId: id,
         label: input.label,
         amount: input.amount,
         category,
+        createdAt,
         ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
         ...(input.note ? { note: input.note } : {}),
       };
