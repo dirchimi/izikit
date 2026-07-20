@@ -18,40 +18,8 @@ export function uiStatus(status: string): CreditStatus {
   return 'credit';
 }
 
-export interface OpenReceivable {
-  id: string;
-  amount: number;
-  amountPaid: number;
-}
-
-export interface Allocation {
-  id: string;
-  newPaid: number;
-  status: ReceivableStatus;
-}
-
-/**
- * Répartit un paiement sur les créances ouvertes, les plus anciennes d'abord
- * (l'appelant fournit la liste déjà triée). On n'applique jamais plus que le dû
- * total : `applied = min(payment, Σ dû)`. Ne renvoie que les créances réellement
- * impactées. Fonction pure — la persistance se fait dans la transaction.
- */
-export function allocateRepayment(
-  open: OpenReceivable[],
-  payment: number,
-): { allocations: Allocation[]; applied: number } {
-  let remaining = Math.max(0, Math.floor(payment));
-  const allocations: Allocation[] = [];
-
-  for (const r of open) {
-    if (remaining <= 0) break;
-    const due = r.amount - r.amountPaid;
-    if (due <= 0) continue;
-    const take = Math.min(remaining, due);
-    const newPaid = r.amountPaid + take;
-    allocations.push({ id: r.id, newPaid, status: deriveStatus(r.amount, newPaid) });
-    remaining -= take;
-  }
-
-  return { allocations, applied: Math.max(0, Math.floor(payment)) - remaining };
-}
+// Task 5.6 : l'allocation de remboursement (`allocateRepayment`, oldest-first)
+// a été extraite vers `@/lib/shared/allocate-repayment` — fonction PURE sans
+// `server-only` ni Prisma, importable aussi bien par la route serveur que par
+// la couche offline client (Task 5.2). Elle ne vit plus ici pour éviter deux
+// implémentations divergentes.

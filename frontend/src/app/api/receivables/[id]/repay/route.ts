@@ -26,7 +26,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { withTxRetry } from '@/lib/server/db/retry-transaction';
 import { withIdempotency } from '@/lib/server/idempotency';
-import { allocateRepayment } from '@/lib/server/receivables/helpers';
+import { allocateRepayment } from '@/lib/shared/allocate-repayment';
 import { docNumber, repaymentLineLabel } from '@/lib/server/documents/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
@@ -160,7 +160,7 @@ export async function POST(
                   select: { id: true, amount: true, amountPaid: true },
                 });
 
-                const { allocations, applied } = allocateRepayment(open, amount);
+                const { allocations, applied, remainingDebt } = allocateRepayment(open, amount);
                 if (applied <= 0) {
                   throw new RepayRejection(
                     { error: 'NO_DEBT', message: 'Ce client n’a aucune créance à rembourser' },
@@ -171,7 +171,7 @@ export async function POST(
                 for (const a of allocations) {
                   await tx.receivable.update({
                     where: { id: a.id },
-                    data: { amountPaid: a.newPaid, status: a.status },
+                    data: { amountPaid: a.newAmountPaid, status: a.status },
                   });
                 }
 
@@ -191,9 +191,6 @@ export async function POST(
                     ...(clientOpId ? { clientOpId } : {}),
                   },
                 });
-
-                const totalDue = open.reduce((sum, r) => sum + (r.amount - r.amountPaid), 0);
-                const remainingDebt = totalDue - applied;
 
                 // Reçu de remboursement (Document type RECU) — instantané figé, partageable
                 // au même titre qu'une facture. `balanceAfter` fige le solde restant. Le
