@@ -9,10 +9,18 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useT } from '@/contexts/LocaleContext';
-import { useApi } from '@/lib/useApi';
 import { computeExpiryStatus } from '@/lib/boutique/expiry';
 import { onSaleChange } from '@/lib/boutique/realtime';
-import { api, ApiError } from '@/lib/api';
+import { ApiError } from '@/lib/api';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { createSaleOffline, type CreateSaleInput } from '@/lib/offline/mutations';
+import { drainOutbox } from '@/lib/offline/sync-engine';
+import {
+  productRowToPos,
+  resolveReceiptNumbers,
+  type PosProduct,
+} from '@/lib/offline/pos-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
 import { type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
@@ -24,23 +32,6 @@ import ReceiptModal, {
   type ReceiptData,
   type ReceiptMethod,
 } from '@/components/boutique/ventes/ReceiptModal';
-
-interface ApiProduct {
-  id: string;
-  ref: string;
-  name: string;
-  category: string;
-  buyPrice: number;
-  sellPrice: number;
-  prixGros: number;
-  unite: string;
-  qty: number;
-  threshold: number;
-  status: 'ok' | 'low' | 'out';
-  imageUrl: string | null;
-  barcode: string | null;
-  expiryDate: string | null;
-}
 
 const METHODS: PaymentMethod[] = ['cash', 'mobile', 'credit'];
 const METHOD_KEY: Record<PaymentMethod, string> = {
@@ -75,14 +66,18 @@ export default function VendrePos() {
   const [barcode, setBarcode] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   // Produit en attente de choix « Détail / Gros » (ouvert à chaque ajout).
-  const [choosing, setChoosing] = useState<ApiProduct | null>(null);
+  const [choosing, setChoosing] = useState<PosProduct | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{
-    products: ApiProduct[];
-    expiryAlertDays: number;
-  }>('/api/products');
-  const products = data?.products ?? [];
-  const expiryAlertDays = data?.expiryAlertDays ?? 30;
+  // Lecture locale (Dexie) — offline-first : le catalogue vient du miroir local
+  // (alimenté par pullAll() quand en ligne, voir AppShell). Le miroir ne
+  // contient que les produits de CETTE boutique (pull org-scoped), d'où pas de
+  // filtre org ici. `productRowToPos` re-dérive le statut stock côté client.
+  const { data: productRows, loading } = useLocalResource(() => db.products.toArray(), [], []);
+  const products = useMemo(() => productRows.map(productRowToPos), [productRows]);
+  // Le seuil d'alerte de péremption n'est pas fourni par /api/sync/pull ; hors
+  // ligne on retient la valeur par défaut boutique (30 j), comme l'écran le
+  // faisait déjà quand l'API ne renvoyait pas la valeur.
+  const expiryAlertDays = 30;
 
   // Chips catégories : « Tous » + les catégories réelles de la boutique.
   const categories = useMemo(
@@ -112,7 +107,7 @@ export default function VendrePos() {
 
   /** Ajoute un produit au panier au tarif choisi (détail ou gros). Un produit
    *  périmé déclenche une confirmation (« vendre quand même ? ») — jamais bloqué. */
-  async function addToCart(product: ApiProduct, wholesale: boolean) {
+  async function addToCart(product: PosProduct, wholesale: boolean) {
     const exp = computeExpiryStatus(product.expiryDate, expiryAlertDays, new Date());
     if (exp?.status === 'expired') {
       const ok = await confirm({
@@ -196,10 +191,16 @@ export default function VendrePos() {
   }
 
   function checkoutError(err: unknown): string {
-    const code = err instanceof ApiError ? err.code : '';
-    if (code === 'INSUFFICIENT_STOCK') return t('pos.insufficientStock');
+    // Le checkout est offline-first : `createSaleOffline` lève des `Error`
+    // dont le `.message` porte le code (INSUFFICIENT_STOCK_LOCAL, …). On garde
+    // aussi le mapping `ApiError.code` au cas où un chemin réseau en remonte.
+    const code = err instanceof ApiError ? err.code : err instanceof Error ? err.message : '';
+    if (code === 'INSUFFICIENT_STOCK' || code === 'INSUFFICIENT_STOCK_LOCAL')
+      return t('pos.insufficientStock');
     if (code === 'CREDIT_NEEDS_CUSTOMER') return t('pos.creditNeedsClient');
     if (code === 'PAYMENT_MISMATCH') return t('pos.pay.mustEqualTotal');
+    // PRODUCT_NOT_FOUND (produit absent du miroir local) et tout le reste →
+    // message d'erreur générique.
     return t('async.error');
   }
 
@@ -239,31 +240,43 @@ export default function VendrePos() {
       .filter((k) => breakdown[k] > 0)
       .map((k) => ({ method: k, amount: breakdown[k] }));
 
+    // Charge offline-first envoyée au moteur local : shape identique au POST
+    // /api/sales en ligne (l'outbox rejouera exactement ce corps au serveur).
+    const input: CreateSaleInput = {
+      ...(split ? { payments } : { method }),
+      ...(discountAmount > 0 ? { discount: discountAmount } : {}),
+      items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
+      // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé
+      // à la volée avec son numéro → reçu + WhatsApp direct).
+      ...(client
+        ? {
+            customer: client.id
+              ? { id: client.id }
+              : { name: client.name, ...(client.phone ? { phone: client.phone } : {}) },
+          }
+        : {}),
+    };
+
     setSubmitting(true);
     try {
-      const res = await api<{
-        sale: { id: string; number: string; total: number; publicToken: string };
-      }>('/api/sales', {
-        method: 'POST',
-        body: {
-          ...(split ? { payments } : { method }),
-          ...(discountAmount > 0 ? { discount: discountAmount } : {}),
-          items: cart.map((l) => ({ productId: l.productId, qty: l.qty, wholesale: l.wholesale })),
-          // Client attaché à TOUTE vente si renseigné (existant via id, sinon créé
-          // à la volée avec son numéro → reçu + WhatsApp direct).
-          ...(client
-            ? {
-                customer: client.id
-                  ? { id: client.id }
-                  : { name: client.name, ...(client.phone ? { phone: client.phone } : {}) },
-              }
-            : {}),
-        },
-      });
+      // Écriture locale optimiste + mise en file d'attente (jamais de réseau ici).
+      const local = await createSaleOffline(input);
+
+      // En ligne : on draine tout de suite (single-flight, rapide) puis on relit
+      // la vente locale pour récupérer le vrai numéro serveur (V-000x) et le
+      // publicToken écrits par la synchro. Hors ligne : numéro provisoire (#L…)
+      // et pas de token — le reçu s'affiche immédiatement quand même.
+      let numbers = { number: local.number, publicToken: local.publicToken };
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        await drainOutbox();
+        const syncedRow = await db.sales.get(local.id);
+        numbers = resolveReceiptNumbers(local, syncedRow);
+      }
+
       toast(t('pos.saleRecorded', { amount: formatFCFA(netTotal) }), 'success');
       // Reçu proposé tout de suite (imprimer / envoyer par WhatsApp).
       setReceipt({
-        number: res.sale.number,
+        number: numbers.number,
         createdAt: new Date().toISOString(),
         // Paiement mixte → 'MIXED' (sinon le reçu affichait une méthode unique
         // trompeuse même quand plusieurs modes étaient réglés).
@@ -275,7 +288,7 @@ export default function VendrePos() {
         customerName: client?.name ?? null,
         customerPhone: client?.phone ?? null,
         items: cart.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
-        publicToken: res.sale.publicToken,
+        publicToken: numbers.publicToken,
       });
       setCart([]);
       setClient(null);
@@ -374,8 +387,7 @@ export default function VendrePos() {
           <div className="px-4 pb-6 md:px-6">
             <AsyncState
               loading={loading}
-              error={error}
-              onRetry={refresh}
+              error={null}
               isEmpty={products.length === 0}
               emptyLabel={t('pos.catalogEmpty')}
               emptyIcon="package"

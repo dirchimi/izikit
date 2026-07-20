@@ -14,6 +14,7 @@ import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useT } from '@/contexts/LocaleContext';
 import { authGateState } from '@/lib/offline/auth-gate';
 import { installSyncTriggers } from '@/lib/offline/sync-triggers';
+import { pullAll } from '@/lib/offline/pull';
 
 interface BoutiqueHeaderData {
   organization: { name: string };
@@ -54,6 +55,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // lifetime regardless of the auth-gate state below (unconditional hook,
   // same rule as the other hooks above).
   useEffect(() => installSyncTriggers(), []);
+
+  // Seed/refresh the local Dexie mirror (Task 3.3) so offline reads (e.g. the
+  // POS catalogue) aren't empty. Best-effort: fire on mount and whenever the
+  // browser regains connectivity, never blocking render and never surfacing
+  // errors (a failed pull just leaves the last-known mirror in place).
+  // Unconditional hook, declared before the auth-gate early return below.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const seed = () => {
+      if (navigator.onLine) void pullAll().catch(() => undefined);
+    };
+    seed();
+    window.addEventListener('online', seed);
+    return () => window.removeEventListener('online', seed);
+  }, []);
 
   const gate = authGateState(loading, user);
   if (gate !== 'ready') {
