@@ -19,12 +19,19 @@ import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { withTxRetry } from '@/lib/server/db/retry-transaction';
+import { withIdempotency } from '@/lib/server/idempotency';
 import { onSaleCommitted } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z
   .object({
+    // Offline-first (Task 0.3) : identifiants générés côté client, tous
+    // optionnels — un appelant online les omet et le comportement est inchangé.
+    // `id` : cuid client de la Sale (repris verbatim comme id serveur).
+    id: z.string().min(1).optional(),
+    // `clientOpId` : clé d'idempotence explicite. À défaut on retombe sur `id`.
+    clientOpId: z.string().min(1).optional(),
     items: z
       .array(
         z.object({
@@ -176,166 +183,207 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const body = parsed.data;
     const orgId = primary.organizationId;
     const userSub = auth.user.sub;
-    const items = parsed.data.items;
-    const customerInput = parsed.data.customer;
-    const paymentsInput = parsed.data.payments;
-    const legacyMethod = parsed.data.method;
+    const items = body.items;
+    const customerInput = body.customer;
+    const paymentsInput = body.payments;
+    const legacyMethod = body.method;
 
-    // Rejoue la tx sur collision transitoire (numéro de vente séquentiel ou
-    // conflit de sérialisation entre deux checkouts simultanés).
-    const result: CheckoutResult = await withTxRetry(() =>
+    // Clé d'idempotence offline : `clientOpId` explicite sinon l'`id` client de
+    // la vente. `null` (aucun des deux) = chemin online pur, rien n'est mémoïsé.
+    const clientOpId = body.clientOpId ?? body.id ?? null;
+
+    // Rejoue la tx sur collision transitoire (numéro de vente séquentiel,
+    // conflit de sérialisation entre deux checkouts simultanés, ou P2002 sur la
+    // clé d'idempotence quand deux rejeux concurrents de la même opération
+    // passent tous deux le findUnique initial — withIdempotency laisse ce P2002
+    // remonter jusqu'ici, le rejeu retombant proprement sur la ligne gagnante).
+    const { result, replayed } = await withTxRetry(() =>
       prisma.$transaction(
-        async (tx) => {
-          const ids = items.map((i) => i.productId);
-          const products = await tx.product.findMany({
-            where: { id: { in: ids }, organizationId: orgId },
-            select: {
-              id: true,
-              name: true,
-              sellPrice: true,
-              prixGros: true,
-              buyPrice: true,
-              qty: true,
+        (tx) =>
+          withIdempotency<CheckoutResult>(
+            tx,
+            { organizationId: orgId, clientOpId, endpoint: 'sales' },
+            async () => {
+              const ids = items.map((i) => i.productId);
+              const products = await tx.product.findMany({
+                where: { id: { in: ids }, organizationId: orgId },
+                select: {
+                  id: true,
+                  name: true,
+                  sellPrice: true,
+                  prixGros: true,
+                  buyPrice: true,
+                  qty: true,
+                },
+              });
+              const byId = new Map(products.map((p) => [p.id, p]));
+
+              // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
+              const unitPriceFor = (
+                p: { sellPrice: number; prixGros: number },
+                wholesale?: boolean,
+              ) => (wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice);
+
+              // Agrège les quantités par produit AVANT de contrôler le stock. Deux
+              // lignes du même article (ex. double scan) doivent être vérifiées
+              // ENSEMBLE : sinon chacune passe le contrôle isolément (qty ligne ≤ stock)
+              // alors que le décrément cumulé ferait passer le stock négatif.
+              const neededByProduct = new Map<string, number>();
+              for (const item of items) {
+                neededByProduct.set(
+                  item.productId,
+                  (neededByProduct.get(item.productId) ?? 0) + item.qty,
+                );
+              }
+              for (const [productId, needed] of neededByProduct) {
+                const p = byId.get(productId);
+                if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId };
+                if (needed > p.qty) return { kind: 'INSUFFICIENT', productId };
+              }
+
+              // Résolution du client (création à la volée si nom fourni sans id).
+              let customerId: string | null = null;
+              if (customerInput?.id) {
+                const c = await tx.customer.findUnique({
+                  where: { id: customerInput.id },
+                  select: { organizationId: true },
+                });
+                if (c) {
+                  // Client déjà en base : ne l'utiliser que s'il appartient à la
+                  // boutique (sinon customerId reste null — pas de fuite inter-org).
+                  if (c.organizationId === orgId) customerId = customerInput.id;
+                } else if (customerInput.name) {
+                  // Offline : client créé côté client avec ce cuid mais pas encore
+                  // synchronisé — on le matérialise en réutilisant son id verbatim.
+                  const created = await tx.customer.create({
+                    data: {
+                      id: customerInput.id,
+                      organizationId: orgId,
+                      name: customerInput.name,
+                      phone: customerInput.phone ?? null,
+                    },
+                    select: { id: true },
+                  });
+                  customerId = created.id;
+                }
+              } else if (customerInput?.name) {
+                const c = await tx.customer.create({
+                  data: {
+                    organizationId: orgId,
+                    name: customerInput.name,
+                    phone: customerInput.phone ?? null,
+                  },
+                  select: { id: true },
+                });
+                customerId = c.id;
+              }
+              // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
+              const gross = items.reduce((sum, item) => {
+                const p = byId.get(item.productId);
+                return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
+              }, 0);
+              const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
+              const total = gross - discount;
+
+              // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
+              // égaler le total NET. Sinon : paiement unique via `method` (compat).
+              const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
+              if (paymentsInput && paymentsInput.length > 0) {
+                for (const p of paymentsInput) {
+                  bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+                }
+                if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
+              } else {
+                bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
+              }
+              const creditAmount = bd.CREDIT;
+              const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
+              const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
+
+              // La part crédit exige un client (sélectionné ou créé à la volée).
+              if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
+
+              const count = await tx.sale.count({ where: { organizationId: orgId } });
+              const number = `V-${String(count + 1).padStart(4, '0')}`;
+              // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
+              // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
+              const publicToken = randomBytes(12).toString('base64url');
+
+              const sale = await tx.sale.create({
+                data: {
+                  // Offline : id cuid généré côté client, repris verbatim pour que
+                  // la vente ait la même identité online/offline. Absent → Prisma
+                  // génère (cuid). Le numéro V- reste séquentiel côté serveur.
+                  ...(body.id ? { id: body.id } : {}),
+                  organizationId: orgId,
+                  number,
+                  method,
+                  total,
+                  discount,
+                  cashAmount: bd.CASH,
+                  mobileAmount: bd.MOBILE,
+                  creditAmount,
+                  publicToken,
+                  createdById: userSub,
+                  ...(customerId ? { customerId } : {}),
+                  items: {
+                    create: items.map((item) => {
+                      const p = byId.get(item.productId);
+                      return {
+                        productId: item.productId,
+                        name: p ? p.name : 'Article',
+                        qty: item.qty,
+                        unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
+                        buyPrice: p ? p.buyPrice : 0,
+                      };
+                    }),
+                  },
+                },
+                select: { id: true },
+              });
+
+              // Décrément + mouvement OUT agrégés PAR PRODUIT (neededByProduct), pas
+              // par ligne : deux lignes du même article (double scan) donnent un seul
+              // StockMovement dont `clientOpId` = `${saleId}:${productId}` reste unique
+              // (la colonne est @unique — un mouvement par ligne collisionnerait).
+              for (const [productId, needed] of neededByProduct) {
+                await tx.product.update({
+                  where: { id: productId },
+                  data: { qty: { decrement: needed } },
+                });
+                await tx.stockMovement.create({
+                  data: {
+                    organizationId: orgId,
+                    productId,
+                    type: 'OUT',
+                    delta: -needed,
+                    reason: 'sale',
+                    createdById: userSub,
+                    clientOpId: `${sale.id}:${productId}`,
+                  },
+                });
+              }
+
+              // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
+              // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
+              if (creditAmount > 0 && customerId) {
+                await tx.receivable.create({
+                  data: {
+                    organizationId: orgId,
+                    customerId,
+                    saleId: sale.id,
+                    amount: creditAmount,
+                    status: 'OPEN',
+                  },
+                });
+              }
+
+              return { kind: 'OK', saleId: sale.id, number, total, publicToken };
             },
-          });
-          const byId = new Map(products.map((p) => [p.id, p]));
-
-          // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
-          const unitPriceFor = (p: { sellPrice: number; prixGros: number }, wholesale?: boolean) =>
-            wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice;
-
-          // Agrège les quantités par produit AVANT de contrôler le stock. Deux
-          // lignes du même article (ex. double scan) doivent être vérifiées
-          // ENSEMBLE : sinon chacune passe le contrôle isolément (qty ligne ≤ stock)
-          // alors que le décrément cumulé ferait passer le stock négatif.
-          const neededByProduct = new Map<string, number>();
-          for (const item of items) {
-            neededByProduct.set(
-              item.productId,
-              (neededByProduct.get(item.productId) ?? 0) + item.qty,
-            );
-          }
-          for (const [productId, needed] of neededByProduct) {
-            const p = byId.get(productId);
-            if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId };
-            if (needed > p.qty) return { kind: 'INSUFFICIENT', productId };
-          }
-
-          // Résolution du client (création à la volée si nom fourni sans id).
-          let customerId: string | null = null;
-          if (customerInput?.id) {
-            const c = await tx.customer.findUnique({
-              where: { id: customerInput.id },
-              select: { organizationId: true },
-            });
-            if (c && c.organizationId === orgId) customerId = customerInput.id;
-          } else if (customerInput?.name) {
-            const c = await tx.customer.create({
-              data: {
-                organizationId: orgId,
-                name: customerInput.name,
-                phone: customerInput.phone ?? null,
-              },
-              select: { id: true },
-            });
-            customerId = c.id;
-          }
-          // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
-          const gross = items.reduce((sum, item) => {
-            const p = byId.get(item.productId);
-            return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
-          }, 0);
-          const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
-          const total = gross - discount;
-
-          // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
-          // égaler le total NET. Sinon : paiement unique via `method` (compat).
-          const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
-          if (paymentsInput && paymentsInput.length > 0) {
-            for (const p of paymentsInput) {
-              bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
-            }
-            if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
-          } else {
-            bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
-          }
-          const creditAmount = bd.CREDIT;
-          const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
-          const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
-
-          // La part crédit exige un client (sélectionné ou créé à la volée).
-          if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
-
-          const count = await tx.sale.count({ where: { organizationId: orgId } });
-          const number = `V-${String(count + 1).padStart(4, '0')}`;
-          // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
-          // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
-          const publicToken = randomBytes(12).toString('base64url');
-
-          const sale = await tx.sale.create({
-            data: {
-              organizationId: orgId,
-              number,
-              method,
-              total,
-              discount,
-              cashAmount: bd.CASH,
-              mobileAmount: bd.MOBILE,
-              creditAmount,
-              publicToken,
-              createdById: userSub,
-              ...(customerId ? { customerId } : {}),
-              items: {
-                create: items.map((item) => {
-                  const p = byId.get(item.productId);
-                  return {
-                    productId: item.productId,
-                    name: p ? p.name : 'Article',
-                    qty: item.qty,
-                    unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
-                    buyPrice: p ? p.buyPrice : 0,
-                  };
-                }),
-              },
-            },
-            select: { id: true },
-          });
-
-          for (const item of items) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { qty: { decrement: item.qty } },
-            });
-            await tx.stockMovement.create({
-              data: {
-                organizationId: orgId,
-                productId: item.productId,
-                type: 'OUT',
-                delta: -item.qty,
-                reason: 'sale',
-                createdById: userSub,
-              },
-            });
-          }
-
-          // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
-          // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
-          if (creditAmount > 0 && customerId) {
-            await tx.receivable.create({
-              data: {
-                organizationId: orgId,
-                customerId,
-                saleId: sale.id,
-                amount: creditAmount,
-                status: 'OPEN',
-              },
-            });
-          }
-
-          return { kind: 'OK', saleId: sale.id, number, total, publicToken };
-        },
+          ),
         { isolationLevel: 'Serializable' },
       ),
     );
@@ -367,17 +415,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 422, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    // Alertes post-réponse (best-effort) : « nouvelle vente » (si un employé l'a
-    // faite) + « stock bas » pour les produits repassés sous leur seuil.
-    notifyAfterResponse(() =>
-      onSaleCommitted(prisma, {
-        orgId,
-        sellerId: userSub,
-        sale: { id: result.saleId, number: result.number, total: result.total },
-        productIds: items.map((i) => i.productId),
-      }),
-    );
+    // Alertes post-réponse (best-effort) : « nouvelle vente » + « stock bas ».
+    // JAMAIS sur un rejeu : la vente et ses effets datent de la 1re exécution ;
+    // re-notifier à chaque retry offline spammerait le patron.
+    if (!replayed) {
+      notifyAfterResponse(() =>
+        onSaleCommitted(prisma, {
+          orgId,
+          sellerId: userSub,
+          sale: { id: result.saleId, number: result.number, total: result.total },
+          productIds: items.map((i) => i.productId),
+        }),
+      );
+    }
 
+    // Rejeu idempotent → 200 (la vente existe déjà) ; création fraîche → 201.
+    // `result` provient soit de fn (objet JS), soit du resultJson mémoïsé (JSON
+    // reparsé) : il ne contient que des primitives (pas de Date), donc les deux
+    // chemins sérialisent à l'identique — aucun champ n'est traité comme Date.
     return NextResponse.json(
       {
         sale: {
@@ -387,7 +442,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           publicToken: result.publicToken,
         },
       },
-      { status: 201, headers: { 'x-request-id': ctx.requestId } },
+      { status: replayed ? 200 : 201, headers: { 'x-request-id': ctx.requestId } },
     );
   });
 }

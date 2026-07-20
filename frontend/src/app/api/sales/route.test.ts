@@ -305,6 +305,187 @@ describe('POST /api/sales (checkout)', () => {
   });
 });
 
+describe('POST /api/sales — idempotence offline (id client + clientOpId)', () => {
+  it('deux POST avec le même id : une seule Sale, stock décrémenté une fois, 2e réponse = 200', async () => {
+    // --- 1er POST : crée la vente (aucune opération offline connue) ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-client-1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const first = await POST(
+      makePost({ id: 'sale-client-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(first.status).toBe(201);
+    const firstBody = await first.json();
+    expect(firstBody.sale.id).toBe('sale-client-1');
+    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+
+    // Ce que withIdempotency a mémoïsé (JSON) pour ce clientOpId.
+    const memoized = {
+      kind: 'OK',
+      saleId: 'sale-client-1',
+      number: firstBody.sale.number,
+      total: firstBody.sale.total,
+      publicToken: firstBody.sale.publicToken,
+    };
+
+    // --- 2e POST : même id → rejoué, résultat mémoïsé, aucune ré-exécution ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'sale-client-1',
+      endpoint: 'sales',
+      resultJson: memoized,
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makePost({ id: 'sale-client-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.sale.id).toBe('sale-client-1');
+    expect(secondBody.sale.number).toBe(firstBody.sale.number);
+    expect(secondBody.sale.total).toBe(firstBody.sale.total);
+
+    // Pas de duplication : ni Sale, ni décrément de stock une seconde fois.
+    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('online inchangé : POST sans id → Sale créée, numéro V- serveur, aucune OfflineOperation', async () => {
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(4);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 's-server' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(makePost({ method: 'cash', items: [{ productId: 'p1', qty: 2 }] }));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.sale.id).toBe('s-server');
+    expect(body.sale.number).toBe('V-0005');
+    // clientOpId null → chemin online pur : la table d'idempotence n'est jamais touchée.
+    expect(prismaMock.offlineOperation.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+  });
+
+  it("utilise l'id client fourni verbatim comme id de la Sale", async () => {
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'cuid-client-xyz' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ id: 'cuid-client-xyz', method: 'cash', items: [{ productId: 'p1', qty: 1 }] }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ id: 'cuid-client-xyz' }) }),
+    );
+  });
+
+  it('StockMovement porte clientOpId = `${saleId}:${productId}` (dédup par item)', async () => {
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-9' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({ id: 'sale-9', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ clientOpId: 'sale-9:p1' }) }),
+    );
+  });
+
+  it('double scan du même produit : un seul StockMovement agrégé (pas de collision clientOpId)', async () => {
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-agg' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({
+        id: 'sale-agg',
+        method: 'cash',
+        items: [
+          { productId: 'p1', qty: 2 },
+          { productId: 'p1', qty: 3 },
+        ],
+      }),
+    );
+    expect(res.status).toBe(201);
+    // Un seul mouvement, delta cumulé = −5, clientOpId unique par (vente, produit).
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ delta: -5, clientOpId: 'sale-agg:p1' }),
+      }),
+    );
+  });
+
+  it('client créé offline : utilise customer.id fourni verbatim quand introuvable en base', async () => {
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce(null as never); // pas encore synchronisé
+    prismaMock.customer.create.mockResolvedValueOnce({ id: 'cust-client-1' } as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-10' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+    prismaMock.receivable.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makePost({
+        id: 'sale-10',
+        method: 'credit',
+        items: [{ productId: 'p1', qty: 1 }],
+        customer: { id: 'cust-client-1', name: 'Fatou' },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.customer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id: 'cust-client-1',
+          name: 'Fatou',
+          organizationId: 'org1',
+        }),
+      }),
+    );
+  });
+});
+
 describe('GET /api/sales', () => {
   it('liste les ventes récentes avec lignes et client', async () => {
     prismaMock.sale.findMany.mockResolvedValueOnce([
