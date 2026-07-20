@@ -37,7 +37,7 @@
  *     they don't spin forever — they're surfaced for manual triage instead.
  */
 import { api, ApiError } from '@/lib/api';
-import { db, type SaleRow, type ExpenseRow } from './db';
+import { db, type SaleRow, type ExpenseRow, type ConflictRow } from './db';
 import {
   listPending,
   markSyncing,
@@ -62,6 +62,77 @@ export interface DrainResult {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Shape of one entry of the `/api/sales` response's `stockConflicts` array
+ * (see `frontend/src/app/api/sales/route.ts`'s `StockConflict`, Task 4.1).
+ */
+interface StockConflictPayload {
+  productId: string;
+  name: string;
+  requested: number;
+  available: number;
+  shortfall: number;
+}
+
+function isStockConflictPayload(value: unknown): value is StockConflictPayload {
+  return (
+    isRecord(value) &&
+    typeof value.productId === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.requested === 'number' &&
+    typeof value.available === 'number' &&
+    typeof value.shortfall === 'number'
+  );
+}
+
+/**
+ * Pure mapper from a sale's `stockConflicts` response entries to local
+ * `ConflictRow`s (Task 4.2). Exported (and kept side-effect-free) so the
+ * dedupe-key shape and field mapping are directly unit-testable without
+ * touching Dexie — see `sync-engine.test.ts`.
+ *
+ * Any entry that doesn't match `StockConflictPayload` is silently skipped
+ * rather than throwing: `applySyncSuccess`'s caller already isolated this
+ * whole path in a try/catch (see `drainPending`'s docblock), but a
+ * defensive filter here means a single malformed entry can't blank out the
+ * other, valid conflicts in the same response.
+ */
+export function buildConflictRows(
+  saleId: string,
+  saleNumber: string,
+  createdAt: string,
+  stockConflicts: unknown[],
+): ConflictRow[] {
+  return stockConflicts.filter(isStockConflictPayload).map((c) => ({
+    id: `${saleId}:${c.productId}`,
+    saleId,
+    saleNumber,
+    productId: c.productId,
+    productName: c.name,
+    requested: c.requested,
+    available: c.available,
+    shortfall: c.shortfall,
+    createdAt,
+    resolved: 0,
+  }));
+}
+
+/**
+ * Inserts each row unless a row with the same `id` (the deterministic
+ * `${saleId}:${productId}` dedupe key) already exists. Deliberately an
+ * existence-check-then-`add`, NOT a `put` — a replayed sale (Task 2.2's
+ * idempotent retry) must not clobber a conflict the shopkeeper already
+ * marked `resolved` on the `/synchronisation` screen.
+ */
+async function upsertConflicts(rows: ConflictRow[]): Promise<void> {
+  for (const row of rows) {
+    const existing = await db.conflicts.get(row.id);
+    if (!existing) {
+      await db.conflicts.add(row);
+    }
+  }
 }
 
 /**
@@ -100,6 +171,20 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
       if (sale && typeof sale.number === 'string') changes.number = sale.number;
       if (sale && typeof sale.publicToken === 'string') changes.publicToken = sale.publicToken;
       await db.sales.update(row.opId, changes);
+
+      // Task 4.2 — stock conflicts the server signalled for THIS sale (see
+      // Task 4.1's `stockConflicts`, always present as an array, empty when
+      // there's nothing to reconcile). `saleNumber`/`createdAt` are read
+      // back from the just-patched local row so a replay (no `sale.number`
+      // in the response, e.g. an old memoized result) still gets the real
+      // `V-000x` if a previous sync already wrote it.
+      const stockConflicts = Array.isArray(body.stockConflicts) ? body.stockConflicts : [];
+      if (stockConflicts.length > 0) {
+        const patchedSale = await db.sales.get(row.opId);
+        const saleNumber = patchedSale?.number ?? row.opId;
+        const createdAt = patchedSale?.createdAt ?? new Date().toISOString();
+        await upsertConflicts(buildConflictRows(row.opId, saleNumber, createdAt, stockConflicts));
+      }
       break;
     }
     case 'expense': {

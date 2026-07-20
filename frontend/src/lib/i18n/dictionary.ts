@@ -104,6 +104,63 @@ const messages: Record<string, Msg> = {
   },
   'offline.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
   'online.connected': { fr: 'En ligne', en: 'Online', ar: 'متصل' },
+  // ── /synchronisation — écarts de stock + échecs de sync (Task 4.2) ────────
+  'sync.title': { fr: 'Synchronisation', en: 'Synchronization', ar: 'المزامنة' },
+  'sync.subtitle': {
+    fr: 'Écarts de stock et échecs de synchronisation à traiter.',
+    en: 'Stock mismatches and sync failures to review.',
+    ar: 'فروقات المخزون وأخطاء المزامنة التي تحتاج معالجة.',
+  },
+  'sync.conflicts.heading': { fr: 'Écarts de stock', en: 'Stock mismatches', ar: 'فروقات المخزون' },
+  'sync.conflicts.empty': {
+    fr: 'Aucun écart de stock à traiter.',
+    en: 'No stock mismatch to review.',
+    ar: 'لا توجد فروقات مخزون للمعالجة.',
+  },
+  'sync.conflict.line': {
+    fr: 'Vente {saleNumber} — {productName} : manque {shortfall} (demandé {requested}, dispo {available})',
+    en: 'Sale {saleNumber} — {productName}: short {shortfall} (requested {requested}, available {available})',
+    ar: 'البيع {saleNumber} — {productName}: نقص {shortfall} (المطلوب {requested}، المتوفر {available})',
+  },
+  'sync.conflict.adjustStock': { fr: 'Ajuster le stock', en: 'Adjust stock', ar: 'تعديل المخزون' },
+  'sync.conflict.markResolved': {
+    fr: 'Marquer résolu',
+    en: 'Mark resolved',
+    ar: 'وضع علامة محلول',
+  },
+  'sync.conflict.resolvedToast': {
+    fr: 'Écart marqué comme résolu.',
+    en: 'Mismatch marked as resolved.',
+    ar: 'تم وضع علامة على الفرق كمحلول.',
+  },
+  'sync.errors.heading': {
+    fr: 'Échecs de synchronisation',
+    en: 'Sync failures',
+    ar: 'أخطاء المزامنة',
+  },
+  'sync.errors.empty': {
+    fr: 'Aucun échec de synchronisation.',
+    en: 'No sync failures.',
+    ar: 'لا توجد أخطاء مزامنة.',
+  },
+  'sync.error.line': {
+    fr: '{kind} — {reason}',
+    en: '{kind} — {reason}',
+    ar: '{kind} — {reason}',
+  },
+  'sync.error.unknown': { fr: 'Erreur inconnue', en: 'Unknown error', ar: 'خطأ غير معروف' },
+  'sync.error.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
+  'sync.error.retryToast': {
+    fr: 'Nouvelle tentative de synchronisation lancée.',
+    en: 'Sync retry started.',
+    ar: 'تم بدء إعادة محاولة المزامنة.',
+  },
+  'sync.kind.sale': { fr: 'Vente', en: 'Sale', ar: 'بيع' },
+  'sync.kind.expense': { fr: 'Dépense', en: 'Expense', ar: 'مصروف' },
+  'sync.kind.repay': { fr: 'Remboursement', en: 'Repayment', ar: 'سداد' },
+  'sync.kind.adjust': { fr: 'Ajustement de stock', en: 'Stock adjustment', ar: 'تعديل مخزون' },
+  'sync.kind.customer': { fr: 'Client', en: 'Customer', ar: 'زبون' },
+  'sync.kind.cancel': { fr: 'Annulation de vente', en: 'Sale cancellation', ar: 'إلغاء بيع' },
   'lang.soon': {
     fr: 'العربية — bientôt disponible.',
     en: 'Arabic — coming soon.',

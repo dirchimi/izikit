@@ -44,7 +44,12 @@ function makeSaleRow(id: string): SaleRow {
 
 beforeEach(async () => {
   mockedApi.mockReset();
-  await Promise.all([db.outbox.clear(), db.sales.clear(), db.expenses.clear()]);
+  await Promise.all([
+    db.outbox.clear(),
+    db.sales.clear(),
+    db.expenses.clear(),
+    db.conflicts.clear(),
+  ]);
 });
 
 describe('drainOutbox', () => {
@@ -257,5 +262,104 @@ describe('drainOutbox', () => {
 
     updateSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  describe('Task 4.2 — stock-conflict capture', () => {
+    it('a sale response carrying stockConflicts upserts one conflict row per entry', async () => {
+      await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+      await db.sales.put(makeSaleRow('s1'));
+
+      mockedApi.mockResolvedValueOnce({
+        sale: { id: 's1', number: 'V-0001', total: 100, publicToken: null },
+        stockConflicts: [
+          { productId: 'p1', name: 'Riz', requested: 5, available: 2, shortfall: 3 },
+          { productId: 'p2', name: 'Sucre', requested: 4, available: 0, shortfall: 4 },
+        ],
+      });
+
+      const result = await drainOutbox();
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+      const rows = await db.conflicts.toArray();
+      expect(rows).toHaveLength(2);
+      const byProduct = Object.fromEntries(rows.map((r) => [r.productId, r]));
+      expect(byProduct.p1).toMatchObject({
+        id: 's1:p1',
+        saleId: 's1',
+        saleNumber: 'V-0001',
+        productName: 'Riz',
+        requested: 5,
+        available: 2,
+        shortfall: 3,
+        resolved: 0,
+      });
+      expect(byProduct.p2).toMatchObject({
+        id: 's1:p2',
+        saleId: 's1',
+        saleNumber: 'V-0001',
+        productName: 'Sucre',
+        shortfall: 4,
+        resolved: 0,
+      });
+    });
+
+    it('a sale response with an empty stockConflicts array creates no conflict rows', async () => {
+      await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });
+      await db.sales.put(makeSaleRow('s2'));
+
+      mockedApi.mockResolvedValueOnce({
+        sale: { id: 's2', number: 'V-0002', total: 100, publicToken: null },
+        stockConflicts: [],
+      });
+
+      await drainOutbox();
+
+      expect(await db.conflicts.count()).toBe(0);
+    });
+
+    it('a replayed sale (same saleId) does NOT duplicate its conflict rows', async () => {
+      await db.sales.put(makeSaleRow('s3'));
+      await db.conflicts.put({
+        id: 's3:p1',
+        saleId: 's3',
+        saleNumber: 'V-0003',
+        productId: 'p1',
+        productName: 'Riz',
+        requested: 5,
+        available: 2,
+        shortfall: 3,
+        createdAt: '2026-07-20T00:00:00.000Z',
+        resolved: 1, // shopkeeper already resolved it — a replay must not reset this
+      });
+
+      await enqueue({ kind: 'sale', payload: { id: 's3' }, opId: 's3', endpoint: '/api/sales' });
+      mockedApi.mockResolvedValueOnce({
+        sale: { id: 's3', number: 'V-0003', total: 100, publicToken: null },
+        stockConflicts: [
+          { productId: 'p1', name: 'Riz', requested: 5, available: 2, shortfall: 3 },
+        ],
+      });
+
+      await drainOutbox();
+
+      const rows = await db.conflicts.where('saleId').equals('s3').toArray();
+      expect(rows).toHaveLength(1);
+      // The pre-existing resolution is untouched by the replay.
+      expect(rows[0]?.resolved).toBe(1);
+    });
+
+    it('a malformed stockConflicts entry does not throw and is skipped', async () => {
+      await enqueue({ kind: 'sale', payload: { id: 's4' }, opId: 's4', endpoint: '/api/sales' });
+      await db.sales.put(makeSaleRow('s4'));
+
+      mockedApi.mockResolvedValueOnce({
+        sale: { id: 's4', number: 'V-0004', total: 100, publicToken: null },
+        stockConflicts: [{ productId: 'p1' /* missing required fields */ }],
+      });
+
+      const result = await drainOutbox();
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(await db.conflicts.count()).toBe(0);
+    });
   });
 });

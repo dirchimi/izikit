@@ -47,6 +47,49 @@ describe('db (Dexie local database)', () => {
   });
 });
 
+describe('db.conflicts (Task 4.2 — stock-conflict reconciliation queue)', () => {
+  it('stores a conflict row and queries it by the resolved index', async () => {
+    await db.conflicts.put({
+      id: 's1:p1',
+      saleId: 's1',
+      saleNumber: 'V-0001',
+      productId: 'p1',
+      productName: 'Riz',
+      requested: 5,
+      available: 2,
+      shortfall: 3,
+      createdAt: '2026-07-20T00:00:00Z',
+      resolved: 0,
+    });
+
+    const unresolved = await db.conflicts.where('resolved').equals(0).toArray();
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0]?.id).toBe('s1:p1');
+    expect(unresolved[0]?.productName).toBe('Riz');
+
+    const resolved = await db.conflicts.where('resolved').equals(1).toArray();
+    expect(resolved).toHaveLength(0);
+  });
+
+  it('dedupe key [saleId+productId] can be queried directly', async () => {
+    await db.conflicts.put({
+      id: 's2:p9',
+      saleId: 's2',
+      saleNumber: 'V-0002',
+      productId: 'p9',
+      productName: 'Sucre',
+      requested: 10,
+      available: 4,
+      shortfall: 6,
+      createdAt: '2026-07-20T00:00:00Z',
+      resolved: 0,
+    });
+
+    const found = await db.conflicts.where('[saleId+productId]').equals(['s2', 'p9']).first();
+    expect(found?.id).toBe('s2:p9');
+  });
+});
+
 describe('newId / newOpId (cuid2 id generator)', () => {
   it('returns distinct, non-empty strings', () => {
     const a = newId();

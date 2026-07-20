@@ -107,6 +107,20 @@ export async function markError(seq: number, reason: string, retryAt?: string): 
 }
 
 /**
+ * Resets an `error` row back to `pending` (Task 4.2 — the manual
+ * « Réessayer » action on the `/synchronisation` screen's "Échecs de
+ * synchronisation" section). The row's `error`/`retryAt` fields are left as
+ * they were — they describe the PREVIOUS attempt and are simply overwritten
+ * again by `markError`/`markDone` on the next drain; nothing reads them
+ * while the row is `pending`. The caller is expected to also kick a drain
+ * (e.g. `triggerDrain()`) so the retry actually runs — this function only
+ * makes the row visible to `listPending()` again.
+ */
+export async function retryOutboxRow(seq: number): Promise<void> {
+  await db.outbox.update(seq, { status: 'pending' });
+}
+
+/**
  * Count of rows not yet in a terminal-success state: `pending` + `syncing`
  * + `error`. `conflict` rows are deliberately excluded — see the module
  * docblock. This backs the "N à synchroniser" badge.

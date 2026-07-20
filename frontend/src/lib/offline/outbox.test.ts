@@ -17,6 +17,7 @@ import {
   markConflict,
   markError,
   pendingCount,
+  retryOutboxRow,
 } from './outbox';
 
 describe('outbox.ts (client write-queue)', () => {
@@ -134,5 +135,18 @@ describe('outbox.ts (client write-queue)', () => {
     await markConflict(e.seq as number, 'stock shortfall');
 
     expect(await pendingCount()).toBe(3); // a (pending) + b (syncing) + c (error)
+  });
+
+  it('retryOutboxRow resets an error row to pending (Task 4.2 manual retry)', async () => {
+    const row = await enqueue({ kind: 'sale', payload: {}, opId: 'op1', endpoint: '/api/sales' });
+    await markError(row.seq as number, 'INSUFFICIENT_STOCK');
+
+    await retryOutboxRow(row.seq as number);
+
+    const stored = await db.outbox.get(row.seq as number);
+    expect(stored?.status).toBe('pending');
+
+    const pending = await listPending();
+    expect(pending.map((r) => r.seq)).toEqual([row.seq]);
   });
 });

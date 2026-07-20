@@ -193,6 +193,35 @@ export interface OutboxRow {
 }
 
 // ---------------------------------------------------------------------------
+// Conflicts — local stock-conflict reconciliation queue (Task 4.2). No
+// server counterpart: a sale that synced successfully but hit an
+// insufficient-server-stock shortfall (see `frontend/src/app/api/sales/route.ts`'s
+// `stockConflicts`, Task 4.1) is recorded here so the shopkeeper can review
+// it on `/synchronisation` and either restock or dismiss it.
+// ---------------------------------------------------------------------------
+
+export interface ConflictRow {
+  /** Deterministic `${saleId}:${productId}` — doubles as the dedupe key so a
+   * replayed sale (same saleId) never creates a duplicate conflict row for
+   * the same product (see `sync-engine.ts`'s `applySyncSuccess`). */
+  id: string;
+  saleId: string;
+  saleNumber: string;
+  productId: string;
+  productName: string;
+  requested: number;
+  available: number;
+  shortfall: number;
+  createdAt: string; // ISO
+  /** `0 | 1`, NOT a literal `boolean` — IndexedDB does not accept `boolean`
+   * as an indexed key (a boolean-valued indexed property is silently
+   * dropped from the index rather than throwing, so
+   * `.where('resolved').equals(true)` would never match any row). Storing
+   * `0 | 1` keeps the `resolved` index actually queryable. */
+  resolved: 0 | 1;
+}
+
+// ---------------------------------------------------------------------------
 // Session — persisted auth snapshot for offline boot (Task 1.4).
 // ---------------------------------------------------------------------------
 
@@ -237,6 +266,7 @@ class LocalDatabase extends Dexie {
   outbox!: Table<OutboxRow, number>;
   session!: Table<SessionRow, string>;
   meta!: Table<MetaRow, string>;
+  conflicts!: Table<ConflictRow, string>;
 
   constructor() {
     super('sahilley-offline');
@@ -254,6 +284,13 @@ class LocalDatabase extends Dexie {
       outbox: '++seq, status, kind, opId, createdAt',
       session: 'id',
       meta: 'key',
+    });
+
+    // Task 4.2 — adds `conflicts` only; every store from version(1) that
+    // isn't re-declared here carries its schema forward unchanged (Dexie's
+    // incremental versioning contract).
+    this.version(2).stores({
+      conflicts: 'id, resolved, saleId, [saleId+productId]',
     });
   }
 }
