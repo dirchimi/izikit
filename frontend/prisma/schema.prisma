@@ -183,6 +183,7 @@ model StockMovement {
   createdById    String? // utilisateur à l'origine du mouvement
   clientOpId     String?  @unique // idempotency key offline-first (Task 0.1)
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt // Task 1.2 : requis pour le pull incrémental offline-first (`updatedAt > since`)
 
   @@index([organizationId])
   @@index([productId])
@@ -234,6 +235,7 @@ model Sale {
   receivable     Receivable?
   document       Document?
   createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt // Task 1.2 : requis pour le pull incrémental offline-first (`updatedAt > since`) — une annulation post-pull (status/cancelledAt) doit resynchroniser
 
   @@unique([organizationId, number])
   @@index([organizationId])
@@ -354,6 +356,7 @@ model Expense {
   createdById    String?
   occurredAt     DateTime     @default(now())
   createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt // Task 1.2 : requis pour le pull incrémental offline-first (`updatedAt > since`)
 
   @@unique([organizationId, number])
   @@index([organizationId])
@@ -388,6 +391,7 @@ model Document {
   issuedAt       DateTime     @default(now())
   createdById    String?
   createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt // Task 1.2 : requis pour le pull incrémental offline-first (`updatedAt > since`)
 
   @@unique([organizationId, number])
   @@index([organizationId, type])
