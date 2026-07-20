@@ -16,9 +16,23 @@ import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
+  // Offline-first (Task 0.5): the client may supply the id it generated
+  // locally so a replayed POST (retry after a dropped response) dedupes on
+  // that id instead of creating a second customer. Online callers omit it.
+  id: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(40).optional(),
 });
+
+/** Duck-typed P2002 check — mirrors the pattern in notifications/index.ts and slug.ts. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code: unknown }).code === 'P2002'
+  );
+}
 
 async function resolveOrg(
   req: NextRequest,
@@ -78,18 +92,49 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const customer = await prisma.customer.create({
-      data: {
-        organizationId: org.orgId,
-        name: parsed.data.name,
-        phone: parsed.data.phone ?? null,
-      },
-      select: { id: true, name: true, phone: true },
-    });
+    const { id, name, phone } = parsed.data;
 
-    return NextResponse.json(
-      { customer },
-      { status: 201, headers: { 'x-request-id': ctx.requestId } },
-    );
+    try {
+      const customer = await prisma.customer.create({
+        data: {
+          ...(id ? { id } : {}),
+          organizationId: org.orgId,
+          name,
+          phone: phone ?? null,
+        },
+        select: { id: true, name: true, phone: true },
+      });
+
+      return NextResponse.json(
+        { customer },
+        { status: 201, headers: { 'x-request-id': ctx.requestId } },
+      );
+    } catch (err) {
+      // No transaction here (pure create) so this is a plain autocommit —
+      // safe to re-read on the same client after a caught error. A P2002 on
+      // the client-supplied `id` means this is a replay of an already-created
+      // customer: refetch and return it instead of erroring.
+      if (!isUniqueViolation(err) || !id) throw err;
+
+      const existing = await prisma.customer.findUnique({
+        where: { id },
+        select: { id: true, name: true, phone: true, organizationId: true },
+      });
+
+      // Defense-in-depth: cuid ids are globally unique so a cross-tenant
+      // collision is practically impossible, but never leak another org's
+      // customer if it somehow happens.
+      if (!existing || existing.organizationId !== org.orgId) {
+        return NextResponse.json(
+          { error: 'CUSTOMER_ID_CONFLICT', message: "Conflit d'identifiant client" },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+
+      return NextResponse.json(
+        { customer: { id: existing.id, name: existing.name, phone: existing.phone } },
+        { status: 200, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
   });
 }

@@ -91,3 +91,79 @@ describe('POST /api/customers', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /api/customers — idempotence offline (Task 0.5)', () => {
+  it('deux POST avec le même id : le 2e rejoue le même client (200), aucun doublon', async () => {
+    const existing = { id: 'client-offline-1', name: 'Amina', phone: null };
+
+    // 1er appel : création normale, id client accepté tel quel.
+    prismaMock.customer.create.mockResolvedValueOnce(existing as never);
+    const res1 = await POST(makePost({ id: 'client-offline-1', name: 'Amina' }));
+    expect(res1.status).toBe(201);
+    expect((await res1.json()).customer).toEqual(existing);
+    expect(prismaMock.customer.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ id: 'client-offline-1' }) }),
+    );
+
+    // 2e appel (replay) : create rejette en P2002 (id déjà pris), le handler
+    // doit refetch et renvoyer le client existant sans en créer un second.
+    const p2002 = Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      clientVersion: 'test',
+      meta: { target: ['id'] },
+    });
+    prismaMock.customer.create.mockRejectedValueOnce(p2002 as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      ...existing,
+      organizationId: 'org1',
+    } as never);
+
+    const res2 = await POST(makePost({ id: 'client-offline-1', name: 'Amina' }));
+    expect(res2.status).toBe(200);
+    expect((await res2.json()).customer).toEqual(existing);
+    expect(prismaMock.customer.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'client-offline-1' } }),
+    );
+    // Un seul create a réellement abouti au total (le 2e a levé P2002).
+    expect(prismaMock.customer.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('online inchangé : POST sans id → création avec id serveur, 201', async () => {
+    prismaMock.customer.create.mockResolvedValueOnce({
+      id: 'server-generated-id',
+      name: 'Boutique Sans Id',
+      phone: null,
+    } as never);
+
+    const res = await POST(makePost({ name: 'Boutique Sans Id' }));
+    expect(res.status).toBe(201);
+    expect((await res.json()).customer.id).toBe('server-generated-id');
+    const createArg = prismaMock.customer.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(createArg.data).not.toHaveProperty('id');
+    expect(prismaMock.customer.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('garde-fou cross-tenant : id existant appartient à une autre org → erreur, pas de fuite', async () => {
+    const p2002 = Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      clientVersion: 'test',
+      meta: { target: ['id'] },
+    });
+    prismaMock.customer.create.mockRejectedValueOnce(p2002 as never);
+    prismaMock.customer.findUnique.mockResolvedValueOnce({
+      id: 'client-other-org',
+      name: 'Client Autre Boutique',
+      phone: null,
+      organizationId: 'org-OTHER',
+    } as never);
+
+    const res = await POST(makePost({ id: 'client-other-org', name: 'Client Autre Boutique' }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('CUSTOMER_ID_CONFLICT');
+    // On ne doit jamais renvoyer les données du client de l'autre boutique.
+    expect(JSON.stringify(body)).not.toContain('org-OTHER');
+  });
+});
