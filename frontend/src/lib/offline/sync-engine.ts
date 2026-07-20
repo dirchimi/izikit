@@ -88,10 +88,17 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
 
   switch (row.kind) {
     case 'sale': {
-      // POST /api/sales → { sale: { id, number, total, publicToken } }.
+      // POST /api/sales → { sale: { id, number, total, publicToken } }. Persist
+      // BOTH the server display number (V-000x) and the receipt `publicToken`
+      // onto the local mirror so the POS receipt can drop the provisional
+      // placeholder and print a working public receipt link. Each field is
+      // written only when present as a string — a missing/`null` field is a
+      // guarded no-op, and an absent local row makes Dexie's `update` resolve
+      // to `0` rather than throw.
       const sale = isRecord(body.sale) ? body.sale : undefined;
       const changes: Partial<SaleRow> = { synced: true };
       if (sale && typeof sale.number === 'string') changes.number = sale.number;
+      if (sale && typeof sale.publicToken === 'string') changes.publicToken = sale.publicToken;
       await db.sales.update(row.opId, changes);
       break;
     }

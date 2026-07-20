@@ -103,6 +103,23 @@ describe('drainOutbox', () => {
     expect(sale2?.synced).toBe(false);
   });
 
+  it('persists BOTH the server number and publicToken onto the local sale row on sync (Task 3.4)', async () => {
+    await enqueue({ kind: 'sale', payload: { id: 's7' }, opId: 's7', endpoint: '/api/sales' });
+    await db.sales.put(makeSaleRow('s7'));
+
+    mockedApi.mockResolvedValueOnce({
+      sale: { id: 's7', number: 'V-0007', total: 100, publicToken: 'tok_x' },
+    });
+
+    const result = await drainOutbox();
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+    const sale = await db.sales.get('s7');
+    expect(sale?.number).toBe('V-0007');
+    expect(sale?.publicToken).toBe('tok_x');
+    expect(sale?.synced).toBe(true);
+  });
+
   it('stops immediately on a network error (status 0) and leaves later rows untouched/pending', async () => {
     await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
     await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });

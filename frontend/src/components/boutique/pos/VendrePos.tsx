@@ -14,13 +14,13 @@ import { onSaleChange } from '@/lib/boutique/realtime';
 import { ApiError } from '@/lib/api';
 import { db } from '@/lib/offline/db';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
-import { createSaleOffline, type CreateSaleInput } from '@/lib/offline/mutations';
-import { drainOutbox } from '@/lib/offline/sync-engine';
 import {
-  productRowToPos,
-  resolveReceiptNumbers,
-  type PosProduct,
-} from '@/lib/offline/pos-adapters';
+  createSaleOffline,
+  type CreateSaleInput,
+  type ProvisionalSale,
+} from '@/lib/offline/mutations';
+import { finalizeSaleReceipt } from '@/lib/offline/finalize-sale';
+import { productRowToPos, type PosProduct } from '@/lib/offline/pos-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
 import { type PaymentMethod } from '@/lib/boutique/fixtures';
 import ProductCard from './ProductCard';
@@ -260,18 +260,25 @@ export default function VendrePos() {
     setSubmitting(true);
     try {
       // Écriture locale optimiste + mise en file d'attente (jamais de réseau ici).
-      const local = await createSaleOffline(input);
+      // SEUL un échec ICI (validation locale, stock local, tx Dexie annulée)
+      // signifie que RIEN n'a été committé → toast d'erreur + on s'arrête. Une
+      // fois `createSaleOffline` résolu, la vente est durable ET en file : plus
+      // aucun chemin ne doit router vers l'erreur ni sauter la réinitialisation.
+      let local: ProvisionalSale;
+      try {
+        local = await createSaleOffline(input);
+      } catch (err) {
+        toast(checkoutError(err), 'error');
+        return;
+      }
 
       // En ligne : on draine tout de suite (single-flight, rapide) puis on relit
       // la vente locale pour récupérer le vrai numéro serveur (V-000x) et le
       // publicToken écrits par la synchro. Hors ligne : numéro provisoire (#L…)
-      // et pas de token — le reçu s'affiche immédiatement quand même.
-      let numbers = { number: local.number, publicToken: local.publicToken };
-      if (typeof navigator !== 'undefined' && navigator.onLine) {
-        await drainOutbox();
-        const syncedRow = await db.sales.get(local.id);
-        numbers = resolveReceiptNumbers(local, syncedRow);
-      }
+      // et pas de token. `finalizeSaleReceipt` avale toute erreur de drain/relecture
+      // (la vente est déjà committée) → jamais de throw ici.
+      const online = typeof navigator !== 'undefined' && navigator.onLine;
+      const numbers = await finalizeSaleReceipt(local, { online });
 
       toast(t('pos.saleRecorded', { amount: formatFCFA(netTotal) }), 'success');
       // Reçu proposé tout de suite (imprimer / envoyer par WhatsApp).
@@ -296,8 +303,6 @@ export default function VendrePos() {
       // Vente enregistrée → resynchronise stock, ventes, dashboard, créances,
       // documents et rapports sur tous les écrans (plus besoin d'actualiser).
       onSaleChange();
-    } catch (err) {
-      toast(checkoutError(err), 'error');
     } finally {
       setSubmitting(false);
     }
