@@ -125,3 +125,101 @@ describe('POST /api/expenses', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /api/expenses — idempotence offline (id client + clientOpId)', () => {
+  it('deux POST avec le même id : une seule dépense créée, 2e réponse = 200, même dépense', async () => {
+    // --- 1er POST : crée la dépense (aucune opération offline connue) ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.expense.count.mockResolvedValueOnce(0);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'expense-client-1',
+      number: 'D-0001',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: 'taxi',
+      occurredAt: new Date('2026-06-20T00:00:00Z'),
+    } as never);
+
+    const first = await POST(
+      makePost({
+        id: 'expense-client-1',
+        label: 'Transport',
+        amount: 3000,
+        category: 'Transport',
+        note: 'taxi',
+      }),
+    );
+    expect(first.status).toBe(201);
+    const firstBody = await first.json();
+    expect(firstBody.expense.id).toBe('expense-client-1');
+    expect(prismaMock.expense.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.expense.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ id: 'expense-client-1' }) }),
+    );
+
+    // Ce que withIdempotency a mémoïsé (JSON) pour ce clientOpId.
+    const memoized = {
+      id: 'expense-client-1',
+      number: firstBody.expense.number,
+      label: firstBody.expense.label,
+      category: firstBody.expense.category,
+      amount: firstBody.expense.amount,
+      note: firstBody.expense.note,
+      occurredAt: firstBody.expense.occurredAt,
+    };
+
+    // --- 2e POST : même id → rejoué, résultat mémoïsé, aucune ré-exécution ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op1',
+      organizationId: 'org1',
+      clientOpId: 'expense-client-1',
+      endpoint: 'expenses',
+      resultJson: memoized,
+      createdAt: new Date(),
+    } as never);
+
+    const second = await POST(
+      makePost({
+        id: 'expense-client-1',
+        label: 'Transport',
+        amount: 3000,
+        category: 'Transport',
+        note: 'taxi',
+      }),
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.expense.id).toBe('expense-client-1');
+    expect(secondBody.expense.number).toBe(firstBody.expense.number);
+    expect(secondBody.expense.amount).toBe(firstBody.expense.amount);
+
+    // Pas de duplication : une seule dépense créée au total.
+    expect(prismaMock.expense.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('online inchangé : POST sans id/clientOpId → dépense créée, numéro D- serveur, aucune OfflineOperation', async () => {
+    prismaMock.expense.count.mockResolvedValueOnce(7);
+    prismaMock.expense.create.mockResolvedValueOnce({
+      id: 'e-server',
+      number: 'D-0008',
+      label: 'Transport',
+      category: 'Transport',
+      amount: 3000,
+      note: 'taxi',
+      occurredAt: new Date('2026-06-20T00:00:00Z'),
+    } as never);
+
+    const res = await POST(
+      makePost({ label: 'Transport', amount: 3000, category: 'Transport', note: 'taxi' }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.expense.id).toBe('e-server');
+    expect(body.expense.number).toBe('D-0008');
+    // clientOpId null → chemin online pur : la table d'idempotence n'est jamais touchée.
+    expect(prismaMock.offlineOperation.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+  });
+});

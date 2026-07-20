@@ -15,11 +15,17 @@ import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { requireActiveSubscription } from '@/lib/server/subscription/guard';
 import { prisma } from '@/lib/server/prisma';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import { withTxRetry } from '@/lib/server/db/retry-transaction';
+import { withIdempotency } from '@/lib/server/idempotency';
 import { onExpenseCreated } from '@/lib/server/notifications/boutique-events';
 import { notifyAfterResponse } from '@/lib/server/notifications/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
+  // Offline-first (Task 0.4) : identifiants générés côté client, tous
+  // optionnels — un appelant online les omet et le comportement est inchangé.
+  id: z.string().min(1).optional(),
+  clientOpId: z.string().min(1).optional(),
   label: z.string().trim().min(1).max(160),
   amount: z.number().int().positive(),
   category: z.string().trim().min(1).max(40),
@@ -115,38 +121,63 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { label, amount, category, note } = parsed.data;
+    const { id, label, amount, category, note } = parsed.data;
 
-    const expense = await prisma.$transaction(async (tx) => {
-      const count = await tx.expense.count({ where: { organizationId: org.orgId } });
-      const number = `D-${String(count + 1).padStart(4, '0')}`;
-      return tx.expense.create({
-        data: {
-          organizationId: org.orgId,
-          number,
-          label,
-          amount,
-          category,
-          ...(note ? { note } : {}),
-          createdById: org.userSub,
-        },
-        select: EXPENSE_SELECT,
-      });
-    });
+    // Clé d'idempotence offline : `clientOpId` explicite sinon l'`id` client de
+    // la dépense. `null` (aucun des deux) = chemin online pur, rien n'est mémoïsé.
+    const clientOpId = parsed.data.clientOpId ?? id ?? null;
+
+    // Rejoue la tx sur collision transitoire : conflit de sérialisation, ou
+    // P2002 sur le numéro D- séquentiel / la clé d'idempotence (deux rejeux
+    // concurrents de la même opération passant tous deux le findUnique initial
+    // — withIdempotency laisse ce P2002 remonter jusqu'ici, le rejeu retombant
+    // proprement sur la ligne gagnante).
+    const { result: expense, replayed } = await withTxRetry(() =>
+      prisma.$transaction((tx) =>
+        withIdempotency(
+          tx,
+          { organizationId: org.orgId, clientOpId, endpoint: 'expenses' },
+          async () => {
+            const count = await tx.expense.count({ where: { organizationId: org.orgId } });
+            const number = `D-${String(count + 1).padStart(4, '0')}`;
+            return tx.expense.create({
+              data: {
+                ...(id ? { id } : {}),
+                organizationId: org.orgId,
+                number,
+                label,
+                amount,
+                category,
+                ...(note ? { note } : {}),
+                createdById: org.userSub,
+              },
+              select: EXPENSE_SELECT,
+            });
+          },
+        ),
+      ),
+    );
 
     // Alerte post-réponse (best-effort) : « grosse dépense » si ≥ seuil et
     // saisie par un employé (le patron n'est pas notifié de ses propres dépenses).
-    notifyAfterResponse(() =>
-      onExpenseCreated(prisma, {
-        orgId: org.orgId,
-        creatorId: org.userSub,
-        expense: { id: expense.id, label: expense.label, amount: expense.amount },
-      }),
-    );
+    // JAMAIS sur un rejeu : l'effet date de la 1re exécution.
+    if (!replayed) {
+      notifyAfterResponse(() =>
+        onExpenseCreated(prisma, {
+          orgId: org.orgId,
+          creatorId: org.userSub,
+          expense: { id: expense.id, label: expense.label, amount: expense.amount },
+        }),
+      );
+    }
 
+    // Rejeu idempotent → 200 (la dépense existe déjà) ; création fraîche → 201.
+    // `expense` provient soit de fn (objet JS avec occurredAt: Date), soit du
+    // resultJson mémoïsé (JSON reparsé, occurredAt: string ISO) : expenseView
+    // gère les deux formes (garde `instanceof Date`).
     return NextResponse.json(
       { expense: expenseView(expense) },
-      { status: 201, headers: { 'x-request-id': ctx.requestId } },
+      { status: replayed ? 200 : 201, headers: { 'x-request-id': ctx.requestId } },
     );
   });
 }
