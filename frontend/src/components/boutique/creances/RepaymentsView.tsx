@@ -15,6 +15,7 @@ import {
   type RepaymentsData,
 } from '@/lib/offline/creances-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
+import RowSyncBadge from '@/components/boutique/sync/RowSyncBadge';
 
 type Period = 'today' | 'week' | 'month' | 'year';
 
@@ -195,13 +196,16 @@ export default function RepaymentsView() {
                         <span className="font-body text-muted-foreground w-24 text-xs">
                           {fmtDate(r.createdAt)}
                         </span>
-                        <span className="font-body text-foreground flex-1 truncate text-sm font-medium">
-                          {r.customerName}
-                          {r.note && (
-                            <span className="text-muted-foreground ms-1 text-xs font-normal">
-                              · {r.note}
-                            </span>
-                          )}
+                        <span className="font-body text-foreground flex flex-1 items-center gap-2 truncate text-sm font-medium">
+                          <span className="truncate">
+                            {r.customerName}
+                            {r.note && (
+                              <span className="text-muted-foreground ms-1 text-xs font-normal">
+                                · {r.note}
+                              </span>
+                            )}
+                          </span>
+                          <RowSyncBadge synced={r.synced} />
                         </span>
                         <span className="font-body text-muted-foreground flex w-24 items-center justify-center gap-1 text-xs">
                           <Icon i={r.method === 'mobile' ? 'smartphone' : 'banknote'} size={13} />

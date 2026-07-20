@@ -21,6 +21,12 @@ export interface ApiExpense {
   amount: number;
   note: string;
   occurredAt: string; // ISO
+  /** Task 6.3 — feeds `RowSyncBadge` on `DepensesManager`. `ExpenseRow.synced`
+   * is `undefined` for a row seeded purely by `pullAll()` (server truth,
+   * never "still pending") — that maps to `true` here, NOT the raw
+   * `undefined`, so the badge only shows for a row THIS device knows is
+   * still queued (`synced === false`). */
+  synced: boolean;
 }
 
 /**
@@ -39,5 +45,6 @@ export function expenseRowToApi(e: ExpenseRow): ApiExpense {
     amount: e.amount,
     note: e.note ?? '',
     occurredAt: e.occurredAt,
+    synced: e.synced !== false,
   };
 }

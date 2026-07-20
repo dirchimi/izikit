@@ -21,6 +21,7 @@ import { formatFCFA } from '@/lib/boutique/format';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
 import FloatingAddButton from '@/components/boutique/FloatingAddButton';
+import RowSyncBadge from '@/components/boutique/sync/RowSyncBadge';
 
 type Period = 'month' | 'today' | 'date';
 
@@ -297,6 +298,7 @@ export default function DepensesManager() {
                       <span className="font-body text-foreground flex-1 text-sm font-medium">
                         {e.label}
                       </span>
+                      <RowSyncBadge synced={e.synced} />
                       <div className="flex w-24 justify-center">
                         <span
                           className={`font-body rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
@@ -333,11 +335,14 @@ export default function DepensesManager() {
                     <span className="font-body text-muted-foreground font-mono text-xs">
                       {e.number} · {fmtDate(e.occurredAt)}
                     </span>
-                    <span
-                      className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
-                    >
-                      {e.category}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <RowSyncBadge synced={e.synced} />
+                      <span
+                        className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${expenseCategoryColor(e.category)}`}
+                      >
+                        {e.category}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-body text-foreground text-sm font-medium">{e.label}</span>

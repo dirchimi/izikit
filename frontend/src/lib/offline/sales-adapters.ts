@@ -46,6 +46,13 @@ export interface ApiSale {
   customerName: string | null;
   customerPhone: string | null;
   items: ApiSaleItem[];
+  /** Task 6.3 — feeds `RowSyncBadge` on `VentesManager`. `SaleRow.synced` is
+   * `undefined` for a row seeded purely by `pullAll()` (a pulled row is
+   * server truth by definition, never "still pending") — that case maps to
+   * `true` here, NOT the row's raw `undefined`, so the badge only ever shows
+   * "à synchroniser" for a row THIS device knows is still queued
+   * (`synced === false`). */
+  synced: boolean;
 }
 
 /**
@@ -88,6 +95,7 @@ export function aggregateSales(
         sellerName: null,
         customerName: customer?.name ?? null,
         customerPhone: customer?.phone ?? null,
+        synced: s.synced !== false,
         items: (itemsBySale.get(s.id) ?? []).map((it) => ({
           name: it.name,
           qty: it.qty,

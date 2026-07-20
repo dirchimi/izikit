@@ -191,6 +191,9 @@ const messages: Record<string, Msg> = {
     ar: 'مزامنة الآن',
   },
   'sync.button.syncing': { fr: 'Synchronisation…', en: 'Syncing…', ar: 'جارٍ المزامنة…' },
+  // ── RowSyncBadge — per-row sync pill on ventes/dépenses/remboursements (Task 6.3) ──
+  'sync.row.pending': { fr: 'à synchroniser', en: 'to sync', ar: 'بانتظار المزامنة' },
+  'sync.row.conflict': { fr: 'conflit', en: 'conflict', ar: 'تعارض' },
   'lang.soon': {
     fr: 'العربية — bientôt disponible.',
     en: 'Arabic — coming soon.',

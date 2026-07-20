@@ -83,6 +83,21 @@ describe('aggregateSales', () => {
     const out = aggregateSales([sale({ id: 's1' })], [], []);
     expect(out[0]?.items).toEqual([]);
   });
+
+  it('maps synced: false through unchanged (row still queued for the outbox)', () => {
+    const out = aggregateSales([sale({ id: 's1', synced: false })], [], []);
+    expect(out[0]?.synced).toBe(false);
+  });
+
+  it('maps an absent synced (a row pulled fresh from the server) to true', () => {
+    const out = aggregateSales([sale({ id: 's1' })], [], []);
+    expect(out[0]?.synced).toBe(true);
+  });
+
+  it('passes through an explicit synced: true unchanged', () => {
+    const out = aggregateSales([sale({ id: 's1', synced: true })], [], []);
+    expect(out[0]?.synced).toBe(true);
+  });
 });
 
 describe('documentRowToApi', () => {

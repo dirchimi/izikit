@@ -22,6 +22,7 @@ import { createCancelOffline } from '@/lib/offline/mutations';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { aggregateSales } from '@/lib/offline/sales-adapters';
 import { documentRowToApi } from '@/lib/offline/documents-adapters';
+import RowSyncBadge from '@/components/boutique/sync/RowSyncBadge';
 import ReceiptModal, { type ReceiptData } from './ReceiptModal';
 import PdfPreviewModal from '@/components/boutique/documents/PdfPreviewModal';
 import type { ApiDocument } from '@/components/boutique/documents/types';
@@ -259,6 +260,7 @@ export default function VentesManager() {
           method: s.method,
           sellerName: s.sellerName,
           cancelled: s.status === 'CANCELLED',
+          synced: s.synced,
         };
       })
       .filter(
@@ -470,6 +472,7 @@ export default function VentesManager() {
                     >
                       {r.label}
                     </span>
+                    <RowSyncBadge synced={r.synced} />
                     <span className="font-body text-muted-foreground w-8 text-center text-sm">
                       {r.qty}
                     </span>
@@ -568,17 +571,20 @@ export default function VentesManager() {
                   <span className="font-body text-muted-foreground font-mono text-xs">
                     {r.number} · {r.date} {r.time}
                   </span>
-                  {r.cancelled ? (
-                    <span className="font-body bg-muted text-muted-foreground shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold">
-                      {t('ventes.cancelled')}
-                    </span>
-                  ) : (
-                    <span
-                      className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
-                    >
-                      {t(METHOD_LABEL[r.method])}
-                    </span>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <RowSyncBadge synced={r.synced} />
+                    {r.cancelled ? (
+                      <span className="font-body bg-muted text-muted-foreground shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold">
+                        {t('ventes.cancelled')}
+                      </span>
+                    ) : (
+                      <span
+                        className={`font-body shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${METHOD_BADGE[r.method]}`}
+                      >
+                        {t(METHOD_LABEL[r.method])}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {r.sellerName && sellers.length > 1 && (
                   <span className="font-body text-muted-foreground flex items-center gap-1 text-[11px]">

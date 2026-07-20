@@ -78,6 +78,12 @@ export interface RepaymentListItem {
   method: string; // cash | mobile
   note: string;
   createdAt: string; // ISO
+  /** Task 6.3 — feeds `RowSyncBadge` on `RepaymentsView`. Unlike
+   * `SaleRow`/`ExpenseRow`, `RepaymentRow.synced` is a required field (never
+   * `undefined` — `createRepayOffline` always sets it `false`, and
+   * `pull.ts`'s `toRepaymentRow` always sets it `true`), so this is a
+   * straight pass-through, no `!== false` normalisation needed. */
+  synced: boolean;
 }
 
 export interface RepaymentsData {
@@ -285,6 +291,7 @@ export function aggregateRepayments(
       method: (r.method ?? 'cash').toLowerCase(),
       note: r.note ?? '',
       createdAt: r.createdAt,
+      synced: r.synced,
     })),
   };
 }

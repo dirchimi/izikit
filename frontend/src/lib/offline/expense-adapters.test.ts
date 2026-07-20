@@ -30,6 +30,7 @@ describe('expenseRowToApi', () => {
       amount: 30000,
       note: '',
       occurredAt: '2026-07-20T00:00:00.000Z',
+      synced: true,
     });
   });
 
@@ -44,10 +45,21 @@ describe('expenseRowToApi', () => {
     expect(mapped.note).toBe('Payé en espèces');
   });
 
-  it('does not leak internal fields (organizationId, createdAt, synced)', () => {
+  it('does not leak internal fields (organizationId, createdAt)', () => {
     const mapped = expenseRowToApi({ ...baseRow, synced: false });
     expect(mapped).not.toHaveProperty('organizationId');
     expect(mapped).not.toHaveProperty('createdAt');
-    expect(mapped).not.toHaveProperty('synced');
+  });
+
+  it('passes through a false synced flag (row still queued for the outbox)', () => {
+    expect(expenseRowToApi({ ...baseRow, synced: false }).synced).toBe(false);
+  });
+
+  it('maps an absent synced (a row pulled fresh from the server) to true — never "pending" forever', () => {
+    expect(expenseRowToApi(baseRow).synced).toBe(true);
+  });
+
+  it('passes through an explicit synced: true unchanged', () => {
+    expect(expenseRowToApi({ ...baseRow, synced: true }).synced).toBe(true);
   });
 });

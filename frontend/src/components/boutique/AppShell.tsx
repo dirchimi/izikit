@@ -16,6 +16,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { authGateState } from '@/lib/offline/auth-gate';
 import { installSyncTriggers } from '@/lib/offline/sync-triggers';
 import { pullAll } from '@/lib/offline/pull';
+import { purgeLocalHistory } from '@/lib/offline/purge';
 
 interface BoutiqueHeaderData {
   organization: { name: string };
@@ -70,6 +71,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
     seed();
     window.addEventListener('online', seed);
     return () => window.removeEventListener('online', seed);
+  }, []);
+
+  // Local retention sweep (Task 6.3) — prevents unbounded IndexedDB growth on
+  // a long-lived install by dropping old, already-synced history rows (see
+  // `purge.ts`'s docblock for the exact safety rules: never touches unsynced
+  // rows or rows a live outbox entry still references). Best-effort and
+  // silent: a failed sweep just means the mirror keeps growing until the
+  // next successful mount, never a correctness issue. Unconditional hook,
+  // declared before the auth-gate early return below.
+  useEffect(() => {
+    void purgeLocalHistory().catch(() => undefined);
   }, []);
 
   const gate = authGateState(loading, user);

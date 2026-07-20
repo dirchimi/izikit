@@ -247,6 +247,31 @@ describe('aggregateRepayments', () => {
     );
     expect(data.repayments[0]?.customerName).toBe('—');
   });
+
+  it('passes the synced flag through unchanged (feeds RowSyncBadge)', () => {
+    const win = repaymentWindow('year', now);
+    const data = aggregateRepayments(
+      [
+        repayment({
+          id: 'p1',
+          customerId: 'c1',
+          createdAt: '2026-07-05T00:00:00.000Z',
+          synced: false,
+        }),
+        repayment({
+          id: 'p2',
+          customerId: 'c1',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          synced: true,
+        }),
+      ],
+      [customer({ id: 'c1', name: 'Awa' })],
+      win,
+    );
+    const byId = Object.fromEntries(data.repayments.map((r) => [r.id, r.synced]));
+    expect(byId.p1).toBe(false);
+    expect(byId.p2).toBe(true);
+  });
 });
 
 describe('repaymentWindow / customRepaymentWindow', () => {
