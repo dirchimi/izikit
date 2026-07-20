@@ -6,6 +6,9 @@ import { useApi } from '@/lib/useApi';
 import { useT } from '@/contexts/LocaleContext';
 import { countryByCode } from '@/lib/boutique/countries';
 import { shouldDropUp } from '@/lib/boutique/dropup';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { customerRowToApi, type ApiCustomer } from '@/lib/offline/customer-adapters';
 
 interface OrgCurrentLite {
   settings: { country: string };
@@ -16,12 +19,6 @@ export interface PickedClient {
   id?: string;
   name: string;
   phone?: string | null;
-}
-
-interface ApiCustomer {
-  id: string;
-  name: string;
-  phone: string | null;
 }
 
 /**
@@ -40,8 +37,18 @@ export default function ClientPicker({
   required?: boolean;
 }) {
   const t = useT();
-  const { data } = useApi<{ customers: ApiCustomer[] }>('/api/customers');
-  const customers = data?.customers ?? [];
+  // Offline-first (Task 5.4) : lecture locale (Dexie) au lieu du réseau — le
+  // miroir est alimenté par pullAll() (voir AppShell) et par
+  // createSaleOffline()/createCustomerOffline() pour les clients créés hors
+  // ligne (`synced: false`, inclus ici pour rester sélectionnables
+  // immédiatement — une seconde vente à crédit doit pouvoir viser le client
+  // qu'on vient de créer, même sans réseau). Trié par nom pour retrouver
+  // l'ordre du serveur (`orderBy: { name: 'asc' }`).
+  const { data: customerRows } = useLocalResource(() => db.customers.toArray(), [], []);
+  const customers = useMemo(
+    () => customerRows.map(customerRowToApi).sort((a, b) => a.name.localeCompare(b.name)),
+    [customerRows],
+  );
   // Indicatif du pays de la boutique → préfixe affiché (le client saisit local).
   const { data: org } = useApi<OrgCurrentLite>('/api/org/current');
   const country = countryByCode(org?.settings.country);

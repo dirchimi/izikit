@@ -436,3 +436,76 @@ export async function createExpenseOffline(input: CreateExpenseInput): Promise<P
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// createCustomerOffline (Task 5.4) — standalone `customer` mirror of
+// createExpenseOffline above. `createSaleOffline` already materialises an
+// offline customer INLINE when a sale names a new client (see step 6 above);
+// this export exists for a standalone "create a customer" caller that isn't
+// tied to a sale. As of Task 5.4, `ClientPicker` (the only current consumer
+// of `/api/customers`) has no such standalone action — customers are only
+// ever created inline while building a sale — so nothing calls this yet. It
+// is kept exported and tested so a future standalone "add customer" screen
+// can use it without re-deriving the outbox-enqueue shape.
+// ---------------------------------------------------------------------------
+
+export interface CreateCustomerInput {
+  name: string;
+  phone?: string;
+}
+
+export interface ProvisionalCustomer {
+  id: string;
+}
+
+/**
+ * Records a customer locally (optimistic) and enqueues it for the server —
+ * the `customer` counterpart of `createExpenseOffline`. Like an expense, a
+ * customer references no product, so the org id comes from `meta.orgId`
+ * (Task 5.1's foundation) rather than a loaded row.
+ *
+ * @throws Error('NO_ORG') `meta.orgId` hasn't been populated yet (no
+ *   successful pull has ever run)
+ * @throws Error('NAME_REQUIRED') `name` is empty (after trimming)
+ */
+export async function createCustomerOffline(
+  input: CreateCustomerInput,
+): Promise<ProvisionalCustomer> {
+  const id = newId();
+  const createdAt = new Date().toISOString();
+
+  return db.transaction(
+    'rw',
+    [db.customers, db.meta, db.outbox],
+    async (): Promise<ProvisionalCustomer> => {
+      const orgId = await getOrgId();
+      if (!orgId) throw new Error('NO_ORG');
+
+      const name = input.name.trim();
+      if (!name) throw new Error('NAME_REQUIRED');
+
+      const row: CustomerRow = {
+        id,
+        organizationId: orgId,
+        name,
+        updatedAt: createdAt,
+        synced: false,
+        ...(input.phone ? { phone: input.phone } : {}),
+      };
+      await db.customers.put(row);
+
+      // Enqueue the outbox op — same shape the online POST sends, plus
+      // `id`/`clientOpId` for idempotent dedup server-side (see
+      // `frontend/src/app/api/customers/route.ts`'s `Body.id`).
+      const payload: Record<string, unknown> = {
+        id,
+        clientOpId: id,
+        name,
+        ...(input.phone ? { phone: input.phone } : {}),
+      };
+      await enqueue({ kind: 'customer', endpoint: '/api/customers', opId: id, payload });
+
+      return { id };
+    },
+  );
+}

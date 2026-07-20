@@ -10,7 +10,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, type ProductRow } from './db';
-import { createSaleOffline, createExpenseOffline } from './mutations';
+import { createSaleOffline, createExpenseOffline, createCustomerOffline } from './mutations';
 
 const ORG = 'org-1';
 
@@ -454,5 +454,64 @@ describe('createExpenseOffline', () => {
       'AMOUNT_INVALID',
     );
     expect(await db.expenses.count()).toBe(0);
+  });
+});
+
+describe('createCustomerOffline', () => {
+  beforeEach(async () => {
+    await reset();
+    await db.meta.put({ key: 'orgId', value: 'org-1' });
+  });
+
+  it('writes an optimistic customer row (unsynced) and enqueues one outbox row', async () => {
+    const res = await createCustomerOffline({ name: 'Awa Diop', phone: '221700000000' });
+
+    const customer = await db.customers.get(res.id);
+    expect(customer).toBeDefined();
+    expect(customer?.organizationId).toBe('org-1');
+    expect(customer?.name).toBe('Awa Diop');
+    expect(customer?.phone).toBe('221700000000');
+    expect(customer?.synced).toBe(false);
+    expect(typeof customer?.updatedAt).toBe('string');
+
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('customer');
+    expect(outbox[0]?.endpoint).toBe('/api/customers');
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.id).toBe(res.id);
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.name).toBe('Awa Diop');
+    expect(payload.phone).toBe('221700000000');
+  });
+
+  it('trims the name and omits phone from the row/payload when not given', async () => {
+    const res = await createCustomerOffline({ name: '  Moussa  ' });
+
+    const customer = await db.customers.get(res.id);
+    expect(customer?.name).toBe('Moussa');
+    expect('phone' in (customer ?? {})).toBe(false);
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect('phone' in payload).toBe(false);
+  });
+
+  it('throws NAME_REQUIRED and writes nothing for an empty/blank name', async () => {
+    await expect(createCustomerOffline({ name: '' })).rejects.toThrow('NAME_REQUIRED');
+    await expect(createCustomerOffline({ name: '   ' })).rejects.toThrow('NAME_REQUIRED');
+
+    expect(await db.customers.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws NO_ORG and writes nothing when meta.orgId is absent', async () => {
+    await db.meta.delete('orgId');
+
+    await expect(createCustomerOffline({ name: 'Awa Diop' })).rejects.toThrow('NO_ORG');
+
+    expect(await db.customers.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
   });
 });
