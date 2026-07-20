@@ -120,6 +120,39 @@ export interface ExpenseRow {
   synced?: boolean;
 }
 
+/**
+ * Repayment (créance remboursée) — the local echo of a `Repayment` server row
+ * (Task 5.2). Unlike the pulled tables, this one has NO `pull.ts` mapper:
+ * `/api/sync/pull` does not (yet) return the Repayment table, so this table
+ * holds ONLY repayments created on THIS device (`createRepayOffline`). The
+ * money-critical debtor totals (debt / repaid) are NOT derived from here —
+ * they come from the `receivables` table (which IS pulled and reconciled) —
+ * so an incomplete local repayment history never corrupts a balance; it only
+ * limits the repayment *timeline* shown on the créances/repayments screens to
+ * device-local entries (documented limitation, see `creances-adapters.ts`).
+ *
+ * `amount` is the amount ACTUALLY applied (`allocateRepayment`'s `applied`,
+ * capped at the total debt), matching what the server persists — never the
+ * raw amount the user typed. `createdAt` is the repayment date (may be
+ * back-dated via the form's date field, hence stored as given rather than
+ * always "now"). `synced` flips true once the outbox `repay` op drains
+ * (`sync-engine.ts`'s `applySyncSuccess`); `applied`/`remainingDebt` are the
+ * server's authoritative echo, stored cosmetically when the drain response
+ * carries them.
+ */
+export interface RepaymentRow {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  amount: number;
+  method?: string; // 'cash' | 'mobile'
+  note?: string;
+  createdAt: string; // ISO (or back-dated 'YYYY-MM-DD' from the form)
+  synced: boolean;
+  applied?: number;
+  remainingDebt?: number;
+}
+
 export type DocumentType = 'FACTURE' | 'PROFORMA' | 'RECU';
 export type DocumentStatus = 'PAID' | 'PENDING' | 'CREDIT';
 
@@ -260,6 +293,7 @@ class LocalDatabase extends Dexie {
   sales!: Table<SaleRow, string>;
   saleItems!: Table<SaleItemRow, string>;
   receivables!: Table<ReceivableRow, string>;
+  repayments!: Table<RepaymentRow, string>;
   expenses!: Table<ExpenseRow, string>;
   documents!: Table<DocumentRow, string>;
   stockMovements!: Table<StockMovementRow, string>;
@@ -291,6 +325,16 @@ class LocalDatabase extends Dexie {
     // incremental versioning contract).
     this.version(2).stores({
       conflicts: 'id, resolved, saleId, [saleId+productId]',
+    });
+
+    // Task 5.2 — adds `repayments` (local echo of offline repayments). Indexed
+    // on `customerId` (per-debtor timeline) and `createdAt` (period-filtered
+    // repayments list, newest-first). `synced` is deliberately NOT indexed: it
+    // is a boolean, and IndexedDB silently drops boolean-valued index keys (see
+    // `ConflictRow.resolved`'s `0 | 1` note above) — no query ever filters by
+    // it (the drain patches by primary key), so an index would be dead weight.
+    this.version(3).stores({
+      repayments: 'id, customerId, createdAt',
     });
   }
 }

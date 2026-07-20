@@ -1,31 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import DatePicker from '@/components/ui/DatePicker';
 import AsyncState from '@/components/boutique/AsyncState';
 import CashTile from '@/components/boutique/CashTile';
 import { useT } from '@/contexts/LocaleContext';
-import { useApi } from '@/lib/useApi';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import {
+  aggregateRepayments,
+  repaymentWindow,
+  customRepaymentWindow,
+  type RepaymentsData,
+} from '@/lib/offline/creances-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
 
 type Period = 'today' | 'week' | 'month' | 'year';
-
-interface RepaymentRow {
-  id: string;
-  customerName: string;
-  amount: number;
-  method: string; // cash | mobile
-  note: string;
-  createdAt: string;
-}
-interface RepaymentsData {
-  total: number;
-  cash: number;
-  mobile: number;
-  count: number;
-  repayments: RepaymentRow[];
-}
 
 const periods: { id: Period; key: string }[] = [
   { id: 'today', key: 'rapports.period.today' },
@@ -54,8 +45,31 @@ export default function RepaymentsView() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
-  const query = period === 'custom' && from && to ? `from=${from}&to=${to}` : `period=${period}`;
-  const { data, loading, error, refresh } = useApi<RepaymentsData>(`/api/repayments?${query}`);
+  // Offline-first (Task 5.2) : fenêtre [from, to) calculée localement (miroir
+  // de `periodRange`/`parseDateRange` du serveur) puis agrégation locale des
+  // remboursements depuis `db.repayments`. NOTE : cette table ne contient que
+  // les remboursements créés SUR CET APPAREIL (`/api/sync/pull` ne synchronise
+  // pas la table Repayment) — la liste est donc device-locale (voir
+  // `creances-adapters.ts`). Les soldes débiteurs (écran principal) restent,
+  // eux, exacts car dérivés des créances (pull + réconciliation).
+  const range = useMemo(() => {
+    if (period === 'custom' && from && to) {
+      return customRepaymentWindow(from, to) ?? repaymentWindow('week', new Date());
+    }
+    return repaymentWindow(period === 'custom' ? 'week' : period, new Date());
+  }, [period, from, to]);
+
+  const { data, loading } = useLocalResource<RepaymentsData | null>(
+    async () => {
+      const [reps, customers] = await Promise.all([
+        db.repayments.toArray(),
+        db.customers.toArray(),
+      ]);
+      return aggregateRepayments(reps, customers, range);
+    },
+    [range.from, range.to],
+    null,
+  );
 
   function startCustom() {
     if (!from || !to) {
@@ -114,7 +128,7 @@ export default function RepaymentsView() {
         )}
       </div>
 
-      <AsyncState loading={loading} error={error} onRetry={refresh}>
+      <AsyncState loading={loading} error={null}>
         {data && (
           <div className="flex flex-col gap-5">
             {/* Totaux */}

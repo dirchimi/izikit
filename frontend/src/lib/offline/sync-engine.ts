@@ -37,7 +37,7 @@
  *     they don't spin forever — they're surfaced for manual triage instead.
  */
 import { api, ApiError } from '@/lib/api';
-import { db, type SaleRow, type ExpenseRow, type ConflictRow } from './db';
+import { db, type SaleRow, type ExpenseRow, type ConflictRow, type RepaymentRow } from './db';
 import {
   listPending,
   markSyncing,
@@ -196,12 +196,26 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
       break;
     }
     case 'repay': {
-      // POST /api/receivables/[id]/repay → { applied, remainingDebt } — no
-      // per-repayment id in the response, and `db.ts` has no local
-      // `repayments` table yet (Task 5.2 adds one, plus a provisional
-      // local RECU `document`, and will extend this case then). Until
-      // that lands, the receivable's true balance simply arrives on the
-      // next `pull.ts` pass — nothing to patch here today.
+      // POST /api/receivables/[id]/repay → { applied, remainingDebt }. The
+      // local `repayments` row (Task 5.2) was inserted optimistically by
+      // `createRepayOffline` with `id === row.opId`; flip it `synced: true`
+      // and record the server's authoritative `applied`/`remainingDebt` echo
+      // when present (cosmetic — the row's `amount` was already the optimistic
+      // applied value, which matches the server's since both run the same
+      // `allocateRepayment`).
+      //
+      // What we DON'T reconcile here: the per-receivable balances. The server
+      // owns the final allocation (Serializable, strictly oldest-first by
+      // `createdAt`); the next `pull.ts` pass overwrites the local
+      // `receivables` rows with the server's truth. `/api/sync/pull` does not
+      // return the Repayment table, so this local row is never overwritten by
+      // a pull — it stays as the device-local echo (see `RepaymentRow`'s
+      // docblock). A missing local row (drain ran ahead of the optimistic
+      // insert) is a guarded no-op: Dexie's `update` resolves to `0`.
+      const changes: Partial<RepaymentRow> = { synced: true };
+      if (typeof body.applied === 'number') changes.applied = body.applied;
+      if (typeof body.remainingDebt === 'number') changes.remainingDebt = body.remainingDebt;
+      await db.repayments.update(row.opId, changes);
       break;
     }
     case 'adjust': {

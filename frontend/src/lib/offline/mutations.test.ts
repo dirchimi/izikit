@@ -9,8 +9,13 @@
  */
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { db, type ProductRow } from './db';
-import { createSaleOffline, createExpenseOffline, createCustomerOffline } from './mutations';
+import { db, type ProductRow, type ReceivableRow } from './db';
+import {
+  createSaleOffline,
+  createExpenseOffline,
+  createCustomerOffline,
+  createRepayOffline,
+} from './mutations';
 
 const ORG = 'org-1';
 
@@ -42,6 +47,7 @@ async function reset(): Promise<void> {
     db.sales.clear(),
     db.saleItems.clear(),
     db.receivables.clear(),
+    db.repayments.clear(),
     db.stockMovements.clear(),
     db.outbox.clear(),
     db.meta.clear(),
@@ -513,5 +519,183 @@ describe('createCustomerOffline', () => {
 
     expect(await db.customers.count()).toBe(0);
     expect(await db.outbox.count()).toBe(0);
+  });
+});
+
+describe('createRepayOffline', () => {
+  const CUST = 'cust-1';
+
+  function receivable(overrides: Partial<ReceivableRow> & { id: string }): ReceivableRow {
+    return {
+      organizationId: ORG,
+      customerId: CUST,
+      amount: 1000,
+      amountPaid: 0,
+      status: 'OPEN',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    await reset();
+    await db.meta.put({ key: 'orgId', value: ORG });
+  });
+
+  it('spreads a payment over two receivables oldest-first, matching allocateRepayment', async () => {
+    // r1 older (updatedAt earlier) → paid first; r2 newer → gets the remainder.
+    await db.receivables.bulkPut([
+      receivable({ id: 'r2', amount: 500, updatedAt: '2026-07-10T00:00:00.000Z' }),
+      receivable({ id: 'r1', amount: 1000, updatedAt: '2026-07-01T00:00:00.000Z' }),
+    ]);
+
+    const res = await createRepayOffline({
+      customerId: CUST,
+      amount: 1200,
+      method: 'cash',
+      note: 'acompte',
+    });
+
+    // applied = min(1200, 1500) = 1200 ; remainingDebt = 1500 - 1200 = 300
+    expect(res.applied).toBe(1200);
+    expect(res.remainingDebt).toBe(300);
+
+    // r1 fully paid, r2 partial — oldest-first allocation.
+    const r1 = await db.receivables.get('r1');
+    expect(r1?.amountPaid).toBe(1000);
+    expect(r1?.status).toBe('PAID');
+    const r2 = await db.receivables.get('r2');
+    expect(r2?.amountPaid).toBe(200);
+    expect(r2?.status).toBe('PARTIAL');
+
+    // one repayment row (amount = APPLIED, unsynced)
+    const reps = await db.repayments.where('customerId').equals(CUST).toArray();
+    expect(reps).toHaveLength(1);
+    expect(reps[0]?.id).toBe(res.id);
+    expect(reps[0]?.amount).toBe(1200);
+    expect(reps[0]?.method).toBe('cash');
+    expect(reps[0]?.note).toBe('acompte');
+    expect(reps[0]?.synced).toBe(false);
+    expect(reps[0]?.organizationId).toBe(ORG);
+
+    // one outbox row (kind repay, endpoint carries the customer id, payload has
+    // id/clientOpId/amount = RAW input)
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('repay');
+    expect(outbox[0]?.endpoint).toBe(`/api/receivables/${CUST}/repay`);
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.id).toBe(res.id);
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.amount).toBe(1200);
+    expect(payload.method).toBe('cash');
+    expect(payload.note).toBe('acompte');
+  });
+
+  it('caps the applied amount at the total debt (partial receivable included)', async () => {
+    await db.receivables.put(
+      receivable({ id: 'r1', amount: 1000, amountPaid: 400, status: 'PARTIAL' }),
+    );
+
+    const res = await createRepayOffline({ customerId: CUST, amount: 5000, method: 'mobile' });
+
+    // due = 1000 - 400 = 600 → applied capped at 600, remainingDebt 0
+    expect(res.applied).toBe(600);
+    expect(res.remainingDebt).toBe(0);
+    const r1 = await db.receivables.get('r1');
+    expect(r1?.amountPaid).toBe(1000);
+    expect(r1?.status).toBe('PAID');
+    const reps = await db.repayments.toArray();
+    expect(reps[0]?.amount).toBe(600);
+    // payload keeps the RAW input amount (server caps it too)
+    const payload = (await db.outbox.toArray())[0]?.payload as Record<string, unknown>;
+    expect(payload.amount).toBe(5000);
+  });
+
+  it('ignores CANCELLED/PAID receivables when allocating', async () => {
+    await db.receivables.bulkPut([
+      receivable({ id: 'rc', amount: 1000, status: 'CANCELLED' }),
+      receivable({ id: 'rp', amount: 1000, amountPaid: 1000, status: 'PAID' }),
+      receivable({ id: 'ro', amount: 300, status: 'OPEN', updatedAt: '2026-07-05T00:00:00.000Z' }),
+    ]);
+
+    const res = await createRepayOffline({ customerId: CUST, amount: 1000, method: 'cash' });
+
+    // only the OPEN 300 is available.
+    expect(res.applied).toBe(300);
+    expect((await db.receivables.get('rc'))?.amountPaid).toBe(0); // untouched
+    expect((await db.receivables.get('ro'))?.status).toBe('PAID');
+  });
+
+  it('throws NO_DEBT and writes nothing when the customer has no open receivable', async () => {
+    await db.receivables.put(
+      receivable({ id: 'rp', amount: 1000, amountPaid: 1000, status: 'PAID' }),
+    );
+
+    await expect(
+      createRepayOffline({ customerId: CUST, amount: 500, method: 'cash' }),
+    ).rejects.toThrow('NO_DEBT');
+
+    expect(await db.repayments.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+    expect((await db.receivables.get('rp'))?.amountPaid).toBe(1000); // unchanged
+  });
+
+  it('throws AMOUNT_INVALID for zero/negative/non-integer and rolls back', async () => {
+    await db.receivables.put(receivable({ id: 'r1' }));
+
+    await expect(
+      createRepayOffline({ customerId: CUST, amount: 0, method: 'cash' }),
+    ).rejects.toThrow('AMOUNT_INVALID');
+    await expect(
+      createRepayOffline({ customerId: CUST, amount: -100, method: 'cash' }),
+    ).rejects.toThrow('AMOUNT_INVALID');
+    await expect(
+      createRepayOffline({ customerId: CUST, amount: 10.5, method: 'cash' }),
+    ).rejects.toThrow('AMOUNT_INVALID');
+
+    expect(await db.repayments.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+    expect((await db.receivables.get('r1'))?.amountPaid).toBe(0); // unchanged
+  });
+
+  it('throws NO_ORG and writes nothing when meta.orgId is absent', async () => {
+    await db.meta.delete('orgId');
+    await db.receivables.put(receivable({ id: 'r1' }));
+
+    await expect(
+      createRepayOffline({ customerId: CUST, amount: 500, method: 'cash' }),
+    ).rejects.toThrow('NO_ORG');
+
+    expect(await db.repayments.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('back-dates createdAt to the given date and forwards it in the payload', async () => {
+    await db.receivables.put(receivable({ id: 'r1', amount: 1000 }));
+
+    const res = await createRepayOffline({
+      customerId: CUST,
+      amount: 500,
+      method: 'cash',
+      date: '2026-07-05',
+    });
+
+    const rep = await db.repayments.get(res.id);
+    expect(rep?.createdAt).toBe('2026-07-05');
+    const payload = (await db.outbox.toArray())[0]?.payload as Record<string, unknown>;
+    expect(payload.date).toBe('2026-07-05');
+  });
+
+  it('omits method/note/date from the payload when not given', async () => {
+    await db.receivables.put(receivable({ id: 'r1', amount: 1000 }));
+
+    await createRepayOffline({ customerId: CUST, amount: 500 });
+
+    const payload = (await db.outbox.toArray())[0]?.payload as Record<string, unknown>;
+    expect('method' in payload).toBe(false);
+    expect('note' in payload).toBe(false);
+    expect('date' in payload).toBe(false);
   });
 });

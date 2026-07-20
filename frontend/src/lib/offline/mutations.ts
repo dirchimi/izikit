@@ -40,10 +40,12 @@ import {
   type CustomerRow,
   type SaleRow,
   type ExpenseRow,
+  type RepaymentRow,
 } from './db';
 import { newId } from './ids';
 import { enqueue } from './outbox';
 import { getOrgId } from './pull';
+import { allocateRepayment } from '@/lib/shared/allocate-repayment';
 
 /** `meta` key holding the monotonic provisional-sale counter (`#L<n>`). */
 const LOCAL_SALE_SEQ_KEY = 'localSaleSeq';
@@ -506,6 +508,135 @@ export async function createCustomerOffline(
       await enqueue({ kind: 'customer', endpoint: '/api/customers', opId: id, payload });
 
       return { id };
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// createRepayOffline (Task 5.2) — the `repay` mirror of the mutations above.
+// A repayment is entered against a CUSTOMER and spread over that customer's
+// open receivables OLDEST-FIRST, using the SHARED `allocateRepayment` (the
+// exact same pure allocator the server route runs — Task 5.6), so the
+// optimistic local split matches what the server will ultimately compute.
+//
+// The server is authoritative for the FINAL allocation: `POST
+// /api/receivables/[id]/repay` re-runs `allocateRepayment` inside a
+// Serializable transaction ordered strictly by `createdAt`, so the next
+// `pull.ts` pass reconciles the per-receivable balances regardless of the
+// local ordering. Because `applied` and `remainingDebt` are order-INDEPENDENT
+// (`applied = min(amount, Σ due)`, `remainingDebt = Σ amount − Σ amountPaid −
+// applied`), the totals shown to the shopkeeper are exact even before sync.
+//
+// NOTE on ordering: `ReceivableRow` carries no `createdAt` (only `updatedAt`),
+// so oldest-first is approximated by `updatedAt` ascending — a faithful proxy
+// for freshly-pulled/created receivables (whose `updatedAt` == creation time
+// until first payment). Any divergence from the server's `createdAt` order
+// only affects WHICH receivable optimistically absorbs the payment, never the
+// totals, and self-heals on the next pull.
+//
+// Deliberately does NOT create a local RECU `Document` — the server assigns
+// the sequential RECU number and the document arrives via `pull.ts`; the
+// documents screen is online-refreshed (Task 5.2 decision).
+// ---------------------------------------------------------------------------
+
+export interface CreateRepayInput {
+  customerId: string;
+  amount: number;
+  method?: string;
+  note?: string;
+  /** 'YYYY-MM-DD' (back-dated) or ISO. Defaults to "now" locally. */
+  date?: string;
+}
+
+export interface RepayResult {
+  id: string;
+  applied: number;
+  remainingDebt: number;
+}
+
+/**
+ * Records a receivable repayment locally (optimistic allocation) and enqueues
+ * it for the server.
+ *
+ * @throws Error('NO_ORG') `meta.orgId` hasn't been populated yet (no
+ *   successful pull has ever run)
+ * @throws Error('AMOUNT_INVALID') `amount` isn't a positive integer
+ * @throws Error('NO_DEBT') the customer has no OPEN/PARTIAL receivable to apply
+ *   the payment to (nothing is written — full rollback)
+ */
+export async function createRepayOffline(input: CreateRepayInput): Promise<RepayResult> {
+  const id = newId();
+  const now = new Date().toISOString();
+
+  return db.transaction(
+    'rw',
+    [db.receivables, db.repayments, db.meta, db.outbox],
+    async (): Promise<RepayResult> => {
+      const orgId = await getOrgId();
+      if (!orgId) throw new Error('NO_ORG');
+
+      if (!Number.isInteger(input.amount) || input.amount <= 0) {
+        throw new Error('AMOUNT_INVALID');
+      }
+
+      // Customer's open receivables, oldest-first (updatedAt proxy — see note).
+      const forCustomer = await db.receivables
+        .where('customerId')
+        .equals(input.customerId)
+        .toArray();
+      const open = forCustomer
+        .filter((r) => r.status === 'OPEN' || r.status === 'PARTIAL')
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0));
+      if (open.length === 0) throw new Error('NO_DEBT');
+
+      const { allocations, applied, remainingDebt } = allocateRepayment(
+        open.map((r) => ({ id: r.id, amount: r.amount, amountPaid: r.amountPaid })),
+        input.amount,
+      );
+      if (applied <= 0) throw new Error('NO_DEBT');
+
+      // Apply the optimistic allocation to the local receivables.
+      for (const a of allocations) {
+        await db.receivables.update(a.id, {
+          amountPaid: a.newAmountPaid,
+          status: a.status,
+          updatedAt: now,
+        });
+      }
+
+      // Local echo row: `amount` is the APPLIED (capped) value the server
+      // persists, not the raw input.
+      const row: RepaymentRow = {
+        id,
+        organizationId: orgId,
+        customerId: input.customerId,
+        amount: applied,
+        createdAt: input.date ?? now,
+        synced: false,
+        ...(input.method ? { method: input.method } : {}),
+        ...(input.note ? { note: input.note } : {}),
+      };
+      await db.repayments.put(row);
+
+      // Enqueue — same shape the online POST sends, plus `id`/`clientOpId`.
+      // `amount` is the RAW input (the server caps it via allocateRepayment);
+      // `[id]` in the endpoint is the customer id (see the route's docblock).
+      const payload: Record<string, unknown> = {
+        id,
+        clientOpId: id,
+        amount: input.amount,
+        ...(input.method ? { method: input.method } : {}),
+        ...(input.note ? { note: input.note } : {}),
+        ...(input.date ? { date: input.date } : {}),
+      };
+      await enqueue({
+        kind: 'repay',
+        endpoint: `/api/receivables/${input.customerId}/repay`,
+        opId: id,
+        payload,
+      });
+
+      return { id, applied, remainingDebt };
     },
   );
 }

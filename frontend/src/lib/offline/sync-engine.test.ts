@@ -63,6 +63,7 @@ beforeEach(async () => {
     db.sales.clear(),
     db.expenses.clear(),
     db.conflicts.clear(),
+    db.repayments.clear(),
   ]);
 });
 
@@ -158,6 +159,34 @@ describe('drainOutbox', () => {
     const expense = await db.expenses.get('e7');
     expect(expense?.number).toBe('D-0007');
     expect(expense?.synced).toBe(true);
+  });
+
+  it('Task 5.2 — a drained repay marks the local repayment row synced:true and stores the server echo', async () => {
+    await enqueue({
+      kind: 'repay',
+      payload: { id: 'rp1', clientOpId: 'rp1', amount: 1200 },
+      opId: 'rp1',
+      endpoint: '/api/receivables/cust-1/repay',
+    });
+    await db.repayments.put({
+      id: 'rp1',
+      organizationId: 'o1',
+      customerId: 'cust-1',
+      amount: 1200,
+      method: 'cash',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      synced: false,
+    });
+
+    mockedApi.mockResolvedValueOnce({ applied: 1200, remainingDebt: 300 });
+
+    const result = await drainOutbox();
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+    const rep = await db.repayments.get('rp1');
+    expect(rep?.synced).toBe(true);
+    expect(rep?.applied).toBe(1200);
+    expect(rep?.remainingDebt).toBe(300);
   });
 
   it('stops immediately on a network error (status 0) and leaves later rows untouched/pending', async () => {

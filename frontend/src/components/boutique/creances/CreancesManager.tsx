@@ -8,42 +8,17 @@ import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
-import { useApi } from '@/lib/useApi';
 import { onRepayment } from '@/lib/boutique/realtime';
-import { api, ApiError } from '@/lib/api';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { createRepayOffline } from '@/lib/offline/mutations';
+import { triggerDrain } from '@/lib/offline/sync-triggers';
+import { aggregateDebtors, type ApiDebtor } from '@/lib/offline/creances-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
-import { creditStatusConfig, type CreditStatus } from '@/lib/boutique/fixtures';
+import { creditStatusConfig } from '@/lib/boutique/fixtures';
 import PdfPreviewModal from '@/components/boutique/documents/PdfPreviewModal';
 import RepaymentForm, { type RepayMethod } from './RepaymentForm';
 import RepaymentsView from './RepaymentsView';
-
-interface ApiCredit {
-  id: string;
-  date: string; // ISO
-  label: string;
-  amount: number;
-  amountPaid: number;
-  status: CreditStatus; // credit | partial | paid
-}
-interface ApiRepayment {
-  id: string;
-  date: string; // ISO
-  amount: number;
-  method: string; // cash | mobile
-  note: string;
-}
-interface ApiDebtor {
-  id: string;
-  name: string;
-  phone: string;
-  debt: number;
-  repaid: number;
-  totalCredit: number;
-  since: string; // ISO
-  lastSale: string; // ISO
-  history: ApiCredit[];
-  repayments: ApiRepayment[];
-}
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', {
@@ -67,8 +42,22 @@ export default function CreancesManager() {
   const [statementFor, setStatementFor] = useState<ApiDebtor | null>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  const { data, loading, error, refresh } = useApi<{ debtors: ApiDebtor[] }>('/api/receivables');
-  const debtors = data?.debtors ?? [];
+  // Offline-first (Task 5.2) : lecture locale (Dexie) au lieu du réseau — on
+  // agrège clients + créances + remboursements dans la MÊME forme `ApiDebtor[]`
+  // que renvoyait `GET /api/receivables`. Le miroir est alimenté par pullAll()
+  // (voir AppShell) et par createRepayOffline() ci-dessous.
+  const { data: debtors, loading } = useLocalResource<ApiDebtor[]>(
+    async () => {
+      const [customers, receivables, repayments] = await Promise.all([
+        db.customers.toArray(),
+        db.receivables.toArray(),
+        db.repayments.toArray(),
+      ]);
+      return aggregateDebtors(customers, receivables, repayments);
+    },
+    [],
+    [],
+  );
 
   const totalDebt = debtors.reduce((sum, d) => sum + d.debt, 0);
   const debtorCount = debtors.filter((d) => d.debt > 0).length;
@@ -106,10 +95,18 @@ export default function CreancesManager() {
     }
     setSubmitting(true);
     try {
-      const res = await api<{ applied: number }>(`/api/receivables/${selected.id}/repay`, {
-        method: 'POST',
-        body: { amount, method, ...(note ? { note } : {}), ...(date ? { date } : {}) },
+      // Offline-first (Task 5.2) : écriture locale optimiste (allocation via le
+      // même `allocateRepayment` que le serveur) + mise en file d'attente ;
+      // jamais de réseau ici. `triggerDrain()` tente une synchro immédiate si
+      // en ligne (single-flight, sans bloquer l'UI déjà à jour).
+      const res = await createRepayOffline({
+        customerId: selected.id,
+        amount,
+        method,
+        ...(note ? { note } : {}),
+        ...(date ? { date } : {}),
       });
+      triggerDrain();
       const suffix = note ? ` — ${note}` : '';
       toast(
         t('creances.repaymentToast', {
@@ -123,8 +120,12 @@ export default function CreancesManager() {
       onRepayment();
       return true;
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : '';
+      // `createRepayOffline` throws plain `Error`s whose `.message` carries a
+      // stable code (NO_DEBT / AMOUNT_INVALID / NO_ORG) — same convention as
+      // DepensesManager's `expenseError` for `createExpenseOffline`.
+      const code = err instanceof Error ? err.message : '';
       if (code === 'NO_DEBT') toast(t('creances.noDebt', { name: selected.name }), 'info');
+      else if (code === 'AMOUNT_INVALID') toast(t('creances.amountInvalid'), 'error');
       else toast(t('async.error'), 'error');
       return false;
     } finally {
@@ -163,8 +164,7 @@ export default function CreancesManager() {
       {tab === 'debtors' && (
         <AsyncState
           loading={loading}
-          error={error}
-          onRetry={refresh}
+          error={null}
           isEmpty={debtors.length === 0}
           emptyLabel={t('creances.emptyAll')}
           emptyIcon="users"
