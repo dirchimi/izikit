@@ -451,6 +451,63 @@ describe('POST /api/sales — idempotence offline (id client + clientOpId)', () 
     );
   });
 
+  it('un rejet (stock insuffisant) ne mémoïse RIEN : aucune OfflineOperation créée', async () => {
+    // Vente offline (clientOpId via `id`) qui échoue au contrôle de stock.
+    // Le rejet est levé → la $transaction avorte (rollback) → withIdempotency
+    // n'atteint jamais son `create`. Sans ce rollback, l'échec serait mémoïsé
+    // et rejouerait INSUFFICIENT pour toujours, même après réapprovisionnement.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 0 },
+    ] as never);
+
+    const res = await POST(
+      makePost({ id: 'sale-reject-1', method: 'cash', items: [{ productId: 'p1', qty: 1 }] }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('INSUFFICIENT_STOCK');
+    // Le rejet ne doit persister NI la vente NI une ligne d'idempotence.
+    expect(prismaMock.sale.create).not.toHaveBeenCalled();
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejet non mémoïsé : le MÊME clientOpId réussit une fois le stock réapprovisionné', async () => {
+    // --- 1er POST : stock 0 → INSUFFICIENT, rien de mémoïsé (rollback) ---
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 0 },
+    ] as never);
+
+    const first = await POST(
+      makePost({ id: 'sale-retry-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(first.status).toBe(409);
+    expect((await first.json()).error).toBe('INSUFFICIENT_STOCK');
+    expect(prismaMock.offlineOperation.create).not.toHaveBeenCalled();
+
+    // --- 2e POST : MÊME clientOpId, stock désormais suffisant → 201 ---
+    // findUnique renvoie encore null (le rejet n'a rien mémoïsé) : fn ré-exécute
+    // et, le stock étant reconstitué, la vente est enfin enregistrée.
+    prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);
+    prismaMock.product.findMany.mockResolvedValueOnce([
+      { id: 'p1', name: 'Riz', sellPrice: 6000, buyPrice: 4500, qty: 10 },
+    ] as never);
+    prismaMock.sale.count.mockResolvedValueOnce(0);
+    prismaMock.sale.create.mockResolvedValueOnce({ id: 'sale-retry-1' } as never);
+    prismaMock.product.update.mockResolvedValue({} as never);
+    prismaMock.stockMovement.create.mockResolvedValue({} as never);
+
+    const second = await POST(
+      makePost({ id: 'sale-retry-1', method: 'cash', items: [{ productId: 'p1', qty: 2 }] }),
+    );
+    expect(second.status).toBe(201);
+    const body = await second.json();
+    expect(body.sale.id).toBe('sale-retry-1');
+    expect(prismaMock.sale.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.offlineOperation.create).toHaveBeenCalledTimes(1);
+  });
+
   it('client créé offline : utilise customer.id fourni verbatim quand introuvable en base', async () => {
     prismaMock.offlineOperation.findUnique.mockResolvedValueOnce(null as never);
     prismaMock.offlineOperation.create.mockResolvedValueOnce({} as never);

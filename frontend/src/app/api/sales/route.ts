@@ -69,12 +69,33 @@ const Body = z
     message: 'method_or_payments_required',
   });
 
-type CheckoutResult =
-  | { kind: 'PRODUCT_NOT_FOUND'; productId: string }
-  | { kind: 'INSUFFICIENT'; productId: string }
-  | { kind: 'CREDIT_NO_CUSTOMER' }
-  | { kind: 'PAYMENT_MISMATCH' }
-  | { kind: 'OK'; saleId: string; number: string; total: number; publicToken: string };
+// Seul le SUCCÈS traverse withIdempotency (et est donc mémoïsé). Un rejet métier
+// (stock insuffisant, client manquant, ventilation incohérente…) est levé comme
+// SaleRejection : il fait AVORTER la $transaction (rollback complet — aucune Sale,
+// aucun client matérialisé, aucune ligne OfflineOperation). Sans ce rollback, un
+// rejet transitoire (ex. stock épuisé par un autre appareil au moment du sync)
+// serait mémoïsé pour ce clientOpId et renverrait la même erreur À JAMAIS, même
+// après réapprovisionnement — la vente réellement conclue offline ne pourrait
+// plus jamais être enregistrée.
+type CheckoutResult = {
+  kind: 'OK';
+  saleId: string;
+  number: string;
+  total: number;
+  publicToken: string;
+};
+
+// Rejet métier typé. `payload`/`status` reproduisent à l'octet près la réponse
+// HTTP qui était renvoyée avant le passage au throw (bodies + codes inchangés).
+class SaleRejection extends Error {
+  constructor(
+    public payload: { error: string; message: string; productId?: string },
+    public status: number,
+  ) {
+    super(payload.error);
+    this.name = 'SaleRejection';
+  }
+}
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -200,221 +221,233 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // clé d'idempotence quand deux rejeux concurrents de la même opération
     // passent tous deux le findUnique initial — withIdempotency laisse ce P2002
     // remonter jusqu'ici, le rejeu retombant proprement sur la ligne gagnante).
-    const { result, replayed } = await withTxRetry(() =>
-      prisma.$transaction(
-        (tx) =>
-          withIdempotency<CheckoutResult>(
-            tx,
-            { organizationId: orgId, clientOpId, endpoint: 'sales' },
-            async () => {
-              const ids = items.map((i) => i.productId);
-              const products = await tx.product.findMany({
-                where: { id: { in: ids }, organizationId: orgId },
-                select: {
-                  id: true,
-                  name: true,
-                  sellPrice: true,
-                  prixGros: true,
-                  buyPrice: true,
-                  qty: true,
-                },
-              });
-              const byId = new Map(products.map((p) => [p.id, p]));
-
-              // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
-              const unitPriceFor = (
-                p: { sellPrice: number; prixGros: number },
-                wholesale?: boolean,
-              ) => (wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice);
-
-              // Agrège les quantités par produit AVANT de contrôler le stock. Deux
-              // lignes du même article (ex. double scan) doivent être vérifiées
-              // ENSEMBLE : sinon chacune passe le contrôle isolément (qty ligne ≤ stock)
-              // alors que le décrément cumulé ferait passer le stock négatif.
-              const neededByProduct = new Map<string, number>();
-              for (const item of items) {
-                neededByProduct.set(
-                  item.productId,
-                  (neededByProduct.get(item.productId) ?? 0) + item.qty,
-                );
-              }
-              for (const [productId, needed] of neededByProduct) {
-                const p = byId.get(productId);
-                if (!p) return { kind: 'PRODUCT_NOT_FOUND', productId };
-                if (needed > p.qty) return { kind: 'INSUFFICIENT', productId };
-              }
-
-              // Résolution du client (création à la volée si nom fourni sans id).
-              let customerId: string | null = null;
-              if (customerInput?.id) {
-                const c = await tx.customer.findUnique({
-                  where: { id: customerInput.id },
-                  select: { organizationId: true },
+    let outcome: { result: CheckoutResult; replayed: boolean };
+    try {
+      outcome = await withTxRetry(() =>
+        prisma.$transaction(
+          (tx) =>
+            withIdempotency<CheckoutResult>(
+              tx,
+              { organizationId: orgId, clientOpId, endpoint: 'sales' },
+              async () => {
+                const ids = items.map((i) => i.productId);
+                const products = await tx.product.findMany({
+                  where: { id: { in: ids }, organizationId: orgId },
+                  select: {
+                    id: true,
+                    name: true,
+                    sellPrice: true,
+                    prixGros: true,
+                    buyPrice: true,
+                    qty: true,
+                  },
                 });
-                if (c) {
-                  // Client déjà en base : ne l'utiliser que s'il appartient à la
-                  // boutique (sinon customerId reste null — pas de fuite inter-org).
-                  if (c.organizationId === orgId) customerId = customerInput.id;
-                } else if (customerInput.name) {
-                  // Offline : client créé côté client avec ce cuid mais pas encore
-                  // synchronisé — on le matérialise en réutilisant son id verbatim.
-                  const created = await tx.customer.create({
+                const byId = new Map(products.map((p) => [p.id, p]));
+
+                // Prix unitaire d'une ligne : gros si demandé ET défini (> 0), sinon détail.
+                const unitPriceFor = (
+                  p: { sellPrice: number; prixGros: number },
+                  wholesale?: boolean,
+                ) => (wholesale && p.prixGros > 0 ? p.prixGros : p.sellPrice);
+
+                // Agrège les quantités par produit AVANT de contrôler le stock. Deux
+                // lignes du même article (ex. double scan) doivent être vérifiées
+                // ENSEMBLE : sinon chacune passe le contrôle isolément (qty ligne ≤ stock)
+                // alors que le décrément cumulé ferait passer le stock négatif.
+                const neededByProduct = new Map<string, number>();
+                for (const item of items) {
+                  neededByProduct.set(
+                    item.productId,
+                    (neededByProduct.get(item.productId) ?? 0) + item.qty,
+                  );
+                }
+                for (const [productId, needed] of neededByProduct) {
+                  const p = byId.get(productId);
+                  if (!p)
+                    throw new SaleRejection(
+                      { error: 'PRODUCT_NOT_FOUND', message: 'Produit introuvable', productId },
+                      404,
+                    );
+                  if (needed > p.qty)
+                    throw new SaleRejection(
+                      { error: 'INSUFFICIENT_STOCK', message: 'Stock insuffisant', productId },
+                      409,
+                    );
+                }
+
+                // Résolution du client (création à la volée si nom fourni sans id).
+                let customerId: string | null = null;
+                if (customerInput?.id) {
+                  const c = await tx.customer.findUnique({
+                    where: { id: customerInput.id },
+                    select: { organizationId: true },
+                  });
+                  if (c) {
+                    // Client déjà en base : ne l'utiliser que s'il appartient à la
+                    // boutique (sinon customerId reste null — pas de fuite inter-org).
+                    if (c.organizationId === orgId) customerId = customerInput.id;
+                  } else if (customerInput.name) {
+                    // Offline : client créé côté client avec ce cuid mais pas encore
+                    // synchronisé — on le matérialise en réutilisant son id verbatim.
+                    const created = await tx.customer.create({
+                      data: {
+                        id: customerInput.id,
+                        organizationId: orgId,
+                        name: customerInput.name,
+                        phone: customerInput.phone ?? null,
+                      },
+                      select: { id: true },
+                    });
+                    customerId = created.id;
+                  }
+                } else if (customerInput?.name) {
+                  const c = await tx.customer.create({
                     data: {
-                      id: customerInput.id,
                       organizationId: orgId,
                       name: customerInput.name,
                       phone: customerInput.phone ?? null,
                     },
                     select: { id: true },
                   });
-                  customerId = created.id;
+                  customerId = c.id;
                 }
-              } else if (customerInput?.name) {
-                const c = await tx.customer.create({
+                // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
+                const gross = items.reduce((sum, item) => {
+                  const p = byId.get(item.productId);
+                  return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
+                }, 0);
+                const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
+                const total = gross - discount;
+
+                // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
+                // égaler le total NET. Sinon : paiement unique via `method` (compat).
+                const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
+                if (paymentsInput && paymentsInput.length > 0) {
+                  for (const p of paymentsInput) {
+                    bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+                  }
+                  if (bd.CASH + bd.MOBILE + bd.CREDIT !== total)
+                    throw new SaleRejection(
+                      {
+                        error: 'PAYMENT_MISMATCH',
+                        message: 'La ventilation du paiement ne correspond pas au total',
+                      },
+                      422,
+                    );
+                } else {
+                  bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
+                }
+                const creditAmount = bd.CREDIT;
+                const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
+                const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
+
+                // La part crédit exige un client (sélectionné ou créé à la volée).
+                if (creditAmount > 0 && !customerId)
+                  throw new SaleRejection(
+                    {
+                      error: 'CREDIT_NEEDS_CUSTOMER',
+                      message: 'Une vente à crédit exige un client',
+                    },
+                    422,
+                  );
+
+                const count = await tx.sale.count({ where: { organizationId: orgId } });
+                const number = `V-${String(count + 1).padStart(4, '0')}`;
+                // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
+                // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
+                const publicToken = randomBytes(12).toString('base64url');
+
+                const sale = await tx.sale.create({
                   data: {
+                    // Offline : id cuid généré côté client, repris verbatim pour que
+                    // la vente ait la même identité online/offline. Absent → Prisma
+                    // génère (cuid). Le numéro V- reste séquentiel côté serveur.
+                    ...(body.id ? { id: body.id } : {}),
                     organizationId: orgId,
-                    name: customerInput.name,
-                    phone: customerInput.phone ?? null,
+                    number,
+                    method,
+                    total,
+                    discount,
+                    cashAmount: bd.CASH,
+                    mobileAmount: bd.MOBILE,
+                    creditAmount,
+                    publicToken,
+                    createdById: userSub,
+                    ...(customerId ? { customerId } : {}),
+                    items: {
+                      create: items.map((item) => {
+                        const p = byId.get(item.productId);
+                        return {
+                          productId: item.productId,
+                          name: p ? p.name : 'Article',
+                          qty: item.qty,
+                          unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
+                          buyPrice: p ? p.buyPrice : 0,
+                        };
+                      }),
+                    },
                   },
                   select: { id: true },
                 });
-                customerId = c.id;
-              }
-              // Brut = somme des lignes ; la remise (bornée) le réduit → total NET.
-              const gross = items.reduce((sum, item) => {
-                const p = byId.get(item.productId);
-                return sum + item.qty * (p ? unitPriceFor(p, item.wholesale) : 0);
-              }, 0);
-              const discount = Math.min(Math.max(0, parsed.data.discount ?? 0), gross);
-              const total = gross - discount;
 
-              // Ventilation du paiement. Avec `payments` : somme par méthode, qui doit
-              // égaler le total NET. Sinon : paiement unique via `method` (compat).
-              const bd = { CASH: 0, MOBILE: 0, CREDIT: 0 };
-              if (paymentsInput && paymentsInput.length > 0) {
-                for (const p of paymentsInput) {
-                  bd[p.method.toUpperCase() as keyof typeof bd] += p.amount;
+                // Décrément + mouvement OUT agrégés PAR PRODUIT (neededByProduct), pas
+                // par ligne : deux lignes du même article (double scan) donnent un seul
+                // StockMovement dont `clientOpId` = `${saleId}:${productId}` reste unique
+                // (la colonne est @unique — un mouvement par ligne collisionnerait).
+                for (const [productId, needed] of neededByProduct) {
+                  await tx.product.update({
+                    where: { id: productId },
+                    data: { qty: { decrement: needed } },
+                  });
+                  await tx.stockMovement.create({
+                    data: {
+                      organizationId: orgId,
+                      productId,
+                      type: 'OUT',
+                      delta: -needed,
+                      reason: 'sale',
+                      createdById: userSub,
+                      clientOpId: `${sale.id}:${productId}`,
+                    },
+                  });
                 }
-                if (bd.CASH + bd.MOBILE + bd.CREDIT !== total) return { kind: 'PAYMENT_MISMATCH' };
-              } else {
-                bd[(legacyMethod ?? 'cash').toUpperCase() as keyof typeof bd] = total;
-              }
-              const creditAmount = bd.CREDIT;
-              const parts = (['CASH', 'MOBILE', 'CREDIT'] as const).filter((k) => bd[k] > 0);
-              const method = parts.length >= 2 ? 'MIXED' : (parts[0] ?? 'CASH');
 
-              // La part crédit exige un client (sélectionné ou créé à la volée).
-              if (creditAmount > 0 && !customerId) return { kind: 'CREDIT_NO_CUSTOMER' };
+                // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
+                // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
+                if (creditAmount > 0 && customerId) {
+                  await tx.receivable.create({
+                    data: {
+                      organizationId: orgId,
+                      customerId,
+                      saleId: sale.id,
+                      amount: creditAmount,
+                      status: 'OPEN',
+                    },
+                  });
+                }
 
-              const count = await tx.sale.count({ where: { organizationId: orgId } });
-              const number = `V-${String(count + 1).padStart(4, '0')}`;
-              // Jeton aléatoire (~96 bits, URL-safe) du lien public de reçu : seul
-              // celui qui reçoit le lien peut ouvrir/télécharger le reçu, sans login.
-              const publicToken = randomBytes(12).toString('base64url');
-
-              const sale = await tx.sale.create({
-                data: {
-                  // Offline : id cuid généré côté client, repris verbatim pour que
-                  // la vente ait la même identité online/offline. Absent → Prisma
-                  // génère (cuid). Le numéro V- reste séquentiel côté serveur.
-                  ...(body.id ? { id: body.id } : {}),
-                  organizationId: orgId,
-                  number,
-                  method,
-                  total,
-                  discount,
-                  cashAmount: bd.CASH,
-                  mobileAmount: bd.MOBILE,
-                  creditAmount,
-                  publicToken,
-                  createdById: userSub,
-                  ...(customerId ? { customerId } : {}),
-                  items: {
-                    create: items.map((item) => {
-                      const p = byId.get(item.productId);
-                      return {
-                        productId: item.productId,
-                        name: p ? p.name : 'Article',
-                        qty: item.qty,
-                        unitPrice: p ? unitPriceFor(p, item.wholesale) : 0,
-                        buyPrice: p ? p.buyPrice : 0,
-                      };
-                    }),
-                  },
-                },
-                select: { id: true },
-              });
-
-              // Décrément + mouvement OUT agrégés PAR PRODUIT (neededByProduct), pas
-              // par ligne : deux lignes du même article (double scan) donnent un seul
-              // StockMovement dont `clientOpId` = `${saleId}:${productId}` reste unique
-              // (la colonne est @unique — un mouvement par ligne collisionnerait).
-              for (const [productId, needed] of neededByProduct) {
-                await tx.product.update({
-                  where: { id: productId },
-                  data: { qty: { decrement: needed } },
-                });
-                await tx.stockMovement.create({
-                  data: {
-                    organizationId: orgId,
-                    productId,
-                    type: 'OUT',
-                    delta: -needed,
-                    reason: 'sale',
-                    createdById: userSub,
-                    clientOpId: `${sale.id}:${productId}`,
-                  },
-                });
-              }
-
-              // Part à crédit → ouvre une créance du montant restant dû (creditAmount).
-              // customerId garanti ici (crédit sans client déjà renvoyé plus haut).
-              if (creditAmount > 0 && customerId) {
-                await tx.receivable.create({
-                  data: {
-                    organizationId: orgId,
-                    customerId,
-                    saleId: sale.id,
-                    amount: creditAmount,
-                    status: 'OPEN',
-                  },
-                });
-              }
-
-              return { kind: 'OK', saleId: sale.id, number, total, publicToken };
-            },
-          ),
-        { isolationLevel: 'Serializable' },
-      ),
-    );
-
-    if (result.kind === 'PRODUCT_NOT_FOUND') {
-      return NextResponse.json(
-        { error: 'PRODUCT_NOT_FOUND', message: 'Produit introuvable', productId: result.productId },
-        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+                return { kind: 'OK', saleId: sale.id, number, total, publicToken };
+              },
+            ),
+          { isolationLevel: 'Serializable' },
+        ),
       );
+    } catch (e) {
+      // Un rejet métier a fait avorter la transaction (rollback : rien n'est
+      // écrit, rien n'est mémoïsé). On restitue la réponse HTTP identique à
+      // celle d'avant le refactor. Toute autre erreur (P2002 non résolu, bug…)
+      // continue de remonter — withTxRetry n'aura pas rejoué SaleRejection.
+      if (e instanceof SaleRejection) {
+        return NextResponse.json(e.payload, {
+          status: e.status,
+          headers: { 'x-request-id': ctx.requestId },
+        });
+      }
+      throw e;
     }
-    if (result.kind === 'INSUFFICIENT') {
-      return NextResponse.json(
-        { error: 'INSUFFICIENT_STOCK', message: 'Stock insuffisant', productId: result.productId },
-        { status: 409, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-    if (result.kind === 'CREDIT_NO_CUSTOMER') {
-      return NextResponse.json(
-        { error: 'CREDIT_NEEDS_CUSTOMER', message: 'Une vente à crédit exige un client' },
-        { status: 422, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-    if (result.kind === 'PAYMENT_MISMATCH') {
-      return NextResponse.json(
-        {
-          error: 'PAYMENT_MISMATCH',
-          message: 'La ventilation du paiement ne correspond pas au total',
-        },
-        { status: 422, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+
+    const { result, replayed } = outcome;
+
     // Alertes post-réponse (best-effort) : « nouvelle vente » + « stock bas ».
     // JAMAIS sur un rejeu : la vente et ses effets datent de la 1re exécution ;
     // re-notifier à chaque retry offline spammerait le patron.
