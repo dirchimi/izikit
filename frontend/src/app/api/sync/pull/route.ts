@@ -93,6 +93,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         expenses,
         documents,
         stockMovements,
+        // Task 5.1 — additive: the caller's current boutique id, so the
+        // client can populate `meta.orgId` (see `frontend/src/lib/offline/pull.ts`'s
+        // `getOrgId()`). Product-less offline writes (expenses, later
+        // customers/adjust/repay) need an org id but have no referenced row
+        // to derive it from the way `createSaleOffline` derives it from the
+        // sale's products.
+        orgId: organizationId,
         serverTime: new Date().toISOString(),
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

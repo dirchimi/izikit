@@ -1522,6 +1522,11 @@ const messages: Record<string, Msg> = {
     en: 'Amount must be greater than zero.',
     ar: 'يجب أن يكون المبلغ أكبر من الصفر.',
   },
+  'depenses.noOrg': {
+    fr: 'Boutique introuvable. Reconnectez-vous puis réessayez.',
+    en: 'Shop not found. Reconnect then try again.',
+    ar: 'المتجر غير موجود. أعد الاتصال ثم حاول مرة أخرى.',
+  },
   'depenses.emptyAll': {
     fr: 'Aucune dépense pour le moment. Enregistrez votre première dépense.',
     en: 'No expenses yet. Record your first expense.',

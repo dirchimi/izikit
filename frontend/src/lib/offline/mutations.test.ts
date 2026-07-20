@@ -10,7 +10,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, type ProductRow } from './db';
-import { createSaleOffline } from './mutations';
+import { createSaleOffline, createExpenseOffline } from './mutations';
 
 const ORG = 'org-1';
 
@@ -338,5 +338,121 @@ describe('createSaleOffline', () => {
     const payload = outbox[0]?.payload as Record<string, unknown>;
     expect('discount' in payload).toBe(false);
     expect('customer' in payload).toBe(false);
+  });
+});
+
+describe('createExpenseOffline', () => {
+  beforeEach(async () => {
+    await reset();
+    await db.expenses.clear();
+    await db.meta.put({ key: 'orgId', value: 'org-1' });
+  });
+
+  it('writes an optimistic expense row (unsynced, provisional number) and enqueues one outbox row', async () => {
+    const res = await createExpenseOffline({ label: 'Loyer', amount: 30000, category: 'Loyer' });
+
+    expect(res.number).toMatch(/^#L\d+$/);
+
+    const expense = await db.expenses.get(res.id);
+    expect(expense).toBeDefined();
+    expect(expense?.organizationId).toBe('org-1');
+    expect(expense?.label).toBe('Loyer');
+    expect(expense?.amount).toBe(30000);
+    expect(expense?.category).toBe('Loyer');
+    expect(expense?.number).toBe(res.number);
+    expect(expense?.synced).toBe(false);
+    expect(typeof expense?.occurredAt).toBe('string');
+    expect(typeof expense?.createdAt).toBe('string');
+
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('expense');
+    expect(outbox[0]?.endpoint).toBe('/api/expenses');
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.id).toBe(res.id);
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.label).toBe('Loyer');
+    expect(payload.amount).toBe(30000);
+    expect(payload.category).toBe('Loyer');
+  });
+
+  it('defaults category when omitted and increments the provisional number across expenses', async () => {
+    const first = await createExpenseOffline({ label: 'Transport', amount: 500 });
+    const second = await createExpenseOffline({ label: 'Eau', amount: 1000 });
+
+    const e1 = await db.expenses.get(first.id);
+    expect(e1?.category).toBe('Divers');
+
+    const n1 = Number(first.number.replace('#L', ''));
+    const n2 = Number(second.number.replace('#L', ''));
+    expect(n2).toBe(n1 + 1);
+  });
+
+  it('uses the given occurredAt locally and forwards it in the payload', async () => {
+    const res = await createExpenseOffline({
+      label: 'Loyer',
+      amount: 30000,
+      occurredAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const expense = await db.expenses.get(res.id);
+    expect(expense?.occurredAt).toBe('2026-07-01T00:00:00.000Z');
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.occurredAt).toBe('2026-07-01T00:00:00.000Z');
+  });
+
+  it('does not include occurredAt/note in the payload when not given', async () => {
+    await createExpenseOffline({ label: 'Transport', amount: 500 });
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect('occurredAt' in payload).toBe(false);
+    expect('note' in payload).toBe(false);
+  });
+
+  it('carries an optional note through to both the local row and the payload', async () => {
+    const res = await createExpenseOffline({
+      label: 'Loyer',
+      amount: 30000,
+      note: 'Payé en espèces',
+    });
+
+    const expense = await db.expenses.get(res.id);
+    expect(expense?.note).toBe('Payé en espèces');
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.note).toBe('Payé en espèces');
+  });
+
+  it('throws NO_ORG and writes nothing when meta.orgId is absent', async () => {
+    await db.meta.delete('orgId');
+
+    await expect(createExpenseOffline({ label: 'Loyer', amount: 30000 })).rejects.toThrow('NO_ORG');
+
+    expect(await db.expenses.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws AMOUNT_INVALID for a zero/negative amount and rolls back', async () => {
+    await expect(createExpenseOffline({ label: 'Loyer', amount: 0 })).rejects.toThrow(
+      'AMOUNT_INVALID',
+    );
+    await expect(createExpenseOffline({ label: 'Loyer', amount: -100 })).rejects.toThrow(
+      'AMOUNT_INVALID',
+    );
+
+    expect(await db.expenses.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws AMOUNT_INVALID for a non-integer amount', async () => {
+    await expect(createExpenseOffline({ label: 'Loyer', amount: 30000.5 })).rejects.toThrow(
+      'AMOUNT_INVALID',
+    );
+    expect(await db.expenses.count()).toBe(0);
   });
 });

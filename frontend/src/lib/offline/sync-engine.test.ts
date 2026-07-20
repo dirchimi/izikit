@@ -10,7 +10,7 @@
  */
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { db, type SaleRow } from './db';
+import { db, type SaleRow, type ExpenseRow } from './db';
 import { api, ApiError } from '@/lib/api';
 import { enqueue, listPending } from './outbox';
 import { drainOutbox } from './sync-engine';
@@ -37,6 +37,20 @@ function makeSaleRow(id: string): SaleRow {
     mobileAmount: 0,
     creditAmount: 0,
     status: 'ACTIVE',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    synced: false,
+  };
+}
+
+function makeExpenseRow(id: string): ExpenseRow {
+  return {
+    id,
+    organizationId: 'o1',
+    number: `#L${id}`,
+    label: 'Loyer',
+    category: 'Loyer',
+    amount: 30000,
+    occurredAt: '2026-07-20T00:00:00.000Z',
     createdAt: '2026-07-20T00:00:00.000Z',
     synced: false,
   };
@@ -123,6 +137,27 @@ describe('drainOutbox', () => {
     expect(sale?.number).toBe('V-0007');
     expect(sale?.publicToken).toBe('tok_x');
     expect(sale?.synced).toBe(true);
+  });
+
+  it('Task 5.1 — patches the local expense row with the server D- number and synced:true', async () => {
+    await enqueue({
+      kind: 'expense',
+      payload: { id: 'e7' },
+      opId: 'e7',
+      endpoint: '/api/expenses',
+    });
+    await db.expenses.put(makeExpenseRow('e7'));
+
+    mockedApi.mockResolvedValueOnce({
+      expense: { id: 'e7', number: 'D-0007', label: 'Loyer', category: 'Loyer', amount: 30000 },
+    });
+
+    const result = await drainOutbox();
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+
+    const expense = await db.expenses.get('e7');
+    expect(expense?.number).toBe('D-0007');
+    expect(expense?.synced).toBe(true);
   });
 
   it('stops immediately on a network error (status 0) and leaves later rows untouched/pending', async () => {

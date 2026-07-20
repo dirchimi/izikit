@@ -141,6 +141,12 @@ describe('GET /api/sync/pull', () => {
     );
   });
 
+  it('renvoie orgId (Task 5.1 — boutique de l’appelant, pour meta.orgId côté client)', async () => {
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.orgId).toBe('org1');
+  });
+
   it('ne renvoie que les lignes du membre — where scopé sur son organizationId (pas une autre org)', async () => {
     mockPrimary.mockResolvedValueOnce({ organizationId: 'org-other', role: 'MEMBER' });
     await GET(makeGet());

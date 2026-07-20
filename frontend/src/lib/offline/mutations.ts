@@ -39,12 +39,20 @@ import {
   type ReceivableRow,
   type CustomerRow,
   type SaleRow,
+  type ExpenseRow,
 } from './db';
 import { newId } from './ids';
 import { enqueue } from './outbox';
+import { getOrgId } from './pull';
 
 /** `meta` key holding the monotonic provisional-sale counter (`#L<n>`). */
 const LOCAL_SALE_SEQ_KEY = 'localSaleSeq';
+/** `meta` key holding the monotonic provisional-expense counter (`#L<n>`).
+ * Deliberately a SEPARATE counter from `LOCAL_SALE_SEQ_KEY` — sales and
+ * expenses are different domains with their own server-assigned display
+ * sequences (`V-` vs `D-`), so sharing one counter would make the
+ * provisional local number carry no meaningful relation to either. */
+const LOCAL_EXPENSE_SEQ_KEY = 'localExpenseSeq';
 
 type PayMethod = 'cash' | 'mobile' | 'credit';
 
@@ -320,4 +328,111 @@ function buildComputeOpts(input: CreateSaleInput): ComputeOpts {
     ...(input.method ? { method: input.method } : {}),
     ...(input.discount !== undefined ? { discount: input.discount } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// createExpenseOffline (Task 5.1) — the `expense` mirror of createSaleOffline
+// above.
+// ---------------------------------------------------------------------------
+
+/** Free-form server-side (`category: z.string().trim().min(1).max(40)` in
+ * `frontend/src/app/api/expenses/route.ts`) — used only when the caller
+ * omits one. `DepensesManager`'s form always supplies a category (defaulting
+ * to 'Charges' itself), so this is a defensive fallback for any other future
+ * caller of `createExpenseOffline`, not the primary path. */
+const DEFAULT_EXPENSE_CATEGORY = 'Divers';
+
+export interface CreateExpenseInput {
+  label: string;
+  amount: number;
+  /** ISO. Defaults to "now" locally. NOTE: `/api/expenses`'s Body schema has
+   * no `occurredAt` field today — the server always stamps its own — so this
+   * only affects the optimistic local row's display date, not what's
+   * eventually persisted server-side. */
+  occurredAt?: string;
+  /** Defaults to `DEFAULT_EXPENSE_CATEGORY` — required (non-empty) server-side. */
+  category?: string;
+  /** Not in Task 5.1's literal spec, but kept optional and additive so an
+   * offline expense doesn't silently drop the note the online path already
+   * supports (`/api/expenses`'s Body has `note` as optional). */
+  note?: string;
+}
+
+export interface ProvisionalExpense {
+  id: string;
+  number: string;
+}
+
+/**
+ * Records an expense locally (optimistic) and enqueues it for the server —
+ * the `expense` counterpart of `createSaleOffline`. Unlike a sale, an expense
+ * references no product, so the org id can't be derived from a loaded row —
+ * it comes instead from `meta.orgId` (Task 5.1's foundation, populated by
+ * `pullAll()` from `/api/sync/pull`'s `orgId`).
+ *
+ * @throws Error('NO_ORG') `meta.orgId` hasn't been populated yet (no
+ *   successful pull has ever run) — shouldn't happen once onboarding is past
+ *   the first sync, but guarded rather than assumed.
+ * @throws Error('AMOUNT_INVALID') `amount` isn't a positive integer
+ */
+export async function createExpenseOffline(input: CreateExpenseInput): Promise<ProvisionalExpense> {
+  const id = newId();
+  const createdAt = new Date().toISOString();
+
+  return db.transaction(
+    'rw',
+    [db.expenses, db.meta, db.outbox],
+    async (): Promise<ProvisionalExpense> => {
+      const orgId = await getOrgId();
+      if (!orgId) throw new Error('NO_ORG');
+
+      if (!Number.isInteger(input.amount) || input.amount <= 0) {
+        throw new Error('AMOUNT_INVALID');
+      }
+
+      // Provisional local number (`#L<n>`), monotonic across expenses —
+      // same shape as the sale counter, but tracked separately (see
+      // `LOCAL_EXPENSE_SEQ_KEY`'s doc comment).
+      const seqRow = await db.meta.get(LOCAL_EXPENSE_SEQ_KEY);
+      const prev = typeof seqRow?.value === 'number' ? seqRow.value : 0;
+      const nextSeq = prev + 1;
+      await db.meta.put({ key: LOCAL_EXPENSE_SEQ_KEY, value: nextSeq });
+      const number = `#L${nextSeq}`;
+
+      const category = input.category ?? DEFAULT_EXPENSE_CATEGORY;
+      const occurredAt = input.occurredAt ?? createdAt;
+
+      const row: ExpenseRow = {
+        id,
+        organizationId: orgId,
+        number,
+        label: input.label,
+        category,
+        amount: input.amount,
+        occurredAt,
+        createdAt,
+        synced: false,
+        ...(input.note ? { note: input.note } : {}),
+      };
+      await db.expenses.put(row);
+
+      // Enqueue the outbox op — same shape the online POST sends, plus
+      // `id`/`clientOpId`. `category` is always sent (server requires it,
+      // non-optional); `occurredAt` only when the caller explicitly gave one
+      // (the server ignores unknown Body keys, so this is harmless either
+      // way — see the field's doc comment above).
+      const payload: Record<string, unknown> = {
+        id,
+        clientOpId: id,
+        label: input.label,
+        amount: input.amount,
+        category,
+        ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
+        ...(input.note ? { note: input.note } : {}),
+      };
+      await enqueue({ kind: 'expense', endpoint: '/api/expenses', opId: id, payload });
+
+      return { id, number };
+    },
+  );
 }

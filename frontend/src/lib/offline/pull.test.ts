@@ -10,7 +10,7 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from './db';
 import { api } from '@/lib/api';
-import { pullAll, pullResource, type PullResponse } from './pull';
+import { pullAll, pullResource, getOrgId, type PullResponse } from './pull';
 
 vi.mock('@/lib/api', () => ({
   api: vi.fn(),
@@ -141,6 +141,7 @@ function makeResponse(overrides: Partial<PullResponse> = {}): PullResponse {
       },
     ],
     serverTime: '2026-07-20T00:00:00.000Z',
+    orgId: 'o1',
     ...overrides,
   };
 }
@@ -200,6 +201,19 @@ describe('pullAll', () => {
 
     const cursor = await db.meta.get('lastPull');
     expect(cursor?.value).toBe(res.serverTime);
+  });
+
+  it('stores the response orgId into meta.orgId, readable via getOrgId (Task 5.1)', async () => {
+    mockedApi.mockResolvedValueOnce(makeResponse({ orgId: 'o1' }));
+    await pullAll();
+
+    const stored = await db.meta.get('orgId');
+    expect(stored?.value).toBe('o1');
+    await expect(getOrgId()).resolves.toBe('o1');
+  });
+
+  it('getOrgId resolves null before any pull has ever run', async () => {
+    await expect(getOrgId()).resolves.toBeNull();
   });
 
   it('omits nullable server fields rather than storing them as null', async () => {

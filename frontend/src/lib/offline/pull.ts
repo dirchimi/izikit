@@ -44,6 +44,9 @@ import {
 } from './db';
 
 const LAST_PULL_KEY = 'lastPull';
+/** Task 5.1 — `meta` key holding the current boutique id, written by
+ * `pullAll()` from the response's `orgId` and read back by `getOrgId()`. */
+const ORG_ID_KEY = 'orgId';
 
 // ---------------------------------------------------------------------------
 // Server response shapes — mirror the Prisma models field-for-field as they
@@ -171,6 +174,11 @@ export interface PullResponse {
   expenses: ServerExpense[];
   documents: ServerDocument[];
   stockMovements: ServerStockMovement[];
+  /** Task 5.1 — the caller's boutique id (additive on the server response).
+   * Stored into `meta.orgId` by `pullAll()` below; read back via `getOrgId()`
+   * by product-less offline writes (expenses, later customers/adjust/repay)
+   * that have no referenced row to derive an org id from. */
+  orgId: string;
   serverTime: string;
 }
 
@@ -428,8 +436,25 @@ export async function pullAll(): Promise<void> {
         await applyResource(name, res);
       }
       await db.meta.put({ key: LAST_PULL_KEY, value: res.serverTime });
+      // Task 5.1 foundation — store the boutique id alongside the cursor so
+      // product-less offline writes (createExpenseOffline, …) can resolve
+      // it without a referenced row. Same transaction as the rest of the
+      // pull: a failure never leaves `meta.orgId` pointing at data that was
+      // never actually persisted.
+      await db.meta.put({ key: ORG_ID_KEY, value: res.orgId });
     },
   );
+}
+
+/**
+ * Reads the boutique id last stored by `pullAll()` (Task 5.1). `null` before
+ * the first successful pull has ever completed — callers that need an org id
+ * for a product-less offline write (expenses, …) treat that as a hard error
+ * (`NO_ORG`) rather than silently guessing.
+ */
+export async function getOrgId(): Promise<string | null> {
+  const row = await db.meta.get(ORG_ID_KEY);
+  return typeof row?.value === 'string' ? row.value : null;
 }
 
 /**

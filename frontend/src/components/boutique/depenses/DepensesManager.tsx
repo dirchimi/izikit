@@ -11,23 +11,16 @@ import KpiCard from '@/components/boutique/KpiCard';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
-import { useApi } from '@/lib/useApi';
 import { onExpenseChange } from '@/lib/boutique/realtime';
-import { api } from '@/lib/api';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { createExpenseOffline } from '@/lib/offline/mutations';
+import { triggerDrain } from '@/lib/offline/sync-triggers';
+import { expenseRowToApi, type ApiExpense } from '@/lib/offline/expense-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
 import FloatingAddButton from '@/components/boutique/FloatingAddButton';
-
-interface ApiExpense {
-  id: string;
-  number: string;
-  label: string;
-  category: string;
-  amount: number;
-  note: string;
-  occurredAt: string; // ISO
-}
 
 type Period = 'month' | 'today' | 'date';
 
@@ -68,8 +61,15 @@ export default function DepensesManager() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const { data, loading, error, refresh } = useApi<{ expenses: ApiExpense[] }>('/api/expenses');
-  const expenses = data?.expenses ?? [];
+  // Offline-first (Task 5.1) : lecture locale (Dexie) au lieu du réseau — le
+  // miroir est alimenté par pullAll() (voir AppShell) et par
+  // createExpenseOffline() ci-dessous pour les dépenses saisies hors ligne.
+  const { data: expenseRows, loading } = useLocalResource(
+    () => db.expenses.orderBy('createdAt').reverse().toArray(),
+    [],
+    [],
+  );
+  const expenses = useMemo(() => expenseRows.map(expenseRowToApi), [expenseRows]);
   const now = new Date();
 
   const monthExpenses = expenses.filter((e) => sameMonth(e.occurredAt, now));
@@ -110,6 +110,16 @@ export default function DepensesManager() {
             })
           : t('common.pickDate');
 
+  /** `createExpenseOffline` throws plain `Error`s whose `.message` carries a
+   * stable code (NO_ORG/AMOUNT_INVALID) — same convention as VendrePos's
+   * `checkoutError` for `createSaleOffline`. */
+  function expenseError(err: unknown): string {
+    const code = err instanceof Error ? err.message : '';
+    if (code === 'AMOUNT_INVALID') return t('depenses.amountInvalid');
+    if (code === 'NO_ORG') return t('depenses.noOrg');
+    return t('async.error');
+  }
+
   async function addExpense(input: NewExpenseInput) {
     if (!input.label) {
       toast(t('depenses.labelRequired'), 'error');
@@ -121,23 +131,25 @@ export default function DepensesManager() {
     }
     setSubmitting(true);
     try {
-      await api('/api/expenses', {
-        method: 'POST',
-        body: {
-          label: input.label,
-          amount: input.amount,
-          category: input.category,
-          ...(input.note ? { note: input.note } : {}),
-        },
+      // Offline-first (Task 5.1) : écriture locale optimiste + mise en file
+      // d'attente (jamais de réseau ici) — même schéma que createSaleOffline
+      // pour la vente. `triggerDrain()` tente une synchro immédiate si en
+      // ligne (single-flight, sans bloquer l'UI qui est déjà à jour).
+      await createExpenseOffline({
+        label: input.label,
+        amount: input.amount,
+        category: input.category,
+        ...(input.note ? { note: input.note } : {}),
       });
+      triggerDrain();
       toast(
         t('depenses.added', { label: input.label, amount: formatFCFA(input.amount) }),
         'success',
       );
       onExpenseChange();
       return true;
-    } catch {
-      toast(t('async.error'), 'error');
+    } catch (err) {
+      toast(expenseError(err), 'error');
       return false;
     } finally {
       setSubmitting(false);
@@ -242,8 +254,7 @@ export default function DepensesManager() {
           {/* Table */}
           <AsyncState
             loading={loading}
-            error={error}
-            onRetry={refresh}
+            error={null}
             isEmpty={expenses.length === 0}
             emptyLabel={t('depenses.emptyAll')}
             emptyIcon="receipt"
