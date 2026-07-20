@@ -127,81 +127,85 @@ export async function POST(
     let replayed: boolean;
     try {
       const outcome = await withTxRetry(() =>
-        prisma.$transaction((tx) =>
-          withIdempotency<AdjustResult>(
-            tx,
-            { organizationId: orgId, clientOpId, endpoint: 'adjust' },
-            async () => {
-              const product = await tx.product.findUnique({
-                where: { id },
-                select: { organizationId: true, qty: true, name: true, buyPrice: true },
-              });
-              if (!product || product.organizationId !== orgId) {
-                throw new AdjustRejection(
-                  { error: 'PRODUCT_NOT_FOUND', message: 'Produit introuvable' },
-                  404,
-                );
-              }
-
-              const newQty = product.qty + delta;
-              if (newQty < 0) {
-                throw new AdjustRejection(
-                  { error: 'INSUFFICIENT_STOCK', message: 'Stock insuffisant pour cette sortie' },
-                  409,
-                );
-              }
-
-              // Réappro pris « en prêt » → dette fournisseur du reste dû, bornée au
-              // coût de l'entrée (delta × prix d'achat effectif). Seulement pour une
-              // entrée.
-              if (parsed.data.supplierDebt && delta > 0) {
-                const effectiveBuyPrice = parsed.data.buyPrice ?? product.buyPrice;
-                const owed = Math.min(parsed.data.supplierDebt.amount, delta * effectiveBuyPrice);
-                if (owed > 0) {
-                  await tx.supplierDebt.create({
-                    data: {
-                      organizationId: orgId,
-                      productId: id,
-                      label: product.name,
-                      amount: owed,
-                      status: 'OPEN',
-                      createdById: auth.user.sub,
-                      ...(parsed.data.supplierDebt.supplierName
-                        ? { supplierName: parsed.data.supplierDebt.supplierName }
-                        : {}),
-                    },
-                  });
+        prisma.$transaction(
+          (tx) =>
+            withIdempotency<AdjustResult>(
+              tx,
+              { organizationId: orgId, clientOpId, endpoint: 'adjust' },
+              async () => {
+                const product = await tx.product.findUnique({
+                  where: { id },
+                  select: { organizationId: true, qty: true, name: true, buyPrice: true },
+                });
+                if (!product || product.organizationId !== orgId) {
+                  throw new AdjustRejection(
+                    { error: 'PRODUCT_NOT_FOUND', message: 'Produit introuvable' },
+                    404,
+                  );
                 }
-              }
 
-              await tx.stockMovement.create({
-                data: {
-                  organizationId: orgId,
-                  productId: id,
-                  type: parsed.data.type ?? (delta > 0 ? 'IN' : 'OUT'),
-                  delta,
-                  ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
-                  createdById: auth.user.sub,
-                  ...(clientOpId ? { clientOpId } : {}),
-                },
-              });
-              // Écriture ATOMIQUE en delta (increment/decrement), pas l'absolu
-              // `newQty` calculé depuis la lecture ci-dessus : rejeu-safe et
-              // concurrency-safe (deux ajustements concurrents composent
-              // correctement au lieu que le second écrase le premier).
-              const updated = await tx.product.update({
-                where: { id },
-                data: {
-                  qty: { increment: delta },
-                  // Réapprovisionnement avec prix d'achat : on met à jour le coût
-                  // courant.
-                  ...(parsed.data.buyPrice !== undefined ? { buyPrice: parsed.data.buyPrice } : {}),
-                },
-                select: PRODUCT_SELECT,
-              });
-              return { kind: 'OK', product: updated };
-            },
-          ),
+                const newQty = product.qty + delta;
+                if (newQty < 0) {
+                  throw new AdjustRejection(
+                    { error: 'INSUFFICIENT_STOCK', message: 'Stock insuffisant pour cette sortie' },
+                    409,
+                  );
+                }
+
+                // Réappro pris « en prêt » → dette fournisseur du reste dû, bornée au
+                // coût de l'entrée (delta × prix d'achat effectif). Seulement pour une
+                // entrée.
+                if (parsed.data.supplierDebt && delta > 0) {
+                  const effectiveBuyPrice = parsed.data.buyPrice ?? product.buyPrice;
+                  const owed = Math.min(parsed.data.supplierDebt.amount, delta * effectiveBuyPrice);
+                  if (owed > 0) {
+                    await tx.supplierDebt.create({
+                      data: {
+                        organizationId: orgId,
+                        productId: id,
+                        label: product.name,
+                        amount: owed,
+                        status: 'OPEN',
+                        createdById: auth.user.sub,
+                        ...(parsed.data.supplierDebt.supplierName
+                          ? { supplierName: parsed.data.supplierDebt.supplierName }
+                          : {}),
+                      },
+                    });
+                  }
+                }
+
+                await tx.stockMovement.create({
+                  data: {
+                    organizationId: orgId,
+                    productId: id,
+                    type: parsed.data.type ?? (delta > 0 ? 'IN' : 'OUT'),
+                    delta,
+                    ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
+                    createdById: auth.user.sub,
+                    ...(clientOpId ? { clientOpId } : {}),
+                  },
+                });
+                // Écriture ATOMIQUE en delta (increment/decrement), pas l'absolu
+                // `newQty` calculé depuis la lecture ci-dessus : rejeu-safe et
+                // concurrency-safe (deux ajustements concurrents composent
+                // correctement au lieu que le second écrase le premier).
+                const updated = await tx.product.update({
+                  where: { id },
+                  data: {
+                    qty: { increment: delta },
+                    // Réapprovisionnement avec prix d'achat : on met à jour le coût
+                    // courant.
+                    ...(parsed.data.buyPrice !== undefined
+                      ? { buyPrice: parsed.data.buyPrice }
+                      : {}),
+                  },
+                  select: PRODUCT_SELECT,
+                });
+                return { kind: 'OK', product: updated };
+              },
+            ),
+          { isolationLevel: 'Serializable' },
         ),
       );
       result = outcome.result;
