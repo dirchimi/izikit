@@ -8,9 +8,14 @@
  *      (spy call count stays at 1).
  *   2. `clientOpId: null` always executes `fn` and never touches
  *      `offlineOperation` (normal online path — nothing memoized).
- *   3. a P2002 race on `create` (two concurrent replays inserting the same
- *      clientOpId) is resolved by re-reading the row that won and
- *      returning IT as memoized, without surfacing the error.
+ *   3. a P2002 from `create` propagates uncaught (NOT swallowed/re-read
+ *      inside the same tx) so the caller's `withTxRetry` can retry the
+ *      whole transaction.
+ *   4. non-P2002 errors from `create` also propagate.
+ *   5. an existing row whose `organizationId` doesn't match the caller's
+ *      throws instead of leaking another tenant's memoized result
+ *      (fail-safe guard; impossible in practice since clientOpId is a
+ *      globally-unique cuid2).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
@@ -73,7 +78,7 @@ describe('withIdempotency', () => {
     expect(txMock.offlineOperation.create).not.toHaveBeenCalled();
   });
 
-  it('handles the P2002 race: create collision re-reads and returns the memoized winner', async () => {
+  it('lets a P2002 from create propagate uncaught (does not re-read inside the tx)', async () => {
     const fn = vi.fn().mockResolvedValue({ n: 7 });
 
     txMock.offlineOperation.findUnique.mockResolvedValueOnce(null);
@@ -85,22 +90,13 @@ describe('withIdempotency', () => {
       },
     );
     txMock.offlineOperation.create.mockRejectedValueOnce(p2002 as never);
-    // Re-read after the race: the row the OTHER concurrent call inserted.
-    txMock.offlineOperation.findUnique.mockResolvedValueOnce({
-      id: 'op_row_race',
-      organizationId: 'org_1',
-      clientOpId: 'op_1',
-      endpoint: 'sales',
-      resultJson: { n: 999 },
-      createdAt: new Date(),
-    } as never);
 
-    const out = await withIdempotency(txMock, baseArgs, fn);
+    await expect(withIdempotency(txMock, baseArgs, fn)).rejects.toBe(p2002);
 
+    // Must NOT attempt a second read on the (now-aborted, on real Postgres)
+    // transaction — only the up-front miss should have happened.
     expect(fn).toHaveBeenCalledTimes(1);
-    expect(out.replayed).toBe(true);
-    expect(out.result).toEqual({ n: 999 });
-    expect(txMock.offlineOperation.findUnique).toHaveBeenCalledTimes(2);
+    expect(txMock.offlineOperation.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it('rethrows non-P2002 errors from create so callers can decide whether to retry', async () => {
@@ -109,5 +105,20 @@ describe('withIdempotency', () => {
     txMock.offlineOperation.create.mockRejectedValueOnce(new Error('connection lost'));
 
     await expect(withIdempotency(txMock, baseArgs, fn)).rejects.toThrow('connection lost');
+  });
+
+  it("throws on an organizationId mismatch instead of leaking another tenant's memoized result", async () => {
+    const fn = vi.fn().mockResolvedValue({ n: 1 });
+    txMock.offlineOperation.findUnique.mockResolvedValueOnce({
+      id: 'op_row_other_org',
+      organizationId: 'org_OTHER',
+      clientOpId: 'op_1',
+      endpoint: 'sales',
+      resultJson: { n: 999 },
+      createdAt: new Date(),
+    } as never);
+
+    await expect(withIdempotency(txMock, baseArgs, fn)).rejects.toThrow(/org_OTHER/);
+    expect(fn).not.toHaveBeenCalled();
   });
 });
