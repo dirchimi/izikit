@@ -1,0 +1,342 @@
+// @vitest-environment jsdom
+/**
+ * mutations.ts — companion unit test (Task 3.2, `createSaleOffline`).
+ *
+ * Same jsdom + `fake-indexeddb/auto` setup as `outbox.test.ts` / `pull.test.ts`
+ * (Dexie needs a real-shaped IndexedDB API). No network is touched:
+ * `createSaleOffline` only writes to Dexie + enqueues an outbox row; the caller
+ * (Task 3.3) decides when to drain.
+ */
+import 'fake-indexeddb/auto';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { db, type ProductRow } from './db';
+import { createSaleOffline } from './mutations';
+
+const ORG = 'org-1';
+
+function product(overrides: Partial<ProductRow> & { id: string }): ProductRow {
+  return {
+    organizationId: ORG,
+    ref: `REF-${overrides.id}`,
+    name: `Product ${overrides.id}`,
+    category: 'Alimentation',
+    buyPrice: 100,
+    sellPrice: 500,
+    prixGros: 0,
+    unite: 'piece',
+    qty: 10,
+    threshold: 2,
+    updatedAt: '2026-07-20T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+async function seed(products: ProductRow[]): Promise<void> {
+  await db.products.bulkPut(products);
+}
+
+async function reset(): Promise<void> {
+  await Promise.all([
+    db.products.clear(),
+    db.customers.clear(),
+    db.sales.clear(),
+    db.saleItems.clear(),
+    db.receivables.clear(),
+    db.stockMovements.clear(),
+    db.outbox.clear(),
+    db.meta.clear(),
+  ]);
+}
+
+describe('createSaleOffline', () => {
+  beforeEach(reset);
+
+  it('writes an optimistic sale, items, aggregated movement, decrements stock, enqueues one outbox row', async () => {
+    await seed([
+      product({ id: 'p1', name: 'Riz', sellPrice: 500, buyPrice: 300, qty: 10 }),
+      product({ id: 'p2', name: 'Huile', sellPrice: 800, buyPrice: 500, qty: 4 }),
+    ]);
+
+    const res = await createSaleOffline({
+      items: [
+        { productId: 'p1', qty: 2, wholesale: false },
+        { productId: 'p2', qty: 1, wholesale: false },
+      ],
+      method: 'cash',
+    });
+
+    // total = 2*500 + 1*800 = 1800
+    expect(res.total).toBe(1800);
+    expect(res.publicToken).toBeNull();
+    expect(res.number).toMatch(/^#L\d+$/);
+
+    const sale = await db.sales.get(res.id);
+    expect(sale).toBeDefined();
+    expect(sale?.synced).toBe(false);
+    expect(sale?.total).toBe(1800);
+    expect(sale?.method).toBe('CASH');
+    expect(sale?.cashAmount).toBe(1800);
+    expect(sale?.number).toBe(res.number);
+    expect(sale?.status).toBe('ACTIVE');
+
+    const items = await db.saleItems.where('saleId').equals(res.id).toArray();
+    expect(items).toHaveLength(2);
+    const p1Item = items.find((i) => i.productId === 'p1');
+    expect(p1Item?.unitPrice).toBe(500);
+    expect(p1Item?.qty).toBe(2);
+    expect(p1Item?.buyPrice).toBe(300);
+    expect(p1Item?.name).toBe('Riz');
+
+    const movements = await db.stockMovements.where('productId').equals('p1').toArray();
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.delta).toBe(-2);
+    expect(movements[0]?.type).toBe('OUT');
+    expect(movements[0]?.reason).toBe('sale');
+    expect(movements[0]?.clientOpId).toBe(`${res.id}:p1`);
+
+    // stock decremented
+    expect((await db.products.get('p1'))?.qty).toBe(8);
+    expect((await db.products.get('p2'))?.qty).toBe(3);
+
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.kind).toBe('sale');
+    expect(outbox[0]?.endpoint).toBe('/api/sales');
+    expect(outbox[0]?.opId).toBe(res.id);
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect(payload.id).toBe(res.id);
+    expect(payload.clientOpId).toBe(res.id);
+    expect(payload.method).toBe('cash');
+    expect(payload.items).toEqual([
+      { productId: 'p1', qty: 2, wholesale: false },
+      { productId: 'p2', qty: 1, wholesale: false },
+    ]);
+  });
+
+  it('aggregates duplicate lines of the same product into one movement (double scan)', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    const res = await createSaleOffline({
+      items: [
+        { productId: 'p1', qty: 2, wholesale: false },
+        { productId: 'p1', qty: 3, wholesale: false },
+      ],
+      method: 'cash',
+    });
+
+    expect(res.total).toBe(2500);
+    const movements = await db.stockMovements.where('productId').equals('p1').toArray();
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.delta).toBe(-5);
+    expect((await db.products.get('p1'))?.qty).toBe(5);
+    // two sale-item lines are still written faithfully
+    const items = await db.saleItems.where('saleId').equals(res.id).toArray();
+    expect(items).toHaveLength(2);
+  });
+
+  it('honours wholesale pricing when prixGros > 0', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, prixGros: 400, qty: 10 })]);
+
+    const res = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 2, wholesale: true }],
+      method: 'cash',
+    });
+
+    expect(res.total).toBe(800); // 2 * 400 (wholesale)
+  });
+
+  it('applies a clamped discount', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    const res = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 2, wholesale: false }],
+      method: 'cash',
+      discount: 300,
+    });
+
+    expect(res.total).toBe(700); // 1000 - 300
+    const sale = await db.sales.get(res.id);
+    expect(sale?.discount).toBe(300);
+  });
+
+  it('throws PRODUCT_NOT_FOUND and writes nothing when a product is missing locally', async () => {
+    await seed([product({ id: 'p1', qty: 10 })]);
+
+    await expect(
+      createSaleOffline({
+        items: [{ productId: 'ghost', qty: 1, wholesale: false }],
+        method: 'cash',
+      }),
+    ).rejects.toThrow('PRODUCT_NOT_FOUND');
+
+    expect(await db.sales.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('throws INSUFFICIENT_STOCK_LOCAL and rolls back everything', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 3 })]);
+
+    await expect(
+      createSaleOffline({
+        items: [{ productId: 'p1', qty: 5, wholesale: false }],
+        method: 'cash',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_STOCK_LOCAL');
+
+    expect(await db.sales.count()).toBe(0);
+    expect(await db.saleItems.count()).toBe(0);
+    expect(await db.stockMovements.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+    expect((await db.products.get('p1'))?.qty).toBe(3); // unchanged
+  });
+
+  it('aggregates duplicate lines for the stock check (each line alone would pass)', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 4 })]);
+
+    await expect(
+      createSaleOffline({
+        items: [
+          { productId: 'p1', qty: 3, wholesale: false },
+          { productId: 'p1', qty: 3, wholesale: false },
+        ],
+        method: 'cash',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_STOCK_LOCAL');
+
+    expect((await db.products.get('p1'))?.qty).toBe(4);
+  });
+
+  it('throws PAYMENT_MISMATCH when the split does not equal net', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    await expect(
+      createSaleOffline({
+        items: [{ productId: 'p1', qty: 2, wholesale: false }],
+        payments: [{ method: 'cash', amount: 900 }], // net is 1000
+      }),
+    ).rejects.toThrow('PAYMENT_MISMATCH');
+
+    expect(await db.sales.count()).toBe(0);
+  });
+
+  it('throws CREDIT_NEEDS_CUSTOMER when a credit portion has no customer, writes nothing', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    await expect(
+      createSaleOffline({
+        items: [{ productId: 'p1', qty: 2, wholesale: false }],
+        method: 'credit',
+      }),
+    ).rejects.toThrow('CREDIT_NEEDS_CUSTOMER');
+
+    expect(await db.sales.count()).toBe(0);
+    expect(await db.receivables.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('opens a receivable for the credit portion of a mixed sale', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    const res = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 2, wholesale: false }],
+      payments: [
+        { method: 'cash', amount: 600 },
+        { method: 'credit', amount: 400 },
+      ],
+      customer: { id: 'cust-1' },
+    });
+
+    const sale = await db.sales.get(res.id);
+    expect(sale?.method).toBe('MIXED');
+    expect(sale?.cashAmount).toBe(600);
+    expect(sale?.creditAmount).toBe(400);
+    expect(sale?.customerId).toBe('cust-1');
+
+    const receivables = await db.receivables.where('customerId').equals('cust-1').toArray();
+    expect(receivables).toHaveLength(1);
+    expect(receivables[0]?.amount).toBe(400);
+    expect(receivables[0]?.amountPaid).toBe(0);
+    expect(receivables[0]?.status).toBe('OPEN');
+    expect(receivables[0]?.saleId).toBe(res.id);
+  });
+
+  it('creates a new offline customer (name, no id) and references it in the sale + payload', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    const res = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 2, wholesale: false }],
+      method: 'credit',
+      customer: { name: 'Awa Diop', phone: '221700000000' },
+    });
+
+    const customers = await db.customers.toArray();
+    expect(customers).toHaveLength(1);
+    const created = customers[0];
+    expect(created?.name).toBe('Awa Diop');
+    expect(created?.phone).toBe('221700000000');
+    expect(created?.synced).toBe(false);
+
+    const sale = await db.sales.get(res.id);
+    expect(sale?.customerId).toBe(created?.id);
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as { customer?: Record<string, unknown> };
+    expect(payload.customer).toEqual({
+      id: created?.id,
+      name: 'Awa Diop',
+      phone: '221700000000',
+    });
+
+    // credit receivable opened against the new customer
+    const receivables = await db.receivables.where('customerId').equals(created!.id).toArray();
+    expect(receivables).toHaveLength(1);
+    expect(receivables[0]?.amount).toBe(1000);
+  });
+
+  it('sends { id } in the payload for an existing customer', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    await createSaleOffline({
+      items: [{ productId: 'p1', qty: 1, wholesale: false }],
+      method: 'cash',
+      customer: { id: 'existing-1' },
+    });
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as { customer?: Record<string, unknown> };
+    expect(payload.customer).toEqual({ id: 'existing-1' });
+    // no offline customer row is fabricated for an existing id
+    expect(await db.customers.count()).toBe(0);
+  });
+
+  it('increments the provisional number across sales', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 100 })]);
+
+    const first = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 1, wholesale: false }],
+      method: 'cash',
+    });
+    const second = await createSaleOffline({
+      items: [{ productId: 'p1', qty: 1, wholesale: false }],
+      method: 'cash',
+    });
+
+    const n1 = Number(first.number.replace('#L', ''));
+    const n2 = Number(second.number.replace('#L', ''));
+    expect(n2).toBe(n1 + 1);
+  });
+
+  it('does not include a discount key in the payload when discount is 0', async () => {
+    await seed([product({ id: 'p1', sellPrice: 500, qty: 10 })]);
+
+    await createSaleOffline({
+      items: [{ productId: 'p1', qty: 1, wholesale: false }],
+      method: 'cash',
+    });
+
+    const outbox = await db.outbox.toArray();
+    const payload = outbox[0]?.payload as Record<string, unknown>;
+    expect('discount' in payload).toBe(false);
+    expect('customer' in payload).toBe(false);
+  });
+});
