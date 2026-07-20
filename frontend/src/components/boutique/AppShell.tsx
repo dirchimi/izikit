@@ -10,6 +10,9 @@ import GlobalBanner from './GlobalBanner';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import OfflineBanner from '@/components/pwa/OfflineBanner';
 import { useApi } from '@/lib/useApi';
+import { useAuth, useUser } from '@/contexts/AuthContext';
+import { useT } from '@/contexts/LocaleContext';
+import { authGateState } from '@/lib/offline/auth-gate';
 
 interface BoutiqueHeaderData {
   organization: { name: string };
@@ -21,17 +24,46 @@ interface BoutiqueHeaderData {
  * - lg+ : sidebar fixe (220px), collée en pleine hauteur.
  * - < lg : sidebar masquée → header mobile avec hamburger ouvrant un drawer.
  *
- * Le gating d'auth est fait en amont, côté serveur, dans (app)/layout.tsx :
- * une session invalide redirige vers /connexion avant que ce shell ne rende.
+ * Gating d'auth — deux couches :
+ * - Serveur (autorité en ligne) : (app)/layout.tsx vérifie le cookie via
+ *   verifyToken() et redirige vers /connexion AVANT de rendre ce shell.
+ * - Client (Task 1.5, couvre le cas hors-ligne) : quand le service worker
+ *   sert le HTML de la coquille (app) depuis le cache pendant que l'appareil
+ *   est hors-ligne, ce composant serveur ne s'exécute PAS — il n'y a alors
+ *   plus aucune autorité pour décider si l'app doit s'afficher. Le garde
+ *   ci-dessous (useUser, voir AuthContext.tsx) couvre ce trou : tant que
+ *   l'auth n'est pas résolue on affiche un loader neutre, et si elle se
+ *   résout sans utilisateur (en ligne, déconnecté ; ou hors-ligne, aucune
+ *   session persistée valide) on redirige vers /connexion sans jamais
+ *   rendre la coquille.
  */
 export default function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const close = () => setDrawerOpen(false);
   const pathname = usePathname();
+  const t = useT();
+  const { loading } = useAuth();
+  const user = useUser('/connexion');
   // Partage le cache de /api/org/current avec la sidebar (même clé useApi).
   const { data: boutique } = useApi<BoutiqueHeaderData>('/api/org/current');
   const shopName = boutique?.organization.name ?? 'Sahilley';
   const shopLogo = boutique?.settings?.logoUrl ?? null;
+
+  const gate = authGateState(loading, user);
+  if (gate !== 'ready') {
+    // 'loading' : auth pas encore résolue → loader neutre, jamais la coquille.
+    // 'redirect' : résolue sans utilisateur → useUser() déclenche déjà le
+    // router.replace('/connexion') en effet de bord ; on ne rend rien ici.
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        className="bg-background flex min-h-screen items-center justify-center"
+      >
+        <span className="sr-only">{t('common.loading')}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-background font-body flex min-h-screen">
