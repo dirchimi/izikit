@@ -20,9 +20,15 @@ export interface SyncIndicatorInput {
  * Single discriminant driving what the indicator shows. Precedence (highest
  * first):
  *   1. `conflict` — a stock mismatch needs a human decision on
- *      `/synchronisation`; wins even mid-drain, since drains don't touch
- *      the `conflicts` table (only `sync-engine.ts`'s `applySyncSuccess`
- *      writes it — see that module's docblock).
+ *      `/synchronisation`. `conflicts` (from `useSyncStatus.ts`'s
+ *      `countConflicts`) is a live query over `db.conflicts` (the
+ *      reconciliation table `sync-engine.ts`'s `applySyncSuccess` writes to
+ *      when a sale's response carries `stockConflicts`), summed with any
+ *      outbox row still at `status: 'conflict'` (the legacy 409 path used
+ *      by `/api/products/[id]/adjust`) — so this state wins even MID-drain:
+ *      a conflict recorded by `applySyncSuccess` partway through a drain
+ *      flips the indicator to `conflict` immediately, even while `syncing`
+ *      is still `true`.
  *   2. `syncing` — a drain is actively in flight (`drainOutbox()` running).
  *   3. `offline` — no network AND there's outbox work stuck behind it; not
  *      shown when there's nothing pending (no point alarming the user about

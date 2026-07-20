@@ -480,7 +480,7 @@ describe('drainOutbox', () => {
   });
 
   describe('Task 4.2 — stock-conflict capture', () => {
-    it('a sale response carrying stockConflicts upserts one conflict row per entry', async () => {
+    it('a sale response carrying stockConflicts upserts one conflict row per entry AND counts toward DrainResult.conflicts (Task 6.4)', async () => {
       await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
       await db.sales.put(makeSaleRow('s1'));
 
@@ -493,7 +493,11 @@ describe('drainOutbox', () => {
       });
 
       const result = await drainOutbox();
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      // The sale itself still drains as `done` (200, not 409) — but since
+      // it wrote new `db.conflicts` rows, `conflicts` must be > 0 (Task 6.4
+      // regression fix: this used to stay 0 because the counter only ever
+      // looked at outbox `status: 'conflict'`, which a 200 response never sets).
+      expect(result).toEqual({ done: 1, conflicts: 1, errors: 0 });
 
       const rows = await db.conflicts.toArray();
       expect(rows).toHaveLength(2);
@@ -527,8 +531,9 @@ describe('drainOutbox', () => {
         stockConflicts: [],
       });
 
-      await drainOutbox();
+      const result = await drainOutbox();
 
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
       expect(await db.conflicts.count()).toBe(0);
     });
 
@@ -555,7 +560,11 @@ describe('drainOutbox', () => {
         ],
       });
 
-      await drainOutbox();
+      const result = await drainOutbox();
+
+      // A pure replay (the one conflict row already existed) writes nothing
+      // NEW, so it must NOT count toward DrainResult.conflicts either.
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
 
       const rows = await db.conflicts.where('saleId').equals('s3').toArray();
       expect(rows).toHaveLength(1);

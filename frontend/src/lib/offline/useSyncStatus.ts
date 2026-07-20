@@ -26,7 +26,20 @@
  *     marks each row `syncing` for the duration of its POST (see
  *     `sync-engine.ts`'s `markSyncing` call), so "is a drain in flight"
  *     falls out of the existing state machine for free.
- *   - `conflicts` is surfaced separately from `pendingCount` (not folded
+ *   - `conflicts` (fixed post-Task-4.3 — see this function's own docblock
+ *     below) is the count of UNRESOLVED rows in `db.conflicts`, the same
+ *     table the `/synchronisation` screen's `ConflictsManager` reads
+ *     (`.where('resolved').equals(0)`) — NOT a count of outbox rows. Since
+ *     Task 4.1, a stock conflict on a sale is a 200 response carrying
+ *     `stockConflicts`, which `sync-engine.ts`'s `applySyncSuccess` records
+ *     into `db.conflicts` while the sale's outbox row still drains as
+ *     `done` — it never gets outbox `status: 'conflict'`. The one path that
+ *     still sets outbox `status: 'conflict'` today is the legacy 409
+ *     `INSUFFICIENT_STOCK` branch used by `/api/products/[id]/adjust`; those
+ *     rows carry no `db.conflicts` entry of their own, so `countConflicts`
+ *     adds them in defensively (summed, not double-counted — the two
+ *     sources never overlap) so a stock-adjust conflict still lights up the
+ *     badge too. It is surfaced separately from `pendingCount` (not folded
  *     in) for the same reason `outbox.ts` excludes it from its own
  *     `pendingCount()` — a conflict needs a human decision on the
  *     dedicated conflicts screen (PHASE 4), not just "still needs syncing".
@@ -63,12 +76,33 @@ export async function countSyncing(): Promise<number> {
     .count();
 }
 
-/** Live-queryable count backing `conflicts`. */
+/**
+ * Live-queryable count backing `conflicts`.
+ *
+ * Primary source: `db.conflicts` rows where `resolved === 0` — the stock
+ * reconciliation table `sync-engine.ts`'s `applySyncSuccess` writes to when a
+ * sale's response carries `stockConflicts` (Task 4.1/4.2). This matches the
+ * `/synchronisation` screen's `ConflictsManager` exactly
+ * (`db.conflicts.where('resolved').equals(0)`) so the nav badge and the
+ * dedicated screen never disagree on count.
+ *
+ * Defensively summed with outbox rows still sitting at `status: 'conflict'`
+ * — today that's only the legacy 409 `INSUFFICIENT_STOCK` branch (used by
+ * `/api/products/[id]/adjust`, see `sync-engine.ts`), which never touches
+ * `db.conflicts`. The two sources are disjoint (a sale's stock conflict never
+ * sets outbox `status: 'conflict'`; an adjust's 409 conflict never writes a
+ * `db.conflicts` row), so summing them cannot double-count the same
+ * conflict.
+ */
 export async function countConflicts(): Promise<number> {
-  return db.outbox
-    .where('status')
-    .equals('conflict' satisfies OutboxStatus)
-    .count();
+  const [unresolved, legacyOutboxConflicts] = await Promise.all([
+    db.conflicts.where('resolved').equals(0).count(),
+    db.outbox
+      .where('status')
+      .equals('conflict' satisfies OutboxStatus)
+      .count(),
+  ]);
+  return unresolved + legacyOutboxConflicts;
 }
 
 /**

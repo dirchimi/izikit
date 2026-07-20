@@ -22,6 +22,7 @@ describe('useSyncStatus query functions', () => {
   beforeEach(async () => {
     await db.outbox.clear();
     await db.meta.clear();
+    await db.conflicts.clear();
   });
 
   describe('countPending', () => {
@@ -68,13 +69,81 @@ describe('useSyncStatus query functions', () => {
       expect(await countConflicts()).toBe(0);
     });
 
-    it('counts only rows with status conflict', async () => {
-      const a = await enqueue({ kind: 'sale', payload: {}, opId: 'a', endpoint: '/api/sales' });
-      const b = await enqueue({ kind: 'sale', payload: {}, opId: 'b', endpoint: '/api/sales' });
-      await markConflict(a.seq as number, 'stock shortfall: Riz -3');
-      await markConflict(b.seq as number, 'stock shortfall: Sucre -1');
+    it('counts UNRESOLVED db.conflicts rows (the reconciliation table), not outbox status', async () => {
+      // Task 6.4 regression: a stock conflict since Task 4.1 arrives as a
+      // 200 + `stockConflicts` and is recorded into `db.conflicts` by
+      // `sync-engine.ts`'s `applySyncSuccess` — the sale's OWN outbox row
+      // still drains as `done`, never `conflict`. So seeding `db.conflicts`
+      // directly (2 unresolved + 1 resolved) with an EMPTY outbox must still
+      // count 2, proving the count is no longer sourced from outbox status.
+      await db.conflicts.bulkAdd([
+        {
+          id: 's1:p1',
+          saleId: 's1',
+          saleNumber: 'V-0001',
+          productId: 'p1',
+          productName: 'Riz',
+          requested: 5,
+          available: 2,
+          shortfall: 3,
+          createdAt: '2026-07-20T00:00:00.000Z',
+          resolved: 0,
+        },
+        {
+          id: 's1:p2',
+          saleId: 's1',
+          saleNumber: 'V-0001',
+          productId: 'p2',
+          productName: 'Sucre',
+          requested: 4,
+          available: 0,
+          shortfall: 4,
+          createdAt: '2026-07-20T00:00:00.000Z',
+          resolved: 0,
+        },
+        {
+          id: 's2:p3',
+          saleId: 's2',
+          saleNumber: 'V-0002',
+          productId: 'p3',
+          productName: 'Huile',
+          requested: 1,
+          available: 0,
+          shortfall: 1,
+          createdAt: '2026-07-20T00:00:00.000Z',
+          resolved: 1, // shopkeeper already resolved it on /synchronisation
+        },
+      ]);
 
       expect(await countConflicts()).toBe(2);
+    });
+
+    it('sums in legacy outbox status:conflict rows (the adjust 409 path) alongside db.conflicts', async () => {
+      // The legacy 409 INSUFFICIENT_STOCK path (used by
+      // /api/products/[id]/adjust) still marks the outbox row `conflict`
+      // directly and never writes to `db.conflicts` — countConflicts must
+      // still surface it so an adjust-stock conflict lights up the badge.
+      const a = await enqueue({
+        kind: 'adjust',
+        payload: {},
+        opId: 'a',
+        endpoint: '/api/products/p1/adjust',
+      });
+      await markConflict(a.seq as number, 'INSUFFICIENT_STOCK');
+      await db.conflicts.add({
+        id: 's1:p1',
+        saleId: 's1',
+        saleNumber: 'V-0001',
+        productId: 'p1',
+        productName: 'Riz',
+        requested: 5,
+        available: 2,
+        shortfall: 3,
+        createdAt: '2026-07-20T00:00:00.000Z',
+        resolved: 0,
+      });
+
+      expect(await countConflicts()).toBe(2); // 1 from db.conflicts + 1 from outbox
     });
   });
 

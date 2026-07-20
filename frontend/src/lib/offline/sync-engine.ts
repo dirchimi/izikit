@@ -25,9 +25,16 @@
  *     network blip should retry from the same head next drain, not skip
  *     ahead.
  *   - stock conflict (409 + a stock-conflict code) → `markConflict` and
- *     keep going; a stock shortfall on one sale is a per-row business
+ *     keep going; a stock shortfall on one row is a per-row business
  *     outcome (PHASE 4's conflict screen), not a reason to block unrelated
- *     rows behind it.
+ *     rows behind it. This 409 branch is now only reachable via
+ *     `/api/products/[id]/adjust` (a stock-OUT below zero) — since Task 4.1,
+ *     `/api/sales` no longer 409s for a stock shortfall; it 200s and carries
+ *     `stockConflicts` in the body instead (see `applySyncSuccess`'s `sale`
+ *     case below, which records those into `db.conflicts`). Both paths are
+ *     summed into `DrainResult.conflicts` (Task 6.4) — the 409 branch below
+ *     increments it directly per row; the 200 path increments it via
+ *     `applySyncSuccess`'s return value in `drainPending`.
  *   - anything else (4xx validation/not-found, or 5xx) → `markError` and
  *     keep going. A 5xx is the SERVER's problem with this specific op, not
  *     evidence the device itself is offline (a true network/timeout
@@ -50,7 +57,11 @@ import {
 /**
  * Server error codes that mean "stock ran out during sync reconciliation",
  * not a hard failure — PHASE 4 routes these to the conflicts screen instead
- * of the generic error bucket.
+ * of the generic error bucket. Today the only op still capable of a 409 with
+ * one of these codes is `adjust` (`/api/products/[id]/adjust`, a stock-OUT
+ * that would push qty below zero) — `/api/sales` moved to a 200 +
+ * `stockConflicts` contract in Task 4.1, handled separately by
+ * `applySyncSuccess`'s `sale` case.
  */
 const STOCK_CONFLICT_CODES: ReadonlySet<string> = new Set(['INSUFFICIENT_STOCK']);
 
@@ -144,14 +155,23 @@ export function buildConflictRows(
  * existence-check-then-`add`, NOT a `put` — a replayed sale (Task 2.2's
  * idempotent retry) must not clobber a conflict the shopkeeper already
  * marked `resolved` on the `/synchronisation` screen.
+ *
+ * Returns the count of rows ACTUALLY inserted (excludes rows skipped because
+ * they already existed) — `applySyncSuccess` propagates this up so
+ * `drainOutbox()`'s `DrainResult.conflicts` counter (Task 6.4) can tell
+ * whether this sale genuinely wrote new conflicts, as opposed to a replay
+ * that found every row already there.
  */
-async function upsertConflicts(rows: ConflictRow[]): Promise<void> {
+async function upsertConflicts(rows: ConflictRow[]): Promise<number> {
+  let inserted = 0;
   for (const row of rows) {
     const existing = await db.conflicts.get(row.id);
     if (!existing) {
       await db.conflicts.add(row);
+      inserted++;
     }
   }
+  return inserted;
 }
 
 /**
@@ -173,9 +193,17 @@ async function upsertConflicts(rows: ConflictRow[]): Promise<void> {
  * PHASE 3/5 optimistic-insert code) — Dexie's `update(key, changes)`
  * resolves to `0` rather than throwing when `key` isn't found, so a
  * missing row is silently skipped by design, not an error.
+ *
+ * Returns the number of NEW `db.conflicts` rows this call wrote (0 for
+ * every `kind` except `sale`, and 0 for a `sale` whose `stockConflicts`
+ * were empty or all already-recorded by a prior replay) — `drainPending`
+ * uses this to keep `DrainResult.conflicts` accurate for the current
+ * contract (Task 6.4), where a stock conflict arrives as part of a 200
+ * response rather than a 409.
  */
-async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void> {
+async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<number> {
   const body = isRecord(response) ? response : {};
+  let conflictsWritten = 0;
 
   switch (row.kind) {
     case 'sale': {
@@ -203,7 +231,9 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
         const patchedSale = await db.sales.get(row.opId);
         const saleNumber = patchedSale?.number ?? row.opId;
         const createdAt = patchedSale?.createdAt ?? new Date().toISOString();
-        await upsertConflicts(buildConflictRows(row.opId, saleNumber, createdAt, stockConflicts));
+        conflictsWritten = await upsertConflicts(
+          buildConflictRows(row.opId, saleNumber, createdAt, stockConflicts),
+        );
       }
       break;
     }
@@ -309,6 +339,8 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
       // Unknown/future kind — nothing local to patch.
       break;
   }
+
+  return conflictsWritten;
 }
 
 let draining = false;
@@ -397,7 +429,8 @@ async function drainPending(): Promise<DrainResult> {
       if (row.kind === 'cancel' && err.status === 409 && err.code === 'SALE_ALREADY_CANCELLED') {
         await markDone(seq);
         try {
-          await applySyncSuccess(row, undefined);
+          const conflictsWritten = await applySyncSuccess(row, undefined);
+          if (conflictsWritten > 0) conflicts++;
         } catch (patchErr) {
           console.warn('[sync-engine] applySyncSuccess failed for row', row.opId, patchErr);
         }
@@ -414,7 +447,14 @@ async function drainPending(): Promise<DrainResult> {
 
     await markDone(seq);
     try {
-      await applySyncSuccess(row, response);
+      const conflictsWritten = await applySyncSuccess(row, response);
+      // Task 6.4 — a sale that wrote one or more NEW `db.conflicts` rows
+      // still drains as `done` (the write itself succeeded server-side;
+      // the stock shortfall is a reconciliation matter, not a sync
+      // failure), but it must still count toward `DrainResult.conflicts`
+      // so callers (and `useSyncStatus`'s badge) see it — see this
+      // function's own docblock and `useSyncStatus.ts`'s `countConflicts`.
+      if (conflictsWritten > 0) conflicts++;
     } catch (patchErr) {
       // The server already accepted the write (row is correctly `done`) —
       // a failed LOCAL cosmetic patch (e.g. a future kind added without a

@@ -406,14 +406,15 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
     expect(await pendingCount()).toBe(2);
 
     const conflictDrain = await drainOutbox();
-    // NOTE (finding, see task report): `DrainResult.conflicts` only counts
-    // the LEGACY 409-INSUFFICIENT_STOCK branch (still exercised in
-    // sync-engine.test.ts for an older contract) — the current Task 4.1
-    // contract is a 200 with a `stockConflicts` array, which takes the
-    // `markDone` path, so this counter stays 0 even though a real conflict
-    // was captured (asserted via `db.conflicts` below). Documented as a gap
-    // in the task report, not fixed here (out of scope for this test).
-    expect(conflictDrain).toEqual({ done: 2, conflicts: 0, errors: 0 });
+    // Task 6.4 fix: `DrainResult.conflicts` used to only count the LEGACY
+    // 409-INSUFFICIENT_STOCK branch (still exercised in sync-engine.test.ts
+    // for the `/api/products/[id]/adjust` contract) — the current Task 4.1
+    // `/api/sales` contract is a 200 with a `stockConflicts` array, which
+    // takes the `markDone` path. `applySyncSuccess` now reports how many NEW
+    // `db.conflicts` rows it wrote per op, and `drainPending` folds that into
+    // `conflicts` — so sale3's real conflict (asserted via `db.conflicts`
+    // below) now correctly counts here too.
+    expect(conflictDrain).toEqual({ done: 2, conflicts: 1, errors: 0 });
 
     // The sale is NOT lost: recorded server-side, given a real V- number.
     expect(server.sales.size).toBe(4);
