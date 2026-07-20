@@ -194,6 +194,10 @@ describe('pullAll', () => {
     expect(sales).toHaveLength(1);
     expect(sales[0]?.id).toBe('s1');
     expect(sales[0]).not.toHaveProperty('items');
+    // Task 6.3 — pulled sales are stamped synced:true (server-confirmed by
+    // definition), matching toRepaymentRow, so purge.ts's retention sweep
+    // bounds growth from pulled history uniformly.
+    expect(sales[0]?.synced).toBe(true);
 
     const saleItems = await db.saleItems.toArray();
     expect(saleItems).toHaveLength(1);
@@ -205,12 +209,14 @@ describe('pullAll', () => {
 
     const expenses = await db.expenses.toArray();
     expect(expenses[0]?.label).toBe('Loyer');
+    expect(expenses[0]?.synced).toBe(true);
 
     const documents = await db.documents.toArray();
     expect(documents[0]?.lines).toEqual([{ article: 'Riz', qty: 2, unitPrice: 500 }]);
 
     const stockMovements = await db.stockMovements.toArray();
     expect(stockMovements[0]?.delta).toBe(-2);
+    expect(stockMovements[0]?.synced).toBe(true);
 
     const repayments = await db.repayments.toArray();
     expect(repayments).toHaveLength(1);

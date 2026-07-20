@@ -3,14 +3,14 @@
  * offline-first plan; see docs/superpowers/plans/2026-07-20-offline-first-boutique.md).
  *
  * The Dexie mirror (`db.ts`) is append-only for its history tables (`sales`,
- * `saleItems`, `stockMovements`, `repayments`) plus the resolved-conflict
- * queue (`conflicts`) — nothing ever shrinks them on its own, so a
- * long-lived install (months of daily sales on a single device) grows
- * IndexedDB without bound. `purgeLocalHistory()` is a best-effort sweep that
- * drops rows old enough (`retentionDays`, default 60) to no longer matter for
- * the on-device screens (which only ever show recent history — reports that
- * need a longer window read the server, not this mirror) — WITHOUT ever
- * touching a row this device still needs to finish syncing.
+ * `saleItems`, `stockMovements`, `repayments`, `expenses`) plus the
+ * resolved-conflict queue (`conflicts`) — nothing ever shrinks them on its
+ * own, so a long-lived install (months of daily sales on a single device)
+ * grows IndexedDB without bound. `purgeLocalHistory()` is a best-effort sweep
+ * that drops rows old enough (`retentionDays`, default 60) to no longer
+ * matter for the on-device screens (which only ever show recent history —
+ * reports that need a longer window read the server, not this mirror) —
+ * WITHOUT ever touching a row this device still needs to finish syncing.
  *
  * Working-SET tables (`products`, `customers`, `receivables`, `documents`,
  * `meta`, `outbox`, `session`) are current-state, not history, and are
@@ -19,39 +19,59 @@
  *
  * Safety rules (all three must hold for a row to be dropped):
  *   1. Older than the cutoff (`retentionDays` ago), compared on the row's own
- *      entry-time field (`createdAt` for sales/stockMovements/repayments;
- *      conflicts also use `createdAt`) — never a business/back-dated field
- *      (an expense's `occurredAt` or a repayment's user-editable date could
- *      be back-dated by the shopkeeper on a row entered minutes ago; `db.ts`'s
- *      `RepaymentRow.createdAt` doc comment notes it MAY be back-dated too,
- *      but that back-dated value IS the row's only timestamp, so it is the
- *      only field available here — the `synced` gate below is what actually
- *      protects a freshly-entered-but-back-dated row, not the date check).
+ *      entry-time field (`createdAt` for sales/stockMovements/repayments/
+ *      expenses; conflicts also use `createdAt`) — never a business/
+ *      back-dated field (an expense's `occurredAt` or a repayment's
+ *      user-editable date could be back-dated by the shopkeeper on a row
+ *      entered minutes ago; `db.ts`'s `RepaymentRow.createdAt` doc comment
+ *      notes it MAY be back-dated too, but that back-dated value IS the
+ *      row's only timestamp, so it is the only field available here — the
+ *      `synced` gate below is what actually protects a
+ *      freshly-entered-but-back-dated row, not the date check).
  *   2. `synced === true` EXACTLY (or, for conflicts, `resolved === 1`) — a
  *      row whose `synced` is `false` (still queued) is never purged, and
- *      neither is one whose `synced` is `undefined`. Every row this repo
- *      writes locally starts `synced: false` and is flipped to `true` only
- *      once the server has confirmed it (`sync-engine.ts`'s
- *      `applySyncSuccess`); a row pulled fresh from the server (`pull.ts`)
- *      never sets `synced` at all (see e.g. `toStockMovementRow`), so it
- *      reads as `undefined` forever, NOT `true`. Treating `undefined` as
- *      purgeable would be the more "complete" cleanup (most historical rows
- *      on a multi-vendeur boutique arrive this way), but this file
- *      deliberately takes the conservative reading of the spec instead: only
- *      a row this device can positively prove is server-confirmed
- *      (`synced === true`) is ever deleted. The cost is that rows seeded
- *      purely by `pullAll()` (this device never wrote them) are never
- *      purged by this sweep — a documented, intentional limitation, not a
- *      bug: on a small boutique's IndexedDB this is a few thousand rows at
- *      most, and "never delete data we can't prove is safe" matters more
- *      here than disk space.
+ *      neither is one whose `synced` is `undefined`. "Server-confirmed"
+ *      covers TWO cases, both stamped `synced: true`: (a) a row this device
+ *      wrote locally and the server has since confirmed
+ *      (`sync-engine.ts`'s `applySyncSuccess` flips it), and (b) a row
+ *      seeded straight from the server by `pull.ts` — by definition already
+ *      server truth, whether or not this device ever wrote it (see e.g.
+ *      `toSaleRow`/`toStockMovementRow`/`toExpenseRow`/`toRepaymentRow`,
+ *      which all set `synced: true` unconditionally). Both are equally safe
+ *      to drop once old enough: the data still lives on the server (viewable
+ *      online), so purging the local copy only bounds this device's
+ *      IndexedDB growth, it never loses data. A row that reads `undefined`
+ *      (never explicitly stamped either way) is treated the same as `false`
+ *      — not purgeable — as a defensive default, not a case any current
+ *      mapper actually produces.
  *   3. NOT referenced by any outbox row still in flight (`pending` /
  *      `syncing` / `error` / `conflict`) — see `buildReferencedIds` below.
  *      This is a defense-in-depth belt-and-suspenders check: today no row
  *      that would pass gate #2 (`synced === true`) is ever ALSO referenced by
  *      a live outbox row (the two states are mutually exclusive in the
  *      current state machine), but a future kind/flow could change that, and
- *      this check is cheap, so it stays.
+ *      this check is cheap, so it stays. One nuance in `isReferencedId`
+ *      (below): a pending `sale`/`cancel`/`adjust` op's re-credit or
+ *      sale/adjust `stockMovement` rows carry `clientOpId = "${opId}:${productId}"`
+ *      (the colon-prefixed form) — for a `cancel` specifically, `opId` there
+ *      is the FRESH cancel op id (NOT the sale id being cancelled, see
+ *      `mutations.ts`'s `createCancelOffline`), so those re-credit movements
+ *      are protected via the colon-prefix match against the cancel op's OWN
+ *      `opId`, which `buildReferencedIds` adds unconditionally for every
+ *      live outbox row regardless of kind — not via the sale-id entry
+ *      `buildReferencedIds` separately adds for `cancel` rows (that one only
+ *      protects the SALE row itself, not its stockMovements).
+ *
+ * Known residual (tracked, not a bug): a LOCALLY-created sale's or cancel's
+ * re-credit `stockMovement` rows are stamped `synced: false` at insert time
+ * (`mutations.ts`'s `createSaleOffline`/`createCancelOffline`) and are never
+ * flipped to `true` — `sync-engine.ts`'s `applySyncSuccess` only flips
+ * `synced` on the `adjust` case's stockMovement (there is no per-item local
+ * stockMovement patch for `sale`/`cancel`). Those specific rows therefore
+ * never clear gate #2 and are never purged by this sweep, even once old and
+ * unreferenced. This is a small, tolerated backlog (a handful of rows per
+ * sale/cancel on a single device) — see the duplicate-local-movement backlog
+ * item — not addressed by this task.
  *
  * `saleItems` has no `createdAt`/`synced` of its own (see `db.ts`'s
  * `SaleItemRow` — it mirrors the server's item-less-of-its-own-timestamp
@@ -103,10 +123,15 @@ export function buildReferencedIds(outboxRows: readonly OutboxRow[]): Set<string
  * Whether `id` is protected by `referenced` — a direct match (sales/
  * expenses/repayments, whose own id equals the outbox `opId`), OR a
  * colon-prefixed match (`stockMovements`, whose `clientOpId` is
- * `${saleOrAdjustOpId}:${productId}` — see `mutations.ts`'s
- * `createSaleOffline`/`createCancelOffline`/`createAdjustOffline`). `id`
- * itself (the exact `clientOpId`) is also checked directly first, since a
- * plain `adjust` op's `clientOpId` carries no colon at all.
+ * `${opId}:${productId}` — see `mutations.ts`'s
+ * `createSaleOffline`/`createCancelOffline`/`createAdjustOffline`). For a
+ * `sale`/`adjust` op that prefix IS the sale/adjust op's own id; for a
+ * `cancel` op it's the cancel op's OWN fresh `opId` (NOT the sale id being
+ * cancelled — see `buildReferencedIds`'s doc comment) — either way,
+ * `buildReferencedIds` already adds that exact `opId` to `referenced`
+ * unconditionally, so the colon-prefix match below finds it regardless of
+ * kind. `id` itself (the exact `clientOpId`) is also checked directly first,
+ * since a plain `adjust` op's `clientOpId` carries no colon at all.
  */
 function isReferencedId(id: string | undefined, referenced: ReadonlySet<string>): boolean {
   if (id === undefined) return false;
@@ -118,8 +143,11 @@ function isReferencedId(id: string | undefined, referenced: ReadonlySet<string>)
 export interface PurgeRowInput {
   /** ISO — the row's own entry-time field (see module docblock). */
   dateIso: string;
-  /** `undefined` (never explicitly synced — e.g. a pulled row, see module
-   * docblock) is treated the SAME as `false`: not purgeable. A plain
+  /** `undefined` (never explicitly stamped `true` or `false`) is treated the
+   * SAME as `false`: not purgeable. No current mapper actually produces
+   * `undefined` for a history row — every `pull.ts` mapper sets `true` and
+   * every local write starts `false` (see module docblock) — but this stays
+   * a defensive default rather than an assumption. A plain
    * `boolean | undefined` (not an optional `synced?:`) so callers can pass
    * a Dexie row's own possibly-`undefined` field straight through under
    * `exactOptionalPropertyTypes`. */
@@ -170,13 +198,22 @@ export async function purgeLocalHistory(retentionDays = 60): Promise<PurgeResult
 
   return db.transaction(
     'rw',
-    [db.sales, db.saleItems, db.stockMovements, db.repayments, db.conflicts, db.outbox],
+    [
+      db.sales,
+      db.saleItems,
+      db.stockMovements,
+      db.repayments,
+      db.expenses,
+      db.conflicts,
+      db.outbox,
+    ],
     async (): Promise<PurgeResult> => {
-      const [outboxRows, sales, movements, repayments, conflicts] = await Promise.all([
+      const [outboxRows, sales, movements, repayments, expenses, conflicts] = await Promise.all([
         db.outbox.toArray(),
         db.sales.toArray(),
         db.stockMovements.toArray(),
         db.repayments.toArray(),
+        db.expenses.toArray(),
         db.conflicts.toArray(),
       ]);
 
@@ -221,6 +258,25 @@ export async function purgeLocalHistory(retentionDays = 60): Promise<PurgeResult
         )
         .map((r) => r.id);
 
+      // Task 6.3 follow-up — expenses were never part of this sweep before
+      // (a pre-existing gap: the original plan spec only named sales/
+      // stockMovements, and repayments was bolted on later for Task 5.2, but
+      // expenses was simply never added). Filtered the same way as every
+      // other history table so growth from expense history is bounded too
+      // ("uniformly", not just sales/movements/repayments).
+      const expenseIds = expenses
+        .filter((e) =>
+          isPurgeable(
+            {
+              dateIso: e.createdAt,
+              synced: e.synced,
+              referenced: isReferencedId(e.id, referenced),
+            },
+            cutoffIso,
+          ),
+        )
+        .map((e) => e.id);
+
       const conflictIds = conflicts
         .filter((c) =>
           isConflictPurgeable({ dateIso: c.createdAt, resolved: c.resolved }, cutoffIso),
@@ -238,6 +294,7 @@ export async function purgeLocalHistory(retentionDays = 60): Promise<PurgeResult
       await db.saleItems.bulkDelete(itemIds);
       await db.stockMovements.bulkDelete(movementIds);
       await db.repayments.bulkDelete(repaymentIds);
+      await db.expenses.bulkDelete(expenseIds);
       await db.conflicts.bulkDelete(conflictIds);
 
       return {
@@ -246,6 +303,7 @@ export async function purgeLocalHistory(retentionDays = 60): Promise<PurgeResult
           itemIds.length +
           movementIds.length +
           repaymentIds.length +
+          expenseIds.length +
           conflictIds.length,
       };
     },

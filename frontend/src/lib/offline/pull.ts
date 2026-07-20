@@ -261,6 +261,15 @@ function toCustomerRow(c: ServerCustomer): CustomerRow {
   };
 }
 
+/** `synced: true` unconditionally — mirrors `toRepaymentRow`'s reasoning
+ * (Task 6.3 cleanup): every row this mapper sees came FROM the server, so
+ * it's authoritative by definition, whether it started as this device's own
+ * optimistic insert (now echoed back post-sync, `bulkPut` overwrites cleanly
+ * by `id`) or another device's/other-vendeur's history this device never
+ * wrote. Marking it `synced: true` is also what makes `purge.ts` treat pulled
+ * history as purgeable-when-old — the data is still on the server regardless
+ * (viewable online), so bounding local growth from it is correct and
+ * desirable, not a data-loss risk. */
 function toSaleRow(s: Omit<ServerSale, 'items'>): SaleRow {
   return {
     id: s.id,
@@ -280,6 +289,7 @@ function toSaleRow(s: Omit<ServerSale, 'items'>): SaleRow {
     ...(s.cancelReason != null ? { cancelReason: s.cancelReason } : {}),
     ...(s.createdById != null ? { createdById: s.createdById } : {}),
     createdAt: s.createdAt,
+    synced: true,
   };
 }
 
@@ -325,6 +335,8 @@ function toReceivableRow(r: ServerReceivable): ReceivableRow {
   };
 }
 
+/** `synced: true` unconditionally — see `toSaleRow`'s doc comment (same
+ * reasoning, Task 6.3 cleanup). */
 function toExpenseRow(e: ServerExpense): ExpenseRow {
   return {
     id: e.id,
@@ -337,6 +349,7 @@ function toExpenseRow(e: ServerExpense): ExpenseRow {
     ...(e.createdById != null ? { createdById: e.createdById } : {}),
     occurredAt: e.occurredAt,
     createdAt: e.createdAt,
+    synced: true,
   };
 }
 
@@ -362,6 +375,8 @@ function toDocumentRow(d: ServerDocument): DocumentRow {
   };
 }
 
+/** `synced: true` unconditionally — see `toSaleRow`'s doc comment (same
+ * reasoning, Task 6.3 cleanup). */
 function toStockMovementRow(m: ServerStockMovement): StockMovementRow {
   return {
     id: m.id,
@@ -373,6 +388,7 @@ function toStockMovementRow(m: ServerStockMovement): StockMovementRow {
     ...(m.createdById != null ? { createdById: m.createdById } : {}),
     ...(m.clientOpId != null ? { clientOpId: m.clientOpId } : {}),
     createdAt: m.createdAt,
+    synced: true,
   };
 }
 

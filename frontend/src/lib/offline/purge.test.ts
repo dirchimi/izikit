@@ -119,6 +119,7 @@ describe('purgeLocalHistory (against fake-indexeddb)', () => {
       db.saleItems.clear(),
       db.stockMovements.clear(),
       db.repayments.clear(),
+      db.expenses.clear(),
       db.conflicts.clear(),
       db.outbox.clear(),
     ]);
@@ -262,6 +263,47 @@ describe('purgeLocalHistory (against fake-indexeddb)', () => {
       },
     ]);
 
+    // --- expenses (Task 6.3 follow-up — expenses joined the sweep) -------
+    await db.expenses.bulkPut([
+      // old + synced + unreferenced → DELETED (e.g. a PULLED expense this
+      // device never wrote, or a locally-synced one — both read the same)
+      {
+        id: 'exp-old-synced',
+        organizationId: 'org-1',
+        number: 'D-1',
+        label: 'Loyer',
+        category: 'Loyer',
+        amount: 30000,
+        occurredAt: OLD,
+        createdAt: OLD,
+        synced: true,
+      },
+      // recent + synced → KEPT (not old enough)
+      {
+        id: 'exp-recent-synced',
+        organizationId: 'org-1',
+        number: 'D-2',
+        label: 'Electricite',
+        category: 'Charges',
+        amount: 5000,
+        occurredAt: RECENT,
+        createdAt: RECENT,
+        synced: true,
+      },
+      // old + UNSYNCED → KEPT (still queued locally)
+      {
+        id: 'exp-old-unsynced',
+        organizationId: 'org-1',
+        number: '#L1',
+        label: 'Transport',
+        category: 'Transport',
+        amount: 2000,
+        occurredAt: OLD,
+        createdAt: OLD,
+        synced: false,
+      },
+    ]);
+
     // --- conflicts -------------------------------------------------------
     await db.conflicts.bulkPut([
       {
@@ -322,12 +364,63 @@ describe('purgeLocalHistory (against fake-indexeddb)', () => {
     const remainingRepaymentIds = (await db.repayments.toArray()).map((r) => r.id).sort();
     expect(remainingRepaymentIds).toEqual(['rp-old-unsynced', 'rp-recent-synced'].sort());
 
+    // expenses (Task 6.3 follow-up)
+    const remainingExpenseIds = (await db.expenses.toArray()).map((e) => e.id).sort();
+    expect(remainingExpenseIds).toEqual(['exp-old-unsynced', 'exp-recent-synced'].sort());
+
     // conflicts
     const remainingConflictIds = (await db.conflicts.toArray()).map((c) => c.id).sort();
     expect(remainingConflictIds).toEqual(['sale-old-synced:p2']);
 
-    // deleted count: 1 sale + 1 item + 1 movement + 1 repayment + 1 conflict
-    expect(result.deleted).toBe(5);
+    // deleted count: 1 sale + 1 item + 1 movement + 1 repayment + 1 expense + 1 conflict
+    expect(result.deleted).toBe(6);
+  });
+
+  it('purges an OLD pulled sale/movement/expense (synced:true from pull.ts, this device never wrote it) once past retention', async () => {
+    // Simulates rows seeded purely by pullAll() — synced:true because
+    // pull.ts's mappers stamp every pulled history row that way (Task 6.3
+    // fix), never because this device wrote+synced them.
+    await db.sales.put({
+      id: 'sale-pulled-old',
+      organizationId: 'org-1',
+      number: 'V-9',
+      method: 'CASH',
+      total: 1200,
+      discount: 0,
+      cashAmount: 1200,
+      mobileAmount: 0,
+      creditAmount: 0,
+      status: 'ACTIVE',
+      createdAt: OLD,
+      synced: true,
+    });
+    await db.stockMovements.put({
+      id: 'mv-pulled-old',
+      organizationId: 'org-1',
+      productId: 'p1',
+      type: 'OUT',
+      delta: -2,
+      createdAt: OLD,
+      synced: true,
+    });
+    await db.expenses.put({
+      id: 'exp-pulled-old',
+      organizationId: 'org-1',
+      number: 'D-9',
+      label: 'Loyer',
+      category: 'Loyer',
+      amount: 30000,
+      occurredAt: OLD,
+      createdAt: OLD,
+      synced: true,
+    });
+
+    const result = await purgeLocalHistory(60);
+
+    expect(await db.sales.get('sale-pulled-old')).toBeUndefined();
+    expect(await db.stockMovements.get('mv-pulled-old')).toBeUndefined();
+    expect(await db.expenses.get('exp-pulled-old')).toBeUndefined();
+    expect(result.deleted).toBe(3);
   });
 
   it('defaults retentionDays to 60 and never deletes anything inside that window', async () => {
