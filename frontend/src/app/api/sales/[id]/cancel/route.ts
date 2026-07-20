@@ -34,12 +34,26 @@ const Body = z.object({
   clientOpId: z.string().min(1).optional(),
 });
 
-type CancelResult =
-  | { kind: 'NOT_FOUND' }
-  | { kind: 'ALREADY_CANCELLED' }
-  | { kind: 'TOO_LATE' }
-  | { kind: 'CREDIT_REPAID' }
-  | { kind: 'OK'; number: string };
+type CancelResult = { kind: 'OK'; number: string };
+
+// Rejets métier (dépendants des données) : DOIVENT être levés (throw), jamais
+// `return`-és depuis la fonction enveloppée par `withIdempotency`. Un `return`
+// serait mémoïsé sous le `clientOpId` du rejeu — si la vente n'existe pas
+// encore au moment de l'annulation (ex : création offline en retard/erreur
+// transitoire pendant le drain), un NOT_FOUND mémoïsé resterait figé pour
+// toujours, même après que la vente soit créée côté serveur. En levant une
+// exception, la transaction Prisma est annulée (rollback) et rien n'est
+// mémoïsé — un rejeu ultérieur avec le même `clientOpId` réévalue les données
+// à jour. Cf. `SaleRejection` dans `sales/route.ts` (Task 0.3), même pattern.
+class CancelRejection extends Error {
+  constructor(
+    public readonly payload: unknown,
+    public readonly status: number,
+  ) {
+    super('CancelRejection');
+    this.name = 'CancelRejection';
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -83,130 +97,142 @@ export async function POST(
     const orgId = primary.organizationId;
     const userSub = auth.user.sub;
 
-    const result: CancelResult = await withTxRetry(() =>
-      prisma.$transaction(
-        async (tx) => {
-          // withIdempotency DOIT rester à l'intérieur de withTxRetry : sur un
-          // rejeu concurrent, le perdant lève P2002 sur `clientOpId @unique`,
-          // que withTxRetry rejoue proprement (le findUnique initial retombe
-          // alors sur la ligne gagnante et renvoie le résultat mémoïsé).
-          const { result } = await withIdempotency(
-            tx,
-            { organizationId: orgId, clientOpId, endpoint: 'cancel' },
-            async (): Promise<CancelResult> => {
-              const sale = await tx.sale.findUnique({
-                where: { id },
-                select: {
-                  organizationId: true,
-                  number: true,
-                  status: true,
-                  createdAt: true,
-                  items: { select: { productId: true, qty: true } },
-                  receivable: { select: { id: true, amountPaid: true } },
-                },
-              });
-              if (!sale || sale.organizationId !== orgId) return { kind: 'NOT_FOUND' };
-              if (sale.status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' };
-              // Au-delà de 24h, l'annulation est refusée (règle métier).
-              if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
-                return { kind: 'TOO_LATE' };
-              }
-              // Une vente à crédit déjà (partiellement) remboursée ne peut pas être
-              // annulée : annuler créerait des remboursements « orphelins » (argent
-              // reçu, mais plus aucune vente en face → écart de caisse). Le Patron
-              // doit d'abord traiter le remboursement/avoir avec le client.
-              if (sale.receivable && sale.receivable.amountPaid > 0) {
-                return { kind: 'CREDIT_REPAID' };
-              }
-
-              // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
-              // (productId null via SetNull) ne peuvent pas être re-créditées : on les
-              // ignore. On ne re-crédite que les produits encore présents dans la boutique.
-              const productIds = sale.items
-                .map((it) => it.productId)
-                .filter((pid): pid is string => pid !== null);
-              const existing =
-                productIds.length > 0
-                  ? await tx.product.findMany({
-                      where: { id: { in: productIds }, organizationId: orgId },
-                      select: { id: true },
-                    })
-                  : [];
-              const existingIds = new Set(existing.map((p) => p.id));
-
-              for (const it of sale.items) {
-                if (!it.productId || !existingIds.has(it.productId) || it.qty <= 0) continue;
-                await tx.product.update({
-                  where: { id: it.productId },
-                  data: { qty: { increment: it.qty } },
-                });
-                await tx.stockMovement.create({
-                  data: {
-                    organizationId: orgId,
-                    productId: it.productId,
-                    type: 'IN',
-                    delta: it.qty,
-                    reason: `annulation vente ${sale.number}`,
-                    createdById: userSub,
+    let result: CancelResult;
+    try {
+      result = await withTxRetry(() =>
+        prisma.$transaction(
+          async (tx) => {
+            // withIdempotency DOIT rester à l'intérieur de withTxRetry : sur un
+            // rejeu concurrent, le perdant lève P2002 sur `clientOpId @unique`,
+            // que withTxRetry rejoue proprement (le findUnique initial retombe
+            // alors sur la ligne gagnante et renvoie le résultat mémoïsé).
+            const { result } = await withIdempotency(
+              tx,
+              { organizationId: orgId, clientOpId, endpoint: 'cancel' },
+              async (): Promise<CancelResult> => {
+                const sale = await tx.sale.findUnique({
+                  where: { id },
+                  select: {
+                    organizationId: true,
+                    number: true,
+                    status: true,
+                    createdAt: true,
+                    items: { select: { productId: true, qty: true } },
+                    receivable: { select: { id: true, amountPaid: true } },
                   },
                 });
-              }
+                if (!sale || sale.organizationId !== orgId) {
+                  throw new CancelRejection(
+                    { error: 'SALE_NOT_FOUND', message: 'Vente introuvable' },
+                    404,
+                  );
+                }
+                if (sale.status === 'CANCELLED') {
+                  throw new CancelRejection(
+                    { error: 'SALE_ALREADY_CANCELLED', message: 'Cette vente est déjà annulée' },
+                    409,
+                  );
+                }
+                // Au-delà de 24h, l'annulation est refusée (règle métier).
+                if (Date.now() - new Date(sale.createdAt).getTime() > CANCEL_WINDOW_MS) {
+                  throw new CancelRejection(
+                    {
+                      error: 'CANCEL_WINDOW_EXPIRED',
+                      message: 'Annulation possible seulement dans les 24h',
+                    },
+                    409,
+                  );
+                }
+                // Une vente à crédit déjà (partiellement) remboursée ne peut pas être
+                // annulée : annuler créerait des remboursements « orphelins » (argent
+                // reçu, mais plus aucune vente en face → écart de caisse). Le Patron
+                // doit d'abord traiter le remboursement/avoir avec le client.
+                if (sale.receivable && sale.receivable.amountPaid > 0) {
+                  throw new CancelRejection(
+                    {
+                      error: 'CREDIT_ALREADY_REPAID',
+                      message:
+                        'Cette vente à crédit a déjà reçu un remboursement. Gérez d’abord le remboursement avec le client avant d’annuler.',
+                    },
+                    409,
+                  );
+                }
 
-              // 2) Créance associée (vente à crédit) → annulée.
-              if (sale.receivable) {
-                await tx.receivable.update({
-                  where: { id: sale.receivable.id },
-                  data: { status: 'CANCELLED' },
+                // 1) Réintégration du stock. Les lignes dont le produit a été supprimé
+                // (productId null via SetNull) ne peuvent pas être re-créditées : on les
+                // ignore. On ne re-crédite que les produits encore présents dans la boutique.
+                const productIds = sale.items
+                  .map((it) => it.productId)
+                  .filter((pid): pid is string => pid !== null);
+                const existing =
+                  productIds.length > 0
+                    ? await tx.product.findMany({
+                        where: { id: { in: productIds }, organizationId: orgId },
+                        select: { id: true },
+                      })
+                    : [];
+                const existingIds = new Set(existing.map((p) => p.id));
+
+                for (const it of sale.items) {
+                  if (!it.productId || !existingIds.has(it.productId) || it.qty <= 0) continue;
+                  await tx.product.update({
+                    where: { id: it.productId },
+                    data: { qty: { increment: it.qty } },
+                  });
+                  await tx.stockMovement.create({
+                    data: {
+                      organizationId: orgId,
+                      productId: it.productId,
+                      type: 'IN',
+                      delta: it.qty,
+                      reason: `annulation vente ${sale.number}`,
+                      createdById: userSub,
+                    },
+                  });
+                }
+
+                // 2) Créance associée (vente à crédit) → annulée.
+                if (sale.receivable) {
+                  await tx.receivable.update({
+                    where: { id: sale.receivable.id },
+                    data: { status: 'CANCELLED' },
+                  });
+                }
+
+                // 3) Trace : la vente devient CANCELLED (jamais supprimée) + motif.
+                await tx.sale.update({
+                  where: { id },
+                  data: {
+                    status: 'CANCELLED',
+                    cancelledAt: new Date(),
+                    cancelledById: userSub,
+                    cancelReason: reason,
+                  },
                 });
-              }
 
-              // 3) Trace : la vente devient CANCELLED (jamais supprimée) + motif.
-              await tx.sale.update({
-                where: { id },
-                data: {
-                  status: 'CANCELLED',
-                  cancelledAt: new Date(),
-                  cancelledById: userSub,
-                  cancelReason: reason,
-                },
-              });
-
-              return { kind: 'OK', number: sale.number };
-            },
-          );
-          return result;
-        },
-        { isolationLevel: 'Serializable' },
-      ),
-    );
-
-    if (result.kind === 'NOT_FOUND') {
-      return NextResponse.json(
-        { error: 'SALE_NOT_FOUND', message: 'Vente introuvable' },
-        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
+                return { kind: 'OK', number: sale.number };
+              },
+            );
+            return result;
+          },
+          { isolationLevel: 'Serializable' },
+        ),
       );
-    }
-    if (result.kind === 'ALREADY_CANCELLED') {
-      return NextResponse.json(
-        { error: 'SALE_ALREADY_CANCELLED', message: 'Cette vente est déjà annulée' },
-        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
-      );
-    }
-    if (result.kind === 'TOO_LATE') {
-      return NextResponse.json(
-        { error: 'CANCEL_WINDOW_EXPIRED', message: 'Annulation possible seulement dans les 24h' },
-        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
-      );
-    }
-    if (result.kind === 'CREDIT_REPAID') {
-      return NextResponse.json(
-        {
-          error: 'CREDIT_ALREADY_REPAID',
-          message:
-            'Cette vente à crédit a déjà reçu un remboursement. Gérez d’abord le remboursement avec le client avant d’annuler.',
-        },
-        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
-      );
+    } catch (e) {
+      // Un rejet métier (NOT_FOUND/ALREADY_CANCELLED/TOO_LATE/CREDIT_REPAID) est
+      // levé DEPUIS l'intérieur de `withIdempotency` : la transaction Prisma
+      // fait un rollback complet et RIEN n'est mémoïsé sous `clientOpId`. Un
+      // rejeu ultérieur (ex : après que la vente offline en retard a fini par
+      // se créer) réévalue donc les données à jour au lieu de renvoyer un 404
+      // figé pour toujours. `withTxRetry` ne rejoue que P2002/P2034, donc
+      // `CancelRejection` remonte ici sans être rejouée.
+      if (e instanceof CancelRejection) {
+        return NextResponse.json(e.payload, {
+          status: e.status,
+          headers: { 'x-request-id': reqCtx.requestId },
+        });
+      }
+      throw e;
     }
 
     log.info('sale cancelled', { saleId: id, number: result.number, by: userSub });
