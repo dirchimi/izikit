@@ -142,11 +142,12 @@ async function upsertConflicts(rows: ConflictRow[]): Promise<void> {
  * showing the provisional "Local #n" placeholder.
  *
  * Keyed by `row.opId` — the same client id the payload carried (PHASE 0's
- * dedup key). For `sale`/`expense`/`customer`/`cancel` that id IS the local
- * table's primary key; for `adjust` the natural local row is instead the
- * `stockMovement` carrying that `clientOpId` (there is no separate local
- * "adjustment" entity). `repay` has no local row to patch yet — see the
- * case comment below.
+ * dedup key). For `sale`/`expense`/`customer`/`cancel`/`repay` that id IS
+ * the local table's primary key (for `repay`, the `repayments` row
+ * `createRepayOffline` inserted optimistically); for `adjust` the natural
+ * local row is instead the `stockMovement` carrying that `clientOpId`
+ * (there is no separate local "adjustment" entity) — see the case comment
+ * below.
  *
  * Every write here is a guarded no-op if the local row is already gone
  * (e.g. purged, or never inserted because this drain ran ahead of the
@@ -207,11 +208,13 @@ async function applySyncSuccess(row: OutboxRow, response: unknown): Promise<void
       // What we DON'T reconcile here: the per-receivable balances. The server
       // owns the final allocation (Serializable, strictly oldest-first by
       // `createdAt`); the next `pull.ts` pass overwrites the local
-      // `receivables` rows with the server's truth. `/api/sync/pull` does not
-      // return the Repayment table, so this local row is never overwritten by
-      // a pull — it stays as the device-local echo (see `RepaymentRow`'s
-      // docblock). A missing local row (drain ran ahead of the optimistic
-      // insert) is a guarded no-op: Dexie's `update` resolves to `0`.
+      // `receivables` rows with the server's truth. `/api/sync/pull` also
+      // returns the Repayment table (Task 5.2), so this same row is later
+      // re-confirmed (and, for other devices' repayments, newly seeded) by
+      // `pull.ts`'s `toRepaymentRow` — that's a harmless `bulkPut` overwrite
+      // keyed by the same `id` (see `RepaymentRow`'s docblock). A missing
+      // local row here (drain ran ahead of the optimistic insert) is a
+      // guarded no-op: Dexie's `update` resolves to `0`.
       const changes: Partial<RepaymentRow> = { synced: true };
       if (typeof body.applied === 'number') changes.applied = body.applied;
       if (typeof body.remainingDebt === 'number') changes.remainingDebt = body.remainingDebt;

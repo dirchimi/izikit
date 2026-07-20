@@ -4,8 +4,9 @@
  * docs/superpowers/plans/2026-07-20-offline-first-boutique.md, PHASE 1).
  *
  * The server endpoint (`frontend/src/app/api/sync/pull/route.ts`, Task 1.2)
- * always returns a FULL batch of the 7 org-scoped tables in one round trip
- * — there is no per-resource filter param. `Sale.items` (SaleItem) arrives
+ * always returns a FULL batch of the 8 org-scoped tables (the original 7 +
+ * `repayments`, added Task 5.2) in one round trip — there is no
+ * per-resource filter param. `Sale.items` (SaleItem) arrives
  * nested inside each sale (`sale.items[]`) because SaleItem has no
  * `organizationId`/`updatedAt` of its own to filter on independently; this
  * module flattens that nesting into the separate Dexie `saleItems` table.
@@ -41,6 +42,7 @@ import {
   type DocumentLine,
   type StockMovementRow,
   type StockMovementType,
+  type RepaymentRow,
 } from './db';
 
 const LAST_PULL_KEY = 'lastPull';
@@ -166,6 +168,19 @@ interface ServerStockMovement {
   createdAt: string;
 }
 
+/** Task 5.2 — server shape of a `Repayment` row, as returned by
+ * `/api/sync/pull` (org-scoped, `createdAt > since` filtered — Repayment is
+ * append-only/immutable, no `@updatedAt` column). */
+interface ServerRepayment {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  amount: number;
+  method: string;
+  note: string | null;
+  createdAt: string;
+}
+
 export interface PullResponse {
   products: ServerProduct[];
   customers: ServerCustomer[];
@@ -174,6 +189,10 @@ export interface PullResponse {
   expenses: ServerExpense[];
   documents: ServerDocument[];
   stockMovements: ServerStockMovement[];
+  /** Task 5.2 — the org's Repayment rows (append-only, `createdAt`-filtered).
+   * Additive on the server response, same shape contract as the other 7
+   * resources. */
+  repayments: ServerRepayment[];
   /** Task 5.1 — the caller's boutique id (additive on the server response).
    * Stored into `meta.orgId` by `pullAll()` below; read back via `getOrgId()`
    * by product-less offline writes (expenses, later customers/adjust/repay)
@@ -182,9 +201,9 @@ export interface PullResponse {
   serverTime: string;
 }
 
-/** Every resource `pullResource()` can refresh independently — the same 7
- * top-level keys the `/api/sync/pull` response carries (`serverTime` is a
- * cursor, not a resource). */
+/** Every resource `pullResource()` can refresh independently — the same
+ * top-level keys the `/api/sync/pull` response carries (`serverTime`/`orgId`
+ * are cursors, not resources). */
 export type ResourceName =
   | 'products'
   | 'customers'
@@ -192,7 +211,8 @@ export type ResourceName =
   | 'receivables'
   | 'expenses'
   | 'documents'
-  | 'stockMovements';
+  | 'stockMovements'
+  | 'repayments';
 
 // ---------------------------------------------------------------------------
 // Row mappers — server JSON shape -> Dexie Row type.
@@ -343,6 +363,25 @@ function toStockMovementRow(m: ServerStockMovement): StockMovementRow {
   };
 }
 
+/** Task 5.2 — maps a server `Repayment` row to its Dexie `RepaymentRow`.
+ * Always `synced: true`: every row this mapper sees came FROM the server,
+ * so it's authoritative by definition — including a row that started life
+ * as this device's own optimistic insert (`createRepayOffline`) and is now
+ * being echoed back post-sync. `bulkPut` keys on `id`, so the server row
+ * cleanly overwrites the local optimistic one rather than duplicating it. */
+function toRepaymentRow(r: ServerRepayment): RepaymentRow {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    customerId: r.customerId,
+    amount: r.amount,
+    ...(r.method != null ? { method: r.method } : {}),
+    ...(r.note != null ? { note: r.note } : {}),
+    createdAt: r.createdAt,
+    synced: true,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fetch + cursor helpers.
 // ---------------------------------------------------------------------------
@@ -393,6 +432,9 @@ async function applyResource(name: ResourceName, res: PullResponse): Promise<voi
     case 'stockMovements':
       await db.stockMovements.bulkPut(res.stockMovements.map(toStockMovementRow));
       return;
+    case 'repayments':
+      await db.repayments.bulkPut(res.repayments.map(toRepaymentRow));
+      return;
   }
 }
 
@@ -404,15 +446,16 @@ const ALL_RESOURCES: readonly ResourceName[] = [
   'expenses',
   'documents',
   'stockMovements',
+  'repayments',
 ];
 
 /**
  * Seeds/refreshes every local table from `GET /api/sync/pull`, using the
  * stored `meta.lastPull` cursor for an incremental pull (omitted on the
- * first-ever pull, which fetches a full org snapshot). All writes — the 7
- * resources plus the new cursor — commit in a single Dexie transaction so a
- * failure never leaves a partially-advanced cursor pointing past data that
- * was never persisted.
+ * first-ever pull, which fetches a full org snapshot). All writes — the 8
+ * resources (including `repayments`, Task 5.2) plus the new cursor — commit
+ * in a single Dexie transaction so a failure never leaves a
+ * partially-advanced cursor pointing past data that was never persisted.
  */
 export async function pullAll(): Promise<void> {
   const since = await getCursor();
@@ -429,6 +472,7 @@ export async function pullAll(): Promise<void> {
       db.expenses,
       db.documents,
       db.stockMovements,
+      db.repayments,
       db.meta,
     ],
     async () => {

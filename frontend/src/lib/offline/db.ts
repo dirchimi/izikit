@@ -122,23 +122,27 @@ export interface ExpenseRow {
 
 /**
  * Repayment (créance remboursée) — the local echo of a `Repayment` server row
- * (Task 5.2). Unlike the pulled tables, this one has NO `pull.ts` mapper:
- * `/api/sync/pull` does not (yet) return the Repayment table, so this table
- * holds ONLY repayments created on THIS device (`createRepayOffline`). The
- * money-critical debtor totals (debt / repaid) are NOT derived from here —
- * they come from the `receivables` table (which IS pulled and reconciled) —
- * so an incomplete local repayment history never corrupts a balance; it only
- * limits the repayment *timeline* shown on the créances/repayments screens to
- * device-local entries (documented limitation, see `creances-adapters.ts`).
+ * (Task 5.2). Seeded two ways: optimistically by `createRepayOffline` (this
+ * device's own writes) AND by `pull.ts`'s `toRepaymentRow` mapper, which
+ * `bulkPut`s the org's full server-side Repayment history (pre-existing rows
+ * + other devices' rows) keyed by `id` — a locally-created repayment that
+ * later syncs shares its id with the server row, so the pulled copy cleanly
+ * overwrites the optimistic one rather than duplicating it. The
+ * money-critical debtor totals (debt / repaid) are still NOT derived from
+ * here — they come from the `receivables` table (which IS pulled and
+ * reconciled) — so this table only feeds the repayment *timeline* shown on
+ * the créances/repayments screens, never a balance.
  *
  * `amount` is the amount ACTUALLY applied (`allocateRepayment`'s `applied`,
  * capped at the total debt), matching what the server persists — never the
  * raw amount the user typed. `createdAt` is the repayment date (may be
  * back-dated via the form's date field, hence stored as given rather than
  * always "now"). `synced` flips true once the outbox `repay` op drains
- * (`sync-engine.ts`'s `applySyncSuccess`); `applied`/`remainingDebt` are the
- * server's authoritative echo, stored cosmetically when the drain response
- * carries them.
+ * (`sync-engine.ts`'s `applySyncSuccess`) OR once a `pull.ts` refresh echoes
+ * the row back from the server (always `true` there — a pulled row is
+ * server truth by definition); `applied`/`remainingDebt` are the server's
+ * authoritative echo, stored cosmetically when the drain response carries
+ * them.
  */
 export interface RepaymentRow {
   id: string;

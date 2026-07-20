@@ -25,10 +25,12 @@
  *      last-modification time; it never affects a balance.
  *
  * The repayment TIMELINE (per-debtor `repayments[]` and the `RepaymentsView`
- * list) is sourced from `db.repayments`, which holds only device-local
- * repayments (`/api/sync/pull` does not sync the Repayment table — see
- * `RepaymentRow`'s docblock). The debtor BALANCES (`debt`/`repaid`) come from
- * `receivables` (pulled + reconciled), so they stay authoritative regardless.
+ * list) is sourced from `db.repayments`, which `/api/sync/pull` now syncs in
+ * full (Task 5.2 fix — org-scoped, `createdAt`-filtered; see `pull.ts`'s
+ * `toRepaymentRow`), so it reflects pre-existing repayments and other
+ * devices' repayments, not just this device's own writes. The debtor
+ * BALANCES (`debt`/`repaid`) come from `receivables` (pulled + reconciled)
+ * independently of this table, so they were always authoritative regardless.
  */
 import type { CustomerRow, ReceivableRow, RepaymentRow, ReceivableStatus } from './db';
 import type { CreditStatus } from '@/lib/boutique/fixtures';

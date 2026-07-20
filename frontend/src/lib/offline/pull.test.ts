@@ -140,6 +140,17 @@ function makeResponse(overrides: Partial<PullResponse> = {}): PullResponse {
         createdAt: '2026-07-20T00:00:00.000Z',
       },
     ],
+    repayments: [
+      {
+        id: 'rp1',
+        organizationId: 'o1',
+        customerId: 'c1',
+        amount: 500,
+        method: 'CASH',
+        note: null,
+        createdAt: '2026-07-20T00:00:00.000Z',
+      },
+    ],
     serverTime: '2026-07-20T00:00:00.000Z',
     orgId: 'o1',
     ...overrides,
@@ -157,6 +168,7 @@ beforeEach(async () => {
     db.expenses.clear(),
     db.documents.clear(),
     db.stockMovements.clear(),
+    db.repayments.clear(),
     db.meta.clear(),
   ]);
 });
@@ -199,8 +211,35 @@ describe('pullAll', () => {
     const stockMovements = await db.stockMovements.toArray();
     expect(stockMovements[0]?.delta).toBe(-2);
 
+    const repayments = await db.repayments.toArray();
+    expect(repayments).toHaveLength(1);
+    expect(repayments[0]?.id).toBe('rp1');
+    expect(repayments[0]?.amount).toBe(500);
+    expect(repayments[0]?.synced).toBe(true);
+
     const cursor = await db.meta.get('lastPull');
     expect(cursor?.value).toBe(res.serverTime);
+  });
+
+  it('marks pulled repayments synced:true, overwriting an optimistic local echo with the same id (Task 5.2)', async () => {
+    // Simulate a repayment this device created offline and already inserted
+    // optimistically (createRepayOffline), not yet marked synced.
+    await db.repayments.put({
+      id: 'rp1',
+      organizationId: 'o1',
+      customerId: 'c1',
+      amount: 500,
+      method: 'cash',
+      createdAt: '2026-07-19T00:00:00.000Z',
+      synced: false,
+    });
+
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    await pullAll();
+
+    const repayments = await db.repayments.toArray();
+    expect(repayments).toHaveLength(1);
+    expect(repayments[0]?.synced).toBe(true);
   });
 
   it('stores the response orgId into meta.orgId, readable via getOrgId (Task 5.1)', async () => {

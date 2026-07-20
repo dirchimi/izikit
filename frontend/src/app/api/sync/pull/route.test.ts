@@ -40,6 +40,7 @@ function emptyFindManyMocks(): void {
   prismaMock.expense.findMany.mockResolvedValue([]);
   prismaMock.document.findMany.mockResolvedValue([]);
   prismaMock.stockMovement.findMany.mockResolvedValue([]);
+  prismaMock.repayment.findMany.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -87,6 +88,7 @@ describe('GET /api/sync/pull', () => {
         expenses: [],
         documents: [],
         stockMovements: [],
+        repayments: [],
       }),
     );
     expect(typeof body.serverTime).toBe('string');
@@ -99,6 +101,7 @@ describe('GET /api/sync/pull', () => {
       prismaMock.expense,
       prismaMock.document,
       prismaMock.stockMovement,
+      prismaMock.repayment,
     ]) {
       expect(model.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { organizationId: 'org1' } }),
@@ -141,6 +144,41 @@ describe('GET /api/sync/pull', () => {
     );
   });
 
+  it('avec since → repayments filtré sur createdAt (pas updatedAt) + scope org (Task 5.2)', async () => {
+    const since = '2026-07-01T00:00:00.000Z';
+    const res = await GET(makeGet(`?since=${encodeURIComponent(since)}`));
+    expect(res.status).toBe(200);
+
+    expect(prismaMock.repayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: 'org1', createdAt: { gt: new Date(since) } },
+      }),
+    );
+  });
+
+  it('renvoie les repayments de la boutique de l’appelant (Task 5.2 — pas de fuite cross-org)', async () => {
+    prismaMock.repayment.findMany.mockResolvedValueOnce([
+      {
+        id: 'rp1',
+        organizationId: 'org1',
+        customerId: 'c1',
+        amount: 1000,
+        method: 'CASH',
+        note: null,
+        createdById: 'user-1',
+        clientOpId: null,
+        createdAt: new Date('2026-07-20T00:00:00.000Z'),
+      },
+    ] as never);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.repayments).toHaveLength(1);
+    expect(body.repayments[0].id).toBe('rp1');
+    expect(prismaMock.repayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: 'org1' } }),
+    );
+  });
+
   it('renvoie orgId (Task 5.1 — boutique de l’appelant, pour meta.orgId côté client)', async () => {
     const res = await GET(makeGet());
     const body = await res.json();
@@ -152,6 +190,9 @@ describe('GET /api/sync/pull', () => {
     await GET(makeGet());
     expect(mockRequireOrgRole).toHaveBeenCalledWith('org-other', 'MEMBER');
     expect(prismaMock.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: 'org-other' } }),
+    );
+    expect(prismaMock.repayment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { organizationId: 'org-other' } }),
     );
   });
