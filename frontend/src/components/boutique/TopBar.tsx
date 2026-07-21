@@ -7,6 +7,7 @@ import { useT } from '@/contexts/LocaleContext';
 import GlobalSearch from './GlobalSearch';
 import LanguageSwitcher from './LanguageSwitcher';
 import NotificationBell from './NotificationBell';
+import SyncIndicator from './sync/SyncIndicator';
 import ThemeToggle from './ThemeToggle';
 
 /**
@@ -37,9 +38,12 @@ export default function TopBar({
         <GlobalSearch />
       </div>
 
-      {/* La cloche est TOUJOURS présente (avant les actions propres à l'écran),
-          quel que soit le `actions` passé par la page. */}
+      {/* Cloche + statut de synchronisation : TOUJOURS présents (avant les
+          actions propres à l'écran), quel que soit le `actions` passé par la
+          page. Le petit bouton sync ouvre /synchronisation (statut + sync
+          manuelle + conflits) et affiche un badge « N à synchroniser ». */}
       <div className="flex shrink-0 items-center gap-2">
+        <SyncIndicator />
         <NotificationBell />
         {actions ?? (
           <div className="flex items-center gap-2">

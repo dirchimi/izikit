@@ -35,12 +35,42 @@ import { useLocalResource } from '@/lib/offline/useLocalResource';
 import { db, type ConflictRow, type OutboxRow } from '@/lib/offline/db';
 import { retryOutboxRow } from '@/lib/offline/outbox';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import { useSyncStatus } from '@/lib/offline/useSyncStatus';
+import { relativeTime } from '@/lib/i18n/relative-time';
 import { ltrIsolate } from '@/lib/i18n/bidi';
 import { conflictLineVars } from './conflict-format';
+import { stateIcon } from './SyncIndicator';
+import { syncIndicatorState, isSyncNowDisabled, syncStatusMessage } from './sync-indicator-state';
 
 export default function ConflictsManager() {
   const t = useT();
   const { toast } = useToast();
+
+  // Statut global + synchronisation manuelle (déplacés ici depuis la sidebar).
+  // `conflicts` du hook est renommé `conflictCount` pour ne pas masquer la
+  // liste `conflicts` (db.conflicts) chargée plus bas.
+  const online = useOnlineStatus();
+  const {
+    pendingCount,
+    syncing,
+    conflicts: conflictCount,
+    lastSyncedAt,
+    syncNow,
+  } = useSyncStatus();
+  const syncState = syncIndicatorState({ pendingCount, conflicts: conflictCount, syncing, online });
+  const syncMessage = syncStatusMessage(syncState, { pendingCount, conflicts: conflictCount });
+  const syncDisabled = isSyncNowDisabled({
+    pendingCount,
+    conflicts: conflictCount,
+    syncing,
+    online,
+  });
+
+  async function handleSyncNow() {
+    if (syncDisabled) return;
+    await syncNow();
+  }
 
   const { data: conflicts, loading: loadingConflicts } = useLocalResource(
     () => db.conflicts.where('resolved').equals(0).toArray(),
@@ -69,6 +99,51 @@ export default function ConflictsManager() {
   return (
     <>
       <TopBar title={t('sync.title')} subtitle={t('sync.subtitle')} />
+
+      {/* Statut global + « Synchroniser maintenant » — le petit bouton sync de
+          la TopBar ouvre cet écran. */}
+      <div className="px-4 pt-6 md:px-8">
+        <div className="bg-surface border-border flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                syncState === 'conflict'
+                  ? 'bg-danger/10 text-danger'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Icon
+                i={stateIcon(syncState)}
+                size={16}
+                className={syncState === 'syncing' ? 'animate-spin' : ''}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <span className="font-body text-foreground text-sm font-semibold">
+                {t(syncMessage.key, syncMessage.vars)}
+              </span>
+              {lastSyncedAt && syncState !== 'syncing' && (
+                <span className="text-muted-foreground font-body text-xs">
+                  {t('sync.lastSynced', { time: relativeTime(lastSyncedAt, t) })}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleSyncNow()}
+            disabled={syncDisabled}
+            className="border-border bg-surface text-foreground font-body flex shrink-0 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-opacity disabled:opacity-50"
+          >
+            <Icon
+              i={syncing ? 'loader-2' : 'refresh-cw'}
+              size={14}
+              className={syncing ? 'animate-spin' : ''}
+            />
+            {syncing ? t('sync.button.syncing') : t('sync.button.syncNow')}
+          </button>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-6 px-4 py-6 md:px-8">
         {/* Écarts de stock */}

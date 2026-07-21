@@ -556,14 +556,14 @@ const messages: Record<string, Msg> = {
     ar: 'احتفظ بسجل لمن يدين لك وبكم. لا مزيد من الدفاتر، ولا نسيان.',
   },
   'landing.feat.offline.title': {
-    fr: 'Consultation hors-ligne',
-    en: 'Offline access',
-    ar: 'الاطّلاع دون اتصال',
+    fr: 'Fonctionne hors-ligne',
+    en: 'Works offline',
+    ar: 'يعمل دون اتصال',
   },
   'landing.feat.offline.desc': {
-    fr: 'Consultez vos ventes, votre stock et vos créances même sans réseau ; tout se synchronise au retour de la connexion. (Ventes 100% hors-ligne : bientôt.)',
-    en: 'View your sales, stock and receivables even with no network; everything syncs when the connection returns. (Full offline sales: coming soon.)',
-    ar: 'اطّلع على مبيعاتك ومخزونك وديونك حتى دون شبكة؛ ويتزامن كل شيء عند عودة الاتصال. (البيع الكامل دون اتصال: قريباً.)',
+    fr: 'Vendez, encaissez et gérez votre stock même sans réseau ; tout se synchronise automatiquement au retour de la connexion, sans doublon.',
+    en: 'Sell, collect payments and manage your stock even with no network; everything syncs automatically when the connection returns, with no duplicates.',
+    ar: 'بِع واستلم المدفوعات وأدِر مخزونك حتى دون شبكة؛ ويتزامن كل شيء تلقائياً عند عودة الاتصال، دون تكرار.',
   },
   'landing.feat.keyPoint': { fr: 'Argument clé', en: 'Key point', ar: 'نقطة أساسية' },
   'landing.problem.eyebrow': {
@@ -836,9 +836,9 @@ const messages: Record<string, Msg> = {
     ar: 'هل يعمل فعلاً بدون إنترنت؟',
   },
   'landing.faq.a1': {
-    fr: 'En partie, aujourd’hui : vous consultez vos données (ventes, stock, créances) même sans connexion, et tout se synchronise au retour du réseau. Les ventes 100% hors-ligne arrivent bientôt.',
-    en: 'Partly, today: you can view your data (sales, stock, receivables) even with no connection, and everything syncs when the network returns. Full offline sales are coming soon.',
-    ar: 'جزئياً اليوم: يمكنك الاطّلاع على بياناتك (المبيعات والمخزون والديون) حتى دون اتصال، ويتزامن كل شيء عند عودة الشبكة. والبيع الكامل دون اتصال قريباً.',
+    fr: 'Oui : vous pouvez vendre, encaisser, gérer votre stock et vos créances même sans connexion. Tout est enregistré sur l’appareil et se synchronise automatiquement au retour du réseau, sans doublon.',
+    en: 'Yes: you can sell, collect payments, and manage your stock and receivables even with no connection. Everything is saved on the device and syncs automatically when the network returns, with no duplicates.',
+    ar: 'نعم: يمكنك البيع واستلام المدفوعات وإدارة مخزونك وديونك حتى دون اتصال. كل شيء يُحفظ على الجهاز ويتزامن تلقائياً عند عودة الشبكة، دون تكرار.',
   },
   'landing.faq.q2': {
     fr: 'Puis-je l’utiliser sur mon téléphone ?',

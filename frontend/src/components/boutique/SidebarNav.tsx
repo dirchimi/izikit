@@ -12,7 +12,7 @@ import { useConfirm } from '@/contexts/ConfirmContext';
 import { useApi } from '@/lib/useApi';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { useSyncStatus } from '@/lib/offline/useSyncStatus';
-import SyncIndicator, { SyncCountBadge } from './sync/SyncIndicator';
+import { SyncCountBadge } from './sync/SyncIndicator';
 
 interface NavItem {
   icon: string;
@@ -175,9 +175,6 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
           {online ? t('online.connected') : t('offline.short')}
         </span>
       </div>
-
-      {/* Statut sync + bouton « Synchroniser maintenant » (Task 4.3) */}
-      <SyncIndicator />
 
       {/* Nav (sections) — compacte, sans défilement en usage normal */}
       <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pt-2 pb-2">
