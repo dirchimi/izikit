@@ -13,7 +13,14 @@
  * server-side before the response reached the device is recognized and
  * dedup-returns 2xx with the already-existing entity — replaying is safe.
  *
- * Three failure branches, each a deliberate choice:
+ * Four failure branches, each a deliberate choice:
+ *   - un-refreshable auth failure (`ApiError.status === 401`) → same
+ *     treatment as network/offline below: reset to `pending` and STOP. By
+ *     the time this reaches the sync engine, `api.ts` already tried (and
+ *     failed) its own single-flight refresh, so this isn't the op's fault —
+ *     it's a device-wide auth lapse that would otherwise 401 every
+ *     subsequent row in this same pass, converting the ENTIRE queue to
+ *     un-retryable `error` in one drain. See the per-row comment below.
  *   - network/offline (`ApiError.status === 0`) → STOP the whole drain and
  *     reset the row back to `pending` (not `error` — `listPending()` only
  *     ever returns `pending` rows, so routing a network blip through
@@ -436,6 +443,25 @@ async function drainPending(): Promise<DrainResult> {
         }
         done++;
         continue;
+      }
+
+      if (err.status === 401) {
+        // Un-refreshable auth failure — api.ts already tried ONE token
+        // refresh internally; reaching here means that refresh itself
+        // failed or timed out, so this row was never actually rejected by
+        // the SERVER's business logic (unlike a genuine 4xx validation
+        // error, which IS a permanent, op-level failure and correctly
+        // becomes `error` below). Treat this as transient/recoverable the
+        // SAME way as the network-stop branch above: reset the row back to
+        // `pending` (not `markError` — `error` rows are excluded by
+        // `listPending()`, which would strand this op, and every op behind
+        // it, un-retryable forever) and STOP the drain so FIFO order is
+        // preserved. Once the user re-authenticates (or a later refresh
+        // succeeds), the next automatic drain replays the whole queue from
+        // this row onward — safe because every mutation is idempotent via
+        // its client id.
+        await db.outbox.update(seq, { status: 'pending' });
+        break;
       }
 
       // Any other 4xx (validation/not-found) or 5xx — see module docblock

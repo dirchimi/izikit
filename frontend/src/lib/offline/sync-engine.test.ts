@@ -288,6 +288,34 @@ describe('drainOutbox', () => {
     expect(pending.map((r) => r.opId)).toEqual(['s1', 's2']);
   });
 
+  it('a 401 that could not be refreshed resets the row to pending (not error) and stops the drain without rejecting', async () => {
+    // api.ts already tried its own single-flight refresh internally before
+    // rethrowing — an ApiError(401, ...) reaching the sync engine means
+    // re-auth is needed, not that this specific op was rejected. Treated the
+    // same as the network-stop branch: reset to `pending` (still visible to
+    // listPending()) and stop, so a later automatic drain replays the whole
+    // queue in FIFO order once the user is re-authenticated.
+    await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+    await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });
+    await db.sales.bulkPut([makeSaleRow('s1'), makeSaleRow('s2')]);
+
+    mockedApi.mockRejectedValueOnce(new ApiError(401, 'Unauthorized', { error: 'UNAUTHORIZED' }));
+
+    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+
+    // op #2 was never POSTed — the loop stopped after the 401.
+    expect(mockedApi).toHaveBeenCalledTimes(1);
+
+    // Row #1 is back to `pending` (NOT `error`), so it's visible to a
+    // follow-up listPending() and will be retried, in FIFO order, next drain.
+    const pending = await listPending();
+    expect(pending.map((r) => r.opId)).toEqual(['s1', 's2']);
+
+    const rows = await db.outbox.toArray();
+    const s1 = rows.find((r) => r.opId === 's1');
+    expect(s1?.status).toBe('pending');
+  });
+
   it('a non-conflict 4xx (validation) marks error and continues draining', async () => {
     await enqueue({
       kind: 'expense',
