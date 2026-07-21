@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import TopBar from '@/components/boutique/TopBar';
@@ -12,33 +13,11 @@ import RecentSaleRow from '@/components/boutique/RecentSaleRow';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useT, useLocale } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { computeDashboardLocal, type DashboardData } from '@/lib/offline/dashboard-adapter';
 import { formatFCFA } from '@/lib/boutique/format';
-
-interface DashboardData {
-  today: {
-    revenue: number;
-    sales: number;
-    expenses: number;
-    collectedCash: number;
-    collectedMobile: number;
-    creditGranted: number;
-  };
-  yesterday: { revenue: number; sales: number; expenses: number };
-  receivablesOpen: number;
-  weekly: { label: string; value: number }[];
-  weekMaxRevenue: number;
-  weekTodayIndex: number;
-  stockAlerts: { name: string; remaining: number; critical: boolean }[];
-  expiryAlerts: { name: string; daysLeft: number; expired: boolean }[];
-  recentSales: {
-    id: string;
-    at: string;
-    product: string;
-    qty: number;
-    total: number;
-    method: string;
-  }[];
-}
 
 const BCP47: Record<string, string> = { fr: 'fr-FR', en: 'en-US', ar: 'ar' };
 
@@ -52,11 +31,42 @@ export default function DashboardManager() {
   const t = useT();
   const { locale } = useLocale();
   const bcp = BCP47[locale] ?? 'fr-FR';
+  const online = useOnlineStatus();
   // Écran « vivant » : rafraîchi toutes les 20 s (onglet visible) → les ventes
-  // des vendeurs tombent en direct sans actualiser.
-  const { data, loading, error, refresh } = useApi<DashboardData>('/api/dashboard', {
-    pollMs: 20_000,
-  });
+  // des vendeurs tombent en direct sans actualiser. Hors ligne, on saute le
+  // réseau et on calcule l'agrégat depuis le miroir Dexie (dashboard-adapter) —
+  // en ligne, /api/dashboard reste prioritaire (source de vérité, historique
+  // complet ; le calcul local est borné à ~60 j par la purge locale).
+  const {
+    data: netData,
+    loading: netLoading,
+    error: netError,
+    refresh,
+  } = useApi<DashboardData>('/api/dashboard', { pollMs: 20_000, skip: !online });
+
+  const { data: localInput } = useLocalResource(
+    async () => {
+      const [sales, items, expenses, repayments, receivables, products] = await Promise.all([
+        db.sales.toArray(),
+        db.saleItems.toArray(),
+        db.expenses.toArray(),
+        db.repayments.toArray(),
+        db.receivables.toArray(),
+        db.products.toArray(),
+      ]);
+      return { sales, items, expenses, repayments, receivables, products };
+    },
+    [],
+    null,
+  );
+  const localData = useMemo(
+    () => (localInput ? computeDashboardLocal(localInput, new Date()) : null),
+    [localInput],
+  );
+
+  const data = online ? netData : localData;
+  const loading = online ? netLoading : localInput === null;
+  const error = online ? netError : null;
 
   return (
     <>

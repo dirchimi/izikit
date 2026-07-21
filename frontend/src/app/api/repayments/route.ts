@@ -11,7 +11,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
 import { prisma } from '@/lib/server/prisma';
-import { parsePeriod, parseDateRange, periodRange } from '@/lib/server/reports/helpers';
+import { parsePeriod, parseDateRange, periodRange } from '@/lib/reports/helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 // Garde-fou : une période ne devrait pas dépasser quelques centaines de

@@ -14,7 +14,7 @@ import {
   type Bucket,
   type Period,
   type TopProduct,
-} from './helpers';
+} from '@/lib/reports/helpers';
 
 export interface ReportSummary {
   revenue: number;

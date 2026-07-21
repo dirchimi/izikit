@@ -9,7 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { ensureBoutique, getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
-import { parsePeriod, parseDateRange, type Period } from '@/lib/server/reports/helpers';
+import { parsePeriod, parseDateRange, type Period } from '@/lib/reports/helpers';
 import { computeReport, computeReportRange } from '@/lib/server/reports/compute';
 import { renderReportPdf } from '@/lib/server/reports/pdf';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';

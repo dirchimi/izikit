@@ -5,7 +5,7 @@ import 'server-only';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { ReportSummary } from './compute';
-import type { TopProduct } from './helpers';
+import type { TopProduct } from '@/lib/reports/helpers';
 import { registerPdfFonts } from '../documents/fonts';
 
 export interface ReportPdfInput {

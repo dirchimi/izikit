@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import DatePicker from '@/components/ui/DatePicker';
 import TopBar from '@/components/boutique/TopBar';
@@ -11,29 +11,19 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import {
+  computeReportLocalPeriod,
+  computeReportLocalRange,
+  type ReportResult,
+} from '@/lib/reports/compute-local';
+import { parseDateRange } from '@/lib/reports/helpers';
 import { formatFCFA } from '@/lib/boutique/format';
 import ReportBarChart from './ReportBarChart';
 
 type Period = 'today' | 'week' | 'month' | 'year';
-
-interface ReportData {
-  period: Period | 'custom';
-  summary: {
-    revenue: number;
-    sales: number;
-    grossMargin: number;
-    marginPct: number;
-    expenses: number;
-    netProfit: number;
-    collectedCash: number;
-    collectedMobile: number;
-    creditGranted: number;
-    repaidCash: number;
-    repaidMobile: number;
-  };
-  series: { label: string; value: number }[];
-  topProducts: { rank: number; name: string; qty: number; ca: number }[];
-}
 
 const periods: { id: Period; key: string }[] = [
   { id: 'today', key: 'rapports.period.today' },
@@ -80,10 +70,49 @@ export default function RapportsManager() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
+  const online = useOnlineStatus();
+
   // En mode personnalisé avec les deux dates → on interroge par plage.
   const reportQuery =
     period === 'custom' && from && to ? `from=${from}&to=${to}` : `period=${period}`;
-  const { data, loading, error, refresh } = useApi<ReportData>(`/api/reports?${reportQuery}`);
+  const {
+    data: netData,
+    loading: netLoading,
+    error: netError,
+    refresh,
+  } = useApi<ReportResult>(`/api/reports?${reportQuery}`, { skip: !online });
+
+  // Hors ligne : calcul local depuis le miroir Dexie (mêmes helpers purs que le
+  // serveur → parité aux mêmes entrées). En ligne, /api/reports reste
+  // prioritaire (source de vérité, historique complet ; le local est borné à
+  // ~60 j par la purge locale).
+  const { data: localInput } = useLocalResource(
+    async () => {
+      const [sales, items, expenses, repayments] = await Promise.all([
+        db.sales.toArray(),
+        db.saleItems.toArray(),
+        db.expenses.toArray(),
+        db.repayments.toArray(),
+      ]);
+      return { sales, items, expenses, repayments };
+    },
+    [],
+    null,
+  );
+  const localData = useMemo<ReportResult | null>(() => {
+    if (!localInput) return null;
+    if (period === 'custom') {
+      if (!from || !to) return null;
+      const range = parseDateRange(from, to);
+      if (!range) return null;
+      return computeReportLocalRange(localInput, range.from, range.to);
+    }
+    return computeReportLocalPeriod(localInput, period, new Date());
+  }, [localInput, period, from, to]);
+
+  const data = online ? netData : localData;
+  const loading = online ? netLoading : localInput === null;
+  const error = online ? netError : null;
   const summary = data?.summary;
 
   // Libellé de la période (export CSV / WhatsApp).
@@ -162,7 +191,8 @@ export default function RapportsManager() {
       <button
         type="button"
         onClick={openPdf}
-        disabled={loading || !data || customIncomplete}
+        // Le PDF est rendu côté serveur → indisponible hors ligne.
+        disabled={loading || !data || customIncomplete || !online}
         className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
         <Icon i="file-text" size={14} />

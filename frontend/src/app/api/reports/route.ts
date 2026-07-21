@@ -16,7 +16,7 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
-import { parsePeriod, parseDateRange } from '@/lib/server/reports/helpers';
+import { parsePeriod, parseDateRange } from '@/lib/reports/helpers';
 import { computeReport, computeReportRange } from '@/lib/server/reports/compute';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
