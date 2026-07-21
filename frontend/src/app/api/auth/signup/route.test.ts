@@ -134,7 +134,11 @@ describe('POST /api/auth/signup', () => {
     const limited = calls.find((r) => r.status === 429)!;
     const body = await limited.json();
     expect(body.error).toBe('TOO_MANY_SIGNUP_ATTEMPTS');
-  });
+    // Timeout étendu : ce cas envoie 6 inscriptions en parallèle, chacune avec
+    // un vrai hash bcrypt (CPU-bound). 6 hashs simultanés dépassent le timeout
+    // Vitest par défaut (5 s) sur une machine lente/chargée — d'où un échec
+    // "flaky" historique sans rapport avec le produit. On laisse de la marge.
+  }, 20000);
 
   it('rejects pwned passwords with PASSWORD_PWNED when PASSWORD_HIBP_CHECK=1', async () => {
     vi.stubEnv('PASSWORD_HIBP_CHECK', '1');
