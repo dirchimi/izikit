@@ -58,6 +58,7 @@ import {
   markDone,
   markConflict,
   markError,
+  reclaimOrphanedSyncing,
   type OutboxRow,
 } from './outbox';
 
@@ -372,6 +373,13 @@ export async function drainOutbox(): Promise<DrainResult> {
   }
   draining = true;
   try {
+    // Récupère les lignes orphelines laissées en `syncing` par un drain dont le
+    // contexte JS a été détruit en plein POST (onglet fermé / rechargement /
+    // crash). drainOutbox est single-flight : passé le garde, aucun drain vivant
+    // ne possède de ligne `syncing` → toutes sont orphelines. On les remet
+    // `pending` (le rejeu est idempotent via la clé client) sinon le badge et le
+    // spinner « Synchronisation… » restaient bloqués à vie, bouton désactivé.
+    await reclaimOrphanedSyncing();
     return await drainPending();
   } finally {
     draining = false;

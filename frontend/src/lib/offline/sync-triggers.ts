@@ -21,7 +21,7 @@
  * without risking a double-POST.
  */
 import { drainOutbox } from './sync-engine';
-import { pendingCount } from './outbox';
+import { pendingCount, reclaimOrphanedSyncing } from './outbox';
 
 const SWEEP_INTERVAL_MS = 30_000;
 
@@ -60,6 +60,13 @@ export function installSyncTriggers(): () => void {
       if (count > 0) triggerDrain();
     });
   }, SWEEP_INTERVAL_MS);
+
+  // Récupère tout de suite (même hors-ligne) les lignes orphelines en `syncing`
+  // — un drain interrompu en plein POST (app fermée/rechargée) laisse sinon le
+  // spinner « Synchronisation… » bloqué à vie et le bouton désactivé, y compris
+  // hors-ligne où `triggerDrain()` ci-dessous ne s'exécute pas. `drainOutbox`
+  // fait déjà ce reclaim en ligne ; ceci couvre le cas chargé hors-ligne.
+  void reclaimOrphanedSyncing();
 
   // Initial sweep — the app may have launched with a non-empty queue while
   // already online (e.g. a previous drain stopped mid-way on a network

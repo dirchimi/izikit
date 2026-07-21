@@ -30,13 +30,29 @@ export default function PwaRegistrar() {
       return;
     }
 
-    const register = () => {
-      void navigator.serviceWorker.register('/sw.js').catch(() => {
+    const register = async () => {
+      // On enregistre `/sw.js?v=<buildId>` : le buildId change à chaque
+      // déploiement (voir scripts/gen-sw-precache.mjs), donc l'URL du SW change
+      // → le navigateur installe un SW neuf qui re-précache le nouveau jeu de
+      // fichiers JS. Sans ce paramètre, `/sw.js` (identique d'un build à l'autre)
+      // ne se réinstallerait pas et l'app resterait sur les anciens chunks
+      // hors-ligne. Repli sur `/sw.js` si le manifeste n'est pas là.
+      let url = '/sw.js';
+      try {
+        const res = await fetch('/sw-precache.json', { cache: 'no-store' });
+        if (res.ok) {
+          const manifest = (await res.json()) as { buildId?: string };
+          if (manifest.buildId) url = `/sw.js?v=${encodeURIComponent(manifest.buildId)}`;
+        }
+      } catch {
+        /* pas de manifeste → enregistrement sur /sw.js nu */
+      }
+      void navigator.serviceWorker.register(url).catch(() => {
         /* enregistrement best-effort : pas bloquant pour l'app */
       });
     };
-    if (document.readyState === 'complete') register();
-    else window.addEventListener('load', register, { once: true });
+    if (document.readyState === 'complete') void register();
+    else window.addEventListener('load', () => void register(), { once: true });
   }, []);
 
   return null;

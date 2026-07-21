@@ -121,6 +121,23 @@ export async function retryOutboxRow(seq: number): Promise<void> {
 }
 
 /**
+ * Resets rows orphaned at `status: 'syncing'` back to `pending`. A row is
+ * flipped to `syncing` right before its POST (`markSyncing`); if the JS context
+ * is torn down mid-POST (tab closed, reload, crash), the in-memory single-flight
+ * lock is lost but the row stays `syncing` in IndexedDB — invisible to
+ * `listPending()` forever, so the sync indicator sticks on "Synchronisation…"
+ * and the "Synchroniser maintenant" button stays permanently disabled.
+ *
+ * Call this ONLY when no drain is live: the sync engine calls it while holding
+ * the single-flight guard, and the triggers call it once at install (before any
+ * drain). Any `syncing` row is then, by definition, orphaned. Replay is
+ * idempotent (client id / clientOpId), so re-POSTing a reclaimed row is safe.
+ */
+export async function reclaimOrphanedSyncing(): Promise<void> {
+  await db.outbox.where('status').equals('syncing').modify({ status: 'pending' });
+}
+
+/**
  * Count of rows not yet in a terminal-success state: `pending` + `syncing`
  * + `error`. `conflict` rows are deliberately excluded — see the module
  * docblock. This backs the "N à synchroniser" badge.

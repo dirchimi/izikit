@@ -1,8 +1,16 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
-import { DEFAULT_LOCALE, LOCALE_COOKIE, type Locale } from '@/lib/i18n/config';
+import { DEFAULT_LOCALE, LOCALE_COOKIE, dir, type Locale } from '@/lib/i18n/config';
 import { translate } from '@/lib/i18n/dictionary';
 
 type Vars = Record<string, string | number>;
@@ -34,11 +42,23 @@ export function LocaleProvider({
   const setLocale = useCallback(
     (next: Locale) => {
       document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; SameSite=Lax`;
+      // Applique lang/dir DIRECTEMENT (comme ThemeContext pour la classe `dark`)
+      // : Next ne re-patche pas les attributs du <html> côté client sur
+      // router.refresh(), donc l'arabe (RTL + police Tajawal) ne s'appliquait
+      // jamais — le texte changeait mais la mise en page restait LTR/latine.
+      document.documentElement.lang = next;
+      document.documentElement.dir = dir(next);
       setLocaleState(next);
       router.refresh();
     },
     [router],
   );
+
+  // Garde <html lang/dir> en phase avec l'état (filet après hydratation).
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = dir(locale);
+  }, [locale]);
 
   const value = useMemo<LocaleContextValue>(
     () => ({ locale, setLocale, t: (key, vars) => translate(locale, key, vars) }),

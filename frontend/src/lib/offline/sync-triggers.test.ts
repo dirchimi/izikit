@@ -19,6 +19,7 @@ vi.mock('./sync-engine', () => ({
 }));
 vi.mock('./outbox', () => ({
   pendingCount: vi.fn(),
+  reclaimOrphanedSyncing: vi.fn(),
 }));
 
 const mockedDrain = vi.mocked(drainOutbox);
