@@ -15,7 +15,12 @@
  *    sans ignoreVary une navigation client hors-ligne ne retrouvait pas la page
  *    en cache et plantait).
  *  - Repli navigation hors-ligne : coquille HTML de la route (visitée OU
- *    pré-cachée) sinon /hors-ligne.
+ *    pré-cachée, query string ignorée en 2e passe) sinon /hors-ligne.
+ *
+ * Coquilles HTML : l'install n'en fait qu'une tentative best-effort (jeton
+ * 15 min souvent périmé → 307 /connexion → coquilles sautées). Le chemin
+ * FIABLE est le message `PRECACHE_SHELLS` envoyé par AppShell juste après un
+ * pullAll() réussi (cookies frais) — voir src/lib/offline/precache-shells.ts.
  *
  * Révision : `/sw-precache.json` porte le `buildId` du déploiement ; le précache
  * vit dans un cache `PRECACHE_PREFIX + buildId`. `PwaRegistrar` enregistre
@@ -26,7 +31,7 @@
  * À la déconnexion, CLEAR_CACHE purge le cache runtime (données privées).
  */
 /* global self, caches */
-const VERSION = 'sahilley-v7';
+const VERSION = 'sahilley-v8';
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const PRECACHE_PREFIX = 'sahilley-precache-';
@@ -71,17 +76,39 @@ async function precacheAssets(cache, assets) {
 }
 
 // Coquille HTML d'une route — on ne garde QUE des documents terminaux (ok +
-// basic + non redirigés) : une redirection /connexion resservie hors-ligne
-// ferait boucler le navigateur.
+// basic + non redirigés + HTML) : une redirection /connexion resservie
+// hors-ligne ferait boucler le navigateur.
+//
+// ⚠️ Le jeton d'accès ne vit que 15 min : à l'installation du SW il est souvent
+// périmé → les pages (app) répondent 307 /connexion et TOUTES les coquilles
+// sont sautées (bug terrain : navigation à froid hors-ligne → « Pas de
+// connexion » sur chaque écran). L'install ne fait donc qu'une tentative
+// best-effort ; le chemin FIABLE est le message PRECACHE_SHELLS envoyé par le
+// client (AppShell) juste après un pullAll() réussi — à cet instant api()
+// vient de rafraîchir les cookies, le fetch ne peut pas être redirigé. Ça
+// rafraîchit aussi les coquilles à chaque chargement en ligne, donc elles
+// référencent toujours les chunks du build courant.
 async function precacheRoute(cache, route) {
   try {
     const res = await fetch(route, { credentials: 'same-origin' });
-    if (res && res.ok && res.type === 'basic' && !res.redirected) {
+    const contentType = res ? res.headers.get('content-type') || '' : '';
+    if (
+      res &&
+      res.ok &&
+      res.type === 'basic' &&
+      !res.redirected &&
+      contentType.includes('text/html')
+    ) {
       await cache.put(route, res.clone());
     }
   } catch {
     /* best-effort */
   }
+}
+
+async function precacheAllShells() {
+  const runtime = await caches.open(RUNTIME_CACHE);
+  await Promise.allSettled(PRECACHE_ROUTES.map((r) => precacheRoute(runtime, r)));
 }
 
 self.addEventListener('install', (event) => {
@@ -103,8 +130,7 @@ self.addEventListener('install', (event) => {
       if (precache && manifest && Array.isArray(manifest.assets)) {
         await precacheAssets(precache, manifest.assets);
       }
-      const runtime = await caches.open(RUNTIME_CACHE);
-      await Promise.allSettled(PRECACHE_ROUTES.map((r) => precacheRoute(runtime, r)));
+      await precacheAllShells();
     })(),
   );
 });
@@ -131,8 +157,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
+  if (!event.data) return;
+  if (event.data.type === 'CLEAR_CACHE') {
     event.waitUntil(caches.delete(RUNTIME_CACHE));
+  } else if (event.data.type === 'PRECACHE_SHELLS') {
+    // Envoyé par le client (AppShell) juste après un pullAll() réussi —
+    // cookies fraîchement rafraîchis → les fetchs de coquilles passent le
+    // garde d'authentification au lieu d'être redirigés vers /connexion.
+    event.waitUntil(precacheAllShells());
   }
 });
 
@@ -171,11 +203,18 @@ async function networkFirst(request, fallbackOffline) {
       // Navigation hors-ligne : coquille HTML de LA ROUTE (visitée OU pré-cachée).
       // `ignoreVary` indispensable (voir en-tête). On ne sert que du HTML —
       // jamais un payload RSC mis en cache sous la même URL.
+      const isHtml = (r) => (r.headers.get('content-type') || '').includes('text/html');
       const cachedShell = await caches.match(request, { ignoreVary: true });
-      const contentType = cachedShell ? cachedShell.headers.get('content-type') || '' : '';
-      if (cachedShell && contentType.includes('text/html')) {
+      if (cachedShell && isHtml(cachedShell)) {
         return cachedShell;
       }
+      // 2e passe : même chemin en ignorant la query string (ex. /creances?tab=x
+      // doit servir la coquille /creances). `matchAll` + filtre HTML pour ne
+      // jamais confondre avec un payload RSC caché sous /route?_rsc=….
+      const runtime = await caches.open(RUNTIME_CACHE);
+      const loose = await runtime.matchAll(request, { ignoreVary: true, ignoreSearch: true });
+      const htmlShell = loose.find(isHtml);
+      if (htmlShell) return htmlShell;
       const offline = await caches.match(OFFLINE_URL);
       if (offline) return offline;
       throw err;

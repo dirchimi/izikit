@@ -15,6 +15,7 @@ import { useT } from '@/contexts/LocaleContext';
 import { authGateState } from '@/lib/offline/auth-gate';
 import { installSyncTriggers } from '@/lib/offline/sync-triggers';
 import { pullAll } from '@/lib/offline/pull';
+import { requestShellPrecache } from '@/lib/offline/precache-shells';
 import { purgeLocalHistory } from '@/lib/offline/purge';
 
 interface BoutiqueHeaderData {
@@ -65,7 +66,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const seed = () => {
-      if (navigator.onLine) void pullAll().catch(() => undefined);
+      if (navigator.onLine)
+        void pullAll()
+          // Un pull réussi ⇒ api() vient de rafraîchir les cookies ⇒ c'est LE
+          // moment où le SW peut capturer les coquilles HTML des écrans sans
+          // être redirigé vers /connexion (voir precache-shells.ts).
+          .then(() => requestShellPrecache())
+          .catch(() => undefined);
     };
     seed();
     window.addEventListener('online', seed);
