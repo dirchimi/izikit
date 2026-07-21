@@ -24,11 +24,21 @@ export default function ErrorBoundary({
 
   useEffect(() => {
     console.error('[app-error]', error);
+    if (typeof window === 'undefined') return;
     const isChunkError =
       error.name === 'ChunkLoadError' ||
       /loading chunk|failed to load chunk|dynamically imported module/i.test(error.message);
-    if (!isChunkError || typeof window === 'undefined') return;
-    // Anti-boucle : au plus un rechargement automatique par tranche de 10 s.
+    // Repli automatique dans deux cas :
+    //  - ChunkLoadError (ancien fichier JS disparu après un déploiement) ;
+    //  - HORS-LIGNE : une navigation client (RSC) qui échoue plante ici. Un
+    //    rechargement COMPLET repasse par le service worker, qui sert la coquille
+    //    HTML en cache → l'écran se reconstruit à partir des données locales
+    //    (Dexie), au lieu d'afficher « Une erreur est survenue ».
+    const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (!isChunkError && !offline) return;
+    // Anti-boucle : au plus un rechargement automatique par tranche de 10 s
+    // (si la coquille rechargée replante, on laisse alors l'écran d'erreur +
+    // ses détails techniques visibles plutôt que de boucler).
     const KEY = 'chunk-reloaded-at';
     const last = Number(window.sessionStorage.getItem(KEY) ?? 0);
     if (Date.now() - last > 10_000) {

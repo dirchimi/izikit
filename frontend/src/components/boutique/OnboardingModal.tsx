@@ -75,8 +75,13 @@ export default function OnboardingModal() {
   const [phone, setPhone] = useState('');
 
   // Ouverture : compte jamais accueilli (onboardedAt === null), une seule fois.
+  // Hors-ligne on ne l'ouvre JAMAIS : l'assistant a besoin du réseau (PATCH
+  // org + POST onboarded) et la session persistée locale ne porte pas
+  // `onboardedAt` — sans ce garde, il croit le compte non-accueilli et se
+  // rouvre à chaque visite du tableau de bord hors-ligne (bug terrain).
   useEffect(() => {
     if (loading || !user) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (!dismissedThisSession && user.onboardedAt === null) setOpen(true);
   }, [loading, user]);
 
