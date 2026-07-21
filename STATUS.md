@@ -145,6 +145,12 @@ Audit trail of these waves lives in `.planning/archive/` (SIMPLIFY-AUDIT, POST-S
 - Vercel CLI as a prerequisite — deploys happen via `git push` → Vercel imports the repo via UI.
 - A `frontend/Dockerfile` — removed in the simplification waves.
 
+## Post-v1: Offline-first (boutique POS)
+
+Shipped on branch `feat/offline-first` (phases 0–6 of `docs/superpowers/plans/2026-07-20-offline-first-boutique.md`): Dexie (IndexedDB) local mirror + client outbox + sync engine, so the boutique POS works with no network and syncs on reconnect. Every offline write carries a client cuid2 that doubles as its server-side idempotency key (`withIdempotency` + `withTxRetry`). New route `GET /api/sync/pull` serves the full-batch mirror seed/refresh. See the "Offline-first (boutique POS)" section in [CLAUDE.md](CLAUDE.md) for the invariants and known limitations (no delete-tombstone, no offline supplier-debt payment / product CRUD, etc.).
+
+Quality gate: 1263/1263 unit tests green (147 files), typecheck/lint/format clean, `pnpm build` succeeds. Prisma migrations 34/35 are **created but not yet applied** to any database — the build only needs the generated Prisma client, not a live DB, so this is safe to leave pending until the branch merges.
+
 ## Critical invariants (never compromise)
 
 1. Sentry init stays the first thing the server runtime loads (`frontend/instrumentation.ts` register hook).
