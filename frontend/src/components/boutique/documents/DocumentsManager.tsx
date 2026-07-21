@@ -8,6 +8,10 @@ import AsyncState from '@/components/boutique/AsyncState';
 import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { useApi } from '@/lib/useApi';
+import { db } from '@/lib/offline/db';
+import { useLocalResource } from '@/lib/offline/useLocalResource';
+import { documentRowToApi } from '@/lib/offline/documents-adapters';
+import { pullResource } from '@/lib/offline/pull';
 import { onDocumentChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
@@ -68,9 +72,18 @@ export default function DocumentsManager() {
   const [pdfDoc, setPdfDoc] = useState<ApiDocument | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
 
-  const { data, loading, error, refresh } = useApi<{ documents: ApiDocument[] }>('/api/documents');
+  // Offline-first : lecture locale (Dexie) au lieu du réseau — le miroir est
+  // alimenté par pullAll() (voir AppShell) et par pullResource('documents')
+  // après chaque création ci-dessous. `error`/`refresh` n'existent pas côté
+  // local (une lecture Dexie ne peut pas « échouer » comme un fetch réseau) —
+  // AsyncState gère déjà ce cas (voir VentesManager, même schéma).
+  const { data: docRows, loading } = useLocalResource(
+    () => db.documents.orderBy('issuedAt').reverse().toArray(),
+    [],
+    [],
+  );
+  const documents = useMemo(() => docRows.map(documentRowToApi), [docRows]);
   const { data: orgData } = useApi<OrgCurrent>('/api/org/current');
-  const documents = data?.documents ?? [];
 
   const org = {
     name: orgData?.organization.name ?? 'Boutique',
@@ -123,6 +136,10 @@ export default function DocumentsManager() {
       });
       toast(t('documents.invoiceCreated', { num: document.number }), 'success');
       onDocumentChange();
+      // Offline-first : la liste lit désormais le miroir local (db.documents) —
+      // on rafraîchit juste cette ressource pour que le document apparaisse tout
+      // de suite au lieu d'attendre le prochain pullAll() (comme VentesManager).
+      void pullResource('documents');
       setSelectedId(document.id);
       return true;
     } catch (err) {
@@ -141,6 +158,7 @@ export default function DocumentsManager() {
       });
       toast(t('documents.proformaCreated', { num: document.number }), 'success');
       onDocumentChange();
+      void pullResource('documents');
       setTab('proformas');
       setSelectedId(document.id);
       return true;
@@ -295,8 +313,7 @@ export default function DocumentsManager() {
           {/* Liste */}
           <AsyncState
             loading={loading}
-            error={error}
-            onRetry={refresh}
+            error={null}
             isEmpty={docs.length === 0}
             emptyLabel={t(
               tab === 'factures'
