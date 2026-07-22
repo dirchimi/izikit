@@ -49,7 +49,13 @@ export function LocaleProvider({
       document.documentElement.lang = next;
       document.documentElement.dir = dir(next);
       setLocaleState(next);
-      router.refresh();
+      // Hors ligne, PAS de router.refresh() : le fetch RSC échoue et Next
+      // recharge alors la page en dur → le service worker ressert la coquille
+      // en cache (rendue dans l'ANCIENNE langue) et le changement paraît
+      // refusé. Les écrans boutique sont des composants clients traduits par
+      // l'état ci-dessus ; les composants serveur rattraperont le cookie au
+      // prochain rendu en ligne.
+      if (typeof navigator === 'undefined' || navigator.onLine) router.refresh();
     },
     [router],
   );

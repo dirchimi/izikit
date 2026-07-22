@@ -9,6 +9,7 @@ import ThemeToggle from './ThemeToggle';
 import { useT } from '@/contexts/LocaleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { useSyncStatus } from '@/lib/offline/useSyncStatus';
@@ -119,6 +120,7 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
   const router = useRouter();
   const { logout, loggingOut } = useAuth();
   const confirm = useConfirm();
+  const { toast } = useToast();
   const online = useOnlineStatus();
   // Compteurs live pour le badge de sync attaché à l'item de nav ci-dessous.
   const { pendingCount, conflicts } = useSyncStatus();
@@ -136,6 +138,14 @@ export default function SidebarNav({ onNavigate = () => {} }: { onNavigate?: () 
     .filter((s) => s.items.length > 0);
 
   async function handleLogout() {
+    // Hors ligne, se déconnecter serait un piège : la révocation serveur ne
+    // peut pas partir, mais la session offline locale + les caches seraient
+    // effacés → impossible de se RE-connecter sans réseau (l'écran de
+    // connexion exige le serveur). On refuse net, avec l'explication.
+    if (!online) {
+      toast(t('logout.offline'), 'info');
+      return;
+    }
     const ok = await confirm({
       title: t('logout.confirmTitle'),
       message: t('logout.confirmMsg'),

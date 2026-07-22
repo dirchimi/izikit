@@ -151,6 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Garde hors-ligne (défense en profondeur — l'UI SidebarNav explique déjà
+    // via un toast) : sans réseau, la révocation serveur ne peut pas partir ;
+    // effacer quand même la session offline + les caches rendrait toute
+    // re-connexion impossible jusqu'au retour du réseau (piège sur un
+    // téléphone de boutique). On ne détruit rien tant qu'on est hors ligne.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     setLoggingOut(true);
     try {
       await api('/api/auth/logout', { method: 'POST' });

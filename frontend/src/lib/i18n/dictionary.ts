@@ -84,6 +84,11 @@ const messages: Record<string, Msg> = {
     en: "You'll need to log in again to access your shop.",
     ar: 'ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى متجرك.',
   },
+  'logout.offline': {
+    fr: 'Déconnexion impossible hors ligne — reconnecte-toi à Internet d’abord.',
+    en: 'Cannot log out while offline — reconnect to the Internet first.',
+    ar: 'لا يمكن تسجيل الخروج دون اتصال — اتصل بالإنترنت أولاً.',
+  },
   'role.patron': { fr: 'Patron', en: 'Owner', ar: 'المالك' },
   'offline.syncPending': {
     fr: 'Hors ligne — sync en attente',
