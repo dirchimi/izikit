@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { revalidateResources } from '@/lib/useApi';
 import { useToast } from '@/contexts/ToastContext';
 import { useAdmin } from '@/components/admin/AdminContext';
 import { useCursorList } from '@/lib/admin/useCursorList';
@@ -116,6 +117,14 @@ export default function AdminSubscriptionsPage() {
     setAction({ kind: 'reject', payment });
   }
 
+  // Après une confirmation OU un refus, invalide les caches useApi qui
+  // affichent ces montants ailleurs (dashboard admin « Paiements à valider »/
+  // encaissé, fiche boutique) : sans ça, revenir au tableau de bord ressert
+  // le cache périmé et le montant refusé semble toujours dû/encaissé.
+  function revalidateAdminStats() {
+    revalidateResources(['/api/admin/stats', '/api/admin/boutiques']);
+  }
+
   async function runAction() {
     if (!action) return;
     const { kind, payment } = action;
@@ -129,6 +138,7 @@ export default function AdminSubscriptionsPage() {
         setItems((prev) =>
           prev.map((x) => (x.id === payment.id ? { ...x, status: res.status } : x)),
         );
+        revalidateAdminStats();
         // Animation « c'est fait ! » dans la modale, puis fermeture + toast.
         setCelebrate(true);
         setBusyId(null);
@@ -149,6 +159,7 @@ export default function AdminSubscriptionsPage() {
             x.id === payment.id ? { ...x, status: res.status, note: trimmed || x.note } : x,
           ),
         );
+        revalidateAdminStats();
         toast('Demande refusée.', 'success');
       }
       setAction(null);

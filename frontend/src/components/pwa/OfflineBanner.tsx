@@ -1,18 +1,37 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { useT } from '@/contexts/LocaleContext';
 import Icon from '@/components/ui/Icon';
 
 /**
- * Barre fine affichée en haut quand le réseau est absent. Signale à
- * l'utilisateur que les données montrées sont les dernières chargées
- * (consultation hors-ligne — couche 1). Rien quand on est en ligne.
+ * Avis TRANSITOIRE de perte de connexion : la barre apparaît quelques secondes
+ * quand le réseau tombe (le moment où il faut être vu), puis s'efface.
+ *
+ * Retour terrain : la version permanente était dérangeante quand la boutique
+ * travaille hors-ligne toute la journée — et l'état durable est déjà porté par
+ * DEUX petits indicateurs permanents (pastille « Hors ligne » de la barre du
+ * haut + badge de la sidebar). Rien quand on est en ligne.
  */
+const SHOW_MS = 5000;
+
 export default function OfflineBanner() {
   const online = useOnlineStatus();
   const t = useT();
-  if (online) return null;
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (online) {
+      setVisible(false);
+      return;
+    }
+    setVisible(true);
+    const timer = setTimeout(() => setVisible(false), SHOW_MS);
+    return () => clearTimeout(timer);
+  }, [online]);
+
+  if (!visible) return null;
 
   return (
     <div
