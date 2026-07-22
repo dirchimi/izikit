@@ -36,6 +36,7 @@ interface AdminStats {
       org: string;
       plan: string | null;
       amount: number;
+      discountCode: string | null;
       method: string;
       months: number;
       createdAt: string;
@@ -238,25 +239,32 @@ export default function AdminDashboard() {
         </button>
       </AdminHeader>
 
-      {/* Ligne 1 — Revenus & abonnements (cœur du business) */}
+      {/* Ligne 1 — L'ARGENT d'abord : tout ce qui compte, visible sans scroller.
+          « Revenu mensuel (réel) » = Σ (montant payé ÷ mois) des paiements
+          réellement encaissés — pas le prix catalogue. */}
       <div>
         <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
-          Revenus & abonnements
+          Revenus
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Revenu mensuel récurrent"
-            value={fcfa(s.subscriptions.mrr)}
-            sub={`${s.subscriptions.active} abonnement(s) payant(s)`}
-            icon="trending-up"
+            label="Encaissé ce mois-ci"
+            value={fcfa(s.collectedByMonth[s.collectedByMonth.length - 1]?.amount ?? 0)}
+            sub="abonnements confirmés"
+            icon="wallet"
             accent
           />
           <StatCard
-            label="Abonnements payants"
-            value={String(s.subscriptions.active)}
-            sub={`${s.subscriptions.offered > 0 ? `${s.subscriptions.offered} offert(s) · ` : ''}${s.subscriptions.trial} en essai · ${s.subscriptions.expired} expiré(s)`}
-            icon="badge-check"
-            href="/admin/subscriptions"
+            label="Total encaissé"
+            value={fcfa(s.collectedTotal)}
+            sub="depuis le lancement"
+            icon="piggy-bank"
+          />
+          <StatCard
+            label="Revenu mensuel (réel)"
+            value={fcfa(s.subscriptions.mrr)}
+            sub="sur les montants réellement payés"
+            icon="trending-up"
           />
           <StatCard
             label="Paiements à valider"
@@ -270,34 +278,60 @@ export default function AdminDashboard() {
             warn={s.subscriptions.pendingCount > 0}
             href="/admin/subscriptions"
           />
+        </div>
+      </div>
+
+      {/* Ligne 1b — Les boutiques (état du parc). */}
+      <div>
+        <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
+          Boutiques & activité
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Abonnements payants"
+            value={String(s.subscriptions.active)}
+            sub={`${s.subscriptions.offered > 0 ? `${s.subscriptions.offered} offert(s) · ` : ''}${s.subscriptions.trial} en essai · ${s.subscriptions.expired} expiré(s)`}
+            icon="badge-check"
+            href="/admin/subscriptions"
+          />
           <StatCard
             label="Boutiques"
             value={String(s.boutiques.total)}
             sub={`${s.subscriptions.active + s.subscriptions.offered + s.subscriptions.trial} actives · ${s.subscriptions.expired} inactives`}
             icon="store"
           />
+          <StatCard
+            label="Volume de ventes"
+            value={fcfa(s.sales.volume)}
+            sub={`${s.sales.count} vente(s) — toutes boutiques`}
+            icon="receipt"
+          />
+          <StatCard
+            label="Utilisateurs"
+            value={String(s.users.total)}
+            sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
+            icon="users"
+            href="/admin/users"
+          />
         </div>
       </div>
 
-      {/* Ligne 2 — Files prioritaires : paiements à valider + relances */}
+      {/* Ligne 2 — Files d'action : QUI appeler / valider aujourd'hui. Une file
+          vide disparaît (au lieu d'occuper l'écran avec « rien à faire »). */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Panel
-          title="Paiements à valider"
-          action={
-            <a
-              href="/admin/subscriptions"
-              className="text-primary font-body text-xs font-semibold hover:underline"
-            >
-              Tout voir →
-            </a>
-          }
-        >
-          {s.subscriptions.pending.length === 0 ? (
-            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
-              Aucun paiement en attente. ✅
-            </p>
-          ) : (
-            s.subscriptions.pending.map((p) => (
+        {s.subscriptions.pending.length > 0 && (
+          <Panel
+            title="Paiements à valider"
+            action={
+              <a
+                href="/admin/subscriptions"
+                className="text-primary font-body text-xs font-semibold hover:underline"
+              >
+                Tout voir →
+              </a>
+            }
+          >
+            {s.subscriptions.pending.map((p) => (
               <div
                 key={p.id}
                 className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
@@ -307,23 +341,22 @@ export default function AdminDashboard() {
                   <p className="text-muted-foreground font-body text-xs">
                     {(p.plan && PLAN_LABEL[p.plan]) ?? p.plan ?? '—'} · {p.months} mois ·{' '}
                     {METHOD_LABEL[p.method] ?? p.method} · {fmtDate(p.createdAt)}
+                    {p.discountCode ? (
+                      <span className="text-primary font-medium"> · Code {p.discountCode}</span>
+                    ) : null}
                   </p>
                 </div>
                 <span className="font-headings text-foreground shrink-0 text-sm font-bold">
                   {fcfa(p.amount)}
                 </span>
               </div>
-            ))
-          )}
-        </Panel>
+            ))}
+          </Panel>
+        )}
 
-        <Panel title="Abonnements qui expirent bientôt">
-          {s.subscriptions.expiringSoon.length === 0 ? (
-            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
-              Aucune expiration dans les 7 jours.
-            </p>
-          ) : (
-            s.subscriptions.expiringSoon.map((o) => (
+        {s.subscriptions.expiringSoon.length > 0 && (
+          <Panel title="Abonnements qui expirent bientôt">
+            {s.subscriptions.expiringSoon.map((o) => (
               <div
                 key={o.id}
                 className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
@@ -340,22 +373,13 @@ export default function AdminDashboard() {
                   <WaButton phone={o.phone} label={o.name} />
                 </div>
               </div>
-            ))
-          )}
-        </Panel>
-      </div>
+            ))}
+          </Panel>
+        )}
 
-      {/* Ligne 2b — Files d'appel : conversion (essais) + rétention (dormantes).
-          Le vrai travail quotidien du fondateur : QUI appeler, avec le numéro
-          en un tap — pas seulement des compteurs. */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Panel title={`Essais en cours — à convertir (${s.trials.length})`}>
-          {s.trials.length === 0 ? (
-            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
-              Aucun essai en cours.
-            </p>
-          ) : (
-            s.trials.map((t) => (
+        {s.trials.length > 0 && (
+          <Panel title={`Essais en cours — à convertir (${s.trials.length})`}>
+            {s.trials.map((t) => (
               <div
                 key={t.id}
                 className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
@@ -381,17 +405,13 @@ export default function AdminDashboard() {
                   <WaButton phone={t.phone} label={t.name} />
                 </div>
               </div>
-            ))
-          )}
-        </Panel>
+            ))}
+          </Panel>
+        )}
 
-        <Panel title={`À relancer — 30 j sans vente (${s.dormantList.length})`}>
-          {s.dormantList.length === 0 ? (
-            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
-              Aucune boutique à relancer. ✅
-            </p>
-          ) : (
-            s.dormantList.map((d) => (
+        {s.dormantList.length > 0 && (
+          <Panel title={`À relancer — 30 j sans vente (${s.dormantList.length})`}>
+            {s.dormantList.map((d) => (
               <div
                 key={d.id}
                 className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
@@ -404,45 +424,44 @@ export default function AdminDashboard() {
                 </div>
                 <WaButton phone={d.phone} label={d.name} />
               </div>
-            ))
-          )}
-        </Panel>
+            ))}
+          </Panel>
+        )}
       </div>
 
-      {/* Ligne 3 — KPIs opérationnels */}
-      <div>
-        <h2 className="font-headings text-muted-foreground mb-2 text-xs font-bold tracking-wide uppercase">
-          Activité plateforme
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Encaissé ce mois-ci"
-            value={fcfa(s.collectedByMonth[s.collectedByMonth.length - 1]?.amount ?? 0)}
-            sub="abonnements confirmés"
-            icon="wallet"
-            accent
-          />
-          <StatCard
-            label="Total encaissé"
-            value={fcfa(s.collectedTotal)}
-            sub="depuis le lancement"
-            icon="piggy-bank"
-          />
-          <StatCard
-            label="Volume de ventes"
-            value={fcfa(s.sales.volume)}
-            sub={`${s.sales.count} vente(s) — toutes boutiques`}
-            icon="receipt"
-          />
-          <StatCard
-            label="Utilisateurs"
-            value={String(s.users.total)}
-            sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
-            icon="users"
-            href="/admin/users"
+      {/* Ligne 3 — Encaissé par mois (revenu réel des abonnements), juste
+          après les files d'action : l'argent se lit avant les classements. */}
+      <Panel
+        title="Encaissé par mois — 6 derniers mois"
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              const rows = s.collectedByMonth.map((m) => [fmtMonth(m.month).long, m.amount]);
+              downloadCsv(
+                'encaisse-par-mois-sahilley.csv',
+                toCsv(['Mois', 'Encaissé (FCFA)'], rows),
+              );
+            }}
+            className="border-border text-foreground font-body hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95"
+          >
+            <Icon i="download" size={13} /> CSV
+          </button>
+        }
+      >
+        <div className="px-4 py-5">
+          <MiniBars
+            data={s.collectedByMonth.map((m) => {
+              const f = fmtMonth(m.month);
+              return {
+                label: f.short,
+                value: m.amount,
+                hint: `${f.long} : ${fcfa(m.amount)}`,
+              };
+            })}
           />
         </div>
-      </div>
+      </Panel>
 
       {/* Ligne 3b — Classements par boutique / ville */}
       <div>
@@ -489,39 +508,6 @@ export default function AdminDashboard() {
           </Panel>
         </div>
       </div>
-
-      {/* Ligne 3c — Encaissé par mois (revenu réel des abonnements) */}
-      <Panel
-        title="Encaissé par mois — 6 derniers mois"
-        action={
-          <button
-            type="button"
-            onClick={() => {
-              const rows = s.collectedByMonth.map((m) => [fmtMonth(m.month).long, m.amount]);
-              downloadCsv(
-                'encaisse-par-mois-sahilley.csv',
-                toCsv(['Mois', 'Encaissé (FCFA)'], rows),
-              );
-            }}
-            className="border-border text-foreground font-body hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95"
-          >
-            <Icon i="download" size={13} /> CSV
-          </button>
-        }
-      >
-        <div className="px-4 py-5">
-          <MiniBars
-            data={s.collectedByMonth.map((m) => {
-              const f = fmtMonth(m.month);
-              return {
-                label: f.short,
-                value: m.amount,
-                hint: `${f.long} : ${fcfa(m.amount)}`,
-              };
-            })}
-          />
-        </div>
-      </Panel>
 
       {/* Ligne 4 — graphe inscriptions + répartitions */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">

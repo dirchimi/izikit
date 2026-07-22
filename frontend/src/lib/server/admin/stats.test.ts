@@ -130,17 +130,28 @@ describe('computeAdminStats', () => {
       _count: 3,
       _sum: { amount: 45000 },
     } as never);
-    prismaMock.subscriptionPayment.findMany.mockResolvedValue([
-      {
-        id: 'sp1',
-        plan: 'PREMIUM',
-        amount: 30000,
-        method: 'CASH',
-        months: 1,
-        createdAt: now,
-        organization: { name: 'Chez Ali' },
-      },
-    ] as never);
+    // 3 findMany successifs (ordre de construction du Promise.all) :
+    // (1) paiements confirmés des boutiques actives (revenu mensuel réel),
+    // (2) file des paiements PENDING, (3) encaissé par mois.
+    prismaMock.subscriptionPayment.findMany
+      .mockResolvedValueOnce([
+        // Dernier paiement de o1 : 600000 pour 12 mois → 50000/mois réels.
+        { organizationId: 'o1', amount: 600000, months: 12 },
+        // Paiement plus ancien de la même boutique : ignoré (on garde le dernier).
+        { organizationId: 'o1', amount: 50000, months: 1 },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: 'sp1',
+          plan: 'PREMIUM',
+          amount: 30000,
+          method: 'CASH',
+          months: 1,
+          createdAt: now,
+          organization: { name: 'Chez Ali' },
+        },
+      ] as never)
+      .mockResolvedValueOnce([] as never);
     prismaMock.organization.findMany.mockResolvedValue([
       {
         id: 'o1',
@@ -159,7 +170,9 @@ describe('computeAdminStats', () => {
     expect(s.subscriptions.offered).toBe(1); // 2 accès actifs − 1 payante
     expect(s.subscriptions.trial).toBe(1);
     expect(s.subscriptions.expired).toBe(2); // 5 − 2 (accès actif) − 1 (essai)
-    expect(s.subscriptions.mrr).toBe(50000); // 1 × 50000 (PREMIUM payante)
+    // Revenu mensuel RÉEL : dernier paiement de o1 = 600000/12 mois = 50000/mois
+    // (le paiement plus ancien de la même boutique ne compte pas).
+    expect(s.subscriptions.mrr).toBe(50000);
     expect(s.subscriptions.pendingCount).toBe(3);
     expect(s.subscriptions.pendingAmount).toBe(45000);
     expect(s.subscriptions.pending[0]).toMatchObject({

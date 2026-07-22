@@ -18,6 +18,10 @@ const SELECT = {
   id: true,
   plan: true,
   amount: true,
+  // Trace du coupon : prix catalogue + code utilisé (null = plein tarif) —
+  // l'admin voit qui a payé plein tarif et qui a utilisé quel code.
+  baseAmount: true,
+  discountCode: true,
   method: true,
   months: true,
   status: true,

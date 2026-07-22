@@ -14,6 +14,9 @@ interface AdminSubPayment {
   id: string;
   plan: string;
   amount: number;
+  // Trace du coupon (null = plein tarif) : prix catalogue + code utilisé.
+  baseAmount: number | null;
+  discountCode: string | null;
   method: string;
   months: number;
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED';
@@ -44,6 +47,18 @@ const METHOD_LABEL: Record<string, string> = {
   BANK: 'Virement bancaire',
   MOBILE: 'Mobile money', // historique
 };
+
+// Trace du coupon, affichée sous chaque montant : l'admin voit d'un coup
+// d'œil qui a payé plein tarif et qui a utilisé quel code (et la remise).
+function CouponHint({ code, base }: { code: string | null; base: number | null }) {
+  if (!code) return null;
+  return (
+    <span className="text-primary font-body block text-xs font-medium">
+      Code {code}
+      {base !== null ? ` · catalogue ${formatFCFA(base)} FCFA` : ''}
+    </span>
+  );
+}
 
 // Sélecteur de filtre réutilisable (même charte que le filtre de statut).
 function FilterSelect({
@@ -263,9 +278,12 @@ export default function AdminSubscriptionsPage() {
               <Badge tone={TONE[p.status] ?? 'neutral'}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
             </div>
             <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
-              <span className="font-headings text-foreground text-sm font-bold">
-                {formatFCFA(p.amount)} FCFA
-              </span>
+              <div className="min-w-0">
+                <span className="font-headings text-foreground text-sm font-bold">
+                  {formatFCFA(p.amount)} FCFA
+                </span>
+                <CouponHint code={p.discountCode} base={p.baseAmount} />
+              </div>
               {canConfirm && p.status === 'PENDING' ? (
                 <div className="flex items-center gap-4">
                   <button
@@ -335,6 +353,7 @@ export default function AdminSubscriptionsPage() {
                 </td>
                 <td className="text-foreground font-body px-4 py-3 text-end font-semibold">
                   {formatFCFA(p.amount)} FCFA
+                  <CouponHint code={p.discountCode} base={p.baseAmount} />
                 </td>
                 <td className="text-muted-foreground font-body px-4 py-3">
                   {METHOD_LABEL[p.method] ?? p.method}
@@ -434,6 +453,7 @@ export default function AdminSubscriptionsPage() {
                 {PLAN_LABEL[action.payment.plan] ?? action.payment.plan} · {action.payment.months}{' '}
                 mois · {METHOD_LABEL[action.payment.method] ?? action.payment.method}
               </span>
+              <CouponHint code={action.payment.discountCode} base={action.payment.baseAmount} />
             </div>
 
             {action.kind === 'confirm' || action.kind === 'amount' ? (

@@ -8,7 +8,7 @@
  */
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
-import { isPlanId, MONTHLY_PRICE } from '@/lib/subscription/plans';
+import { isPlanId } from '@/lib/subscription/plans';
 import { computeSubscription } from '@/lib/subscription/status';
 
 const DAY_MS = 86_400_000;
@@ -43,7 +43,9 @@ export interface AdminStats {
     offered: number;
     trial: number;
     expired: number;
-    mrr: number; // revenu mensuel récurrent (Σ prix mensuel des abonnements PAYANTS)
+    // Revenu mensuel RÉEL : Σ (montant payé ÷ mois) du dernier paiement
+    // confirmé de chaque boutique active — pas le prix catalogue.
+    mrr: number;
     pendingCount: number;
     pendingAmount: number;
     pending: Array<{
@@ -51,6 +53,9 @@ export interface AdminStats {
       org: string;
       plan: string | null;
       amount: number;
+      // Code promo utilisé sur la demande (null = plein tarif) — visible dès
+      // la file du dashboard, pas seulement sur la page Abonnements.
+      discountCode: string | null;
       method: string;
       months: number;
       createdAt: string;
@@ -215,6 +220,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     subsPaying,
     subsTrial,
     activePlanGroups,
+    mrrPaymentRows,
     subPendingAgg,
     subPendingRows,
     expiringRows,
@@ -302,6 +308,17 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       },
       _count: true,
     }) as unknown as Promise<Array<{ plan: string | null; _count: number }>>,
+    // Paiements CONFIRMÉS des boutiques encore actives — sert au revenu
+    // mensuel RÉEL (dernier paiement par boutique, montant ÷ mois).
+    prisma.subscriptionPayment.findMany({
+      where: {
+        status: 'CONFIRMED',
+        organization: { currentPeriodEnd: { gte: now } },
+        ...scopeFilter,
+      },
+      orderBy: { confirmedAt: 'desc' },
+      select: { organizationId: true, amount: true, months: true },
+    }),
     prisma.subscriptionPayment.aggregate({
       where: { status: 'PENDING', ...scopeFilter },
       _count: true,
@@ -316,6 +333,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
         id: true,
         plan: true,
         amount: true,
+        discountCode: true,
         method: true,
         months: true,
         createdAt: true,
@@ -410,12 +428,19 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
 
   const openAmount = (receivablesAgg._sum.amount ?? 0) - (receivablesAgg._sum.amountPaid ?? 0);
 
-  // MRR = somme du prix mensuel de référence des abonnements PAYANTS
-  // (activePlanGroups exclut déjà les accès offerts sans paiement).
-  const mrr = activePlanGroups.reduce((sum, g) => {
-    const price = isPlanId(g.plan) ? MONTHLY_PRICE : 0;
-    return sum + price * g._count;
-  }, 0);
+  // Revenu mensuel RÉEL = Σ (montant payé ÷ mois) du DERNIER paiement confirmé
+  // de chaque boutique active. L'ancien calcul (50 000 × nb d'actifs) était un
+  // prix catalogue théorique : un client qui a payé 200 000 pour UN AN avec un
+  // coupon vaut ~16 667/mois réels, pas 50 000 — le chiffre affiché ne
+  // correspondait à aucun argent réel.
+  const latestPaymentByOrg = new Map<string, { amount: number; months: number }>();
+  for (const p of mrrPaymentRows) {
+    if (!latestPaymentByOrg.has(p.organizationId)) latestPaymentByOrg.set(p.organizationId, p);
+  }
+  const mrr = [...latestPaymentByOrg.values()].reduce(
+    (sum, p) => sum + Math.round(p.amount / Math.max(1, p.months)),
+    0,
+  );
   // Expirées = ni accès actif (payant ou offert) ni essai en cours.
   const expired = Math.max(0, boutiquesTotal - subsActive - subsTrial);
   const offered = Math.max(0, subsActive - subsPaying);
@@ -597,6 +622,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
         org: p.organization?.name ?? '—',
         plan: p.plan,
         amount: p.amount,
+        discountCode: p.discountCode ?? null,
         method: p.method,
         months: p.months,
         createdAt: p.createdAt.toISOString(),
