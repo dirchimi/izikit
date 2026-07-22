@@ -2,7 +2,7 @@
 
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
-import { labelForAction } from '@/lib/admin/action-labels';
+import { waLink } from '@/lib/wa';
 import { toCsv, downloadCsv } from '@/lib/csv';
 import Icon from '@/components/ui/Icon';
 import { AdminHeader, Badge, MiniBars, Panel, Skeleton, StatBar, StatCard } from './ui';
@@ -47,8 +47,18 @@ interface AdminStats {
       status: string;
       activeUntil: string | null;
       daysLeft: number;
+      phone: string | null;
     }>;
   };
+  trials: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    daysLeft: number;
+    salesTotal: number;
+  }>;
+  dormantList: Array<{ id: string; name: string; phone: string | null }>;
+  collectedTotal: number;
   planSplit: { premium: number };
   topBoutiques: {
     byRevenue: Array<{ id: string; name: string; value: number }>;
@@ -141,13 +151,21 @@ function fmtMonth(key: string): { short: string; long: string } {
   const idx = Math.max(0, Math.min(11, Number(m) - 1));
   return { short: MONTH_SHORT[idx] ?? m ?? '', long: `${MONTH_LONG[idx] ?? ''} ${y ?? ''}`.trim() };
 }
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+// Bouton WhatsApp compact des files d'appel — rien si pas de numéro exploitable.
+function WaButton({ phone, label }: { phone: string | null; label: string }) {
+  const href = phone ? waLink(phone) : null;
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Écrire à ${label} sur WhatsApp`}
+      className="text-primary inline-flex shrink-0 items-center"
+    >
+      <Icon i="message-circle" size={15} />
+    </a>
+  );
 }
 
 export default function AdminDashboard() {
@@ -317,7 +335,74 @@ export default function AdminDashboard() {
                     {o.status === 'TRIAL' ? 'Essai' : 'Abonnement'}
                   </p>
                 </div>
-                <Badge tone={urgencyTone(o.daysLeft)}>{daysLeftLabel(o.daysLeft)}</Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge tone={urgencyTone(o.daysLeft)}>{daysLeftLabel(o.daysLeft)}</Badge>
+                  <WaButton phone={o.phone} label={o.name} />
+                </div>
+              </div>
+            ))
+          )}
+        </Panel>
+      </div>
+
+      {/* Ligne 2b — Files d'appel : conversion (essais) + rétention (dormantes).
+          Le vrai travail quotidien du fondateur : QUI appeler, avec le numéro
+          en un tap — pas seulement des compteurs. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Panel title={`Essais en cours — à convertir (${s.trials.length})`}>
+          {s.trials.length === 0 ? (
+            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
+              Aucun essai en cours.
+            </p>
+          ) : (
+            s.trials.map((t) => (
+              <div
+                key={t.id}
+                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-body text-foreground truncate text-sm font-medium">{t.name}</p>
+                  <p className="font-body text-xs">
+                    {/* Signal d'activation : une boutique qui VEND pendant son
+                        essai est prête à payer ; une qui ne vend pas a besoin
+                        d'accompagnement — deux conversations différentes. */}
+                    {t.salesTotal > 0 ? (
+                      <span className="text-success font-semibold">
+                        A vendu · {fcfa(t.salesTotal)}
+                      </span>
+                    ) : (
+                      <span className="text-warning font-semibold">Jamais vendu</span>
+                    )}
+                    {t.phone ? <span className="text-muted-foreground"> · {t.phone}</span> : null}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge tone={urgencyTone(t.daysLeft)}>{daysLeftLabel(t.daysLeft)}</Badge>
+                  <WaButton phone={t.phone} label={t.name} />
+                </div>
+              </div>
+            ))
+          )}
+        </Panel>
+
+        <Panel title={`À relancer — 30 j sans vente (${s.dormantList.length})`}>
+          {s.dormantList.length === 0 ? (
+            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
+              Aucune boutique à relancer. ✅
+            </p>
+          ) : (
+            s.dormantList.map((d) => (
+              <div
+                key={d.id}
+                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-body text-foreground truncate text-sm font-medium">{d.name}</p>
+                  <p className="text-muted-foreground font-body text-xs">
+                    {d.phone ?? 'Pas de téléphone renseigné'}
+                  </p>
+                </div>
+                <WaButton phone={d.phone} label={d.name} />
               </div>
             ))
           )}
@@ -331,11 +416,17 @@ export default function AdminDashboard() {
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Utilisateurs"
-            value={String(s.users.total)}
-            sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
-            icon="users"
-            href="/admin/users"
+            label="Encaissé ce mois-ci"
+            value={fcfa(s.collectedByMonth[s.collectedByMonth.length - 1]?.amount ?? 0)}
+            sub="abonnements confirmés"
+            icon="wallet"
+            accent
+          />
+          <StatCard
+            label="Total encaissé"
+            value={fcfa(s.collectedTotal)}
+            sub="depuis le lancement"
+            icon="piggy-bank"
           />
           <StatCard
             label="Volume de ventes"
@@ -344,16 +435,11 @@ export default function AdminDashboard() {
             icon="receipt"
           />
           <StatCard
-            label="Créances ouvertes"
-            value={fcfa(s.receivables.openAmount)}
-            sub={`${s.receivables.openCount} créance(s)`}
-            icon="notebook-pen"
-          />
-          <StatCard
-            label="Produits"
-            value={String(s.products.total)}
-            sub="au catalogue (toutes boutiques)"
-            icon="package"
+            label="Utilisateurs"
+            value={String(s.users.total)}
+            sub={`+${s.users.newLast7} cette semaine · +${s.users.newToday} aujourd'hui`}
+            icon="users"
+            href="/admin/users"
           />
         </div>
       </div>
@@ -457,24 +543,6 @@ export default function AdminDashboard() {
           <div className="flex flex-col gap-4 px-4 py-5">
             <div className="flex flex-col gap-3">
               <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
-                Par rôle
-              </span>
-              <StatBar
-                label="Utilisateurs"
-                value={s.users.byRole.USER}
-                total={totalUsers}
-                tone="neutral"
-              />
-              <StatBar label="Admins" value={s.users.byRole.ADMIN} total={totalUsers} tone="blue" />
-              <StatBar
-                label="Super-admins"
-                value={s.users.byRole.SUPERADMIN}
-                total={totalUsers}
-                tone="purple"
-              />
-            </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
                 Par statut
               </span>
               <StatBar
@@ -500,17 +568,6 @@ export default function AdminDashboard() {
                 value={s.boutiques.dormant}
                 total={s.boutiques.total}
                 tone="amber"
-              />
-            </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-muted-foreground font-body text-xs font-semibold uppercase">
-                Abonnements actifs
-              </span>
-              <StatBar
-                label="Premium"
-                value={s.planSplit.premium}
-                total={s.boutiques.total}
-                tone="purple"
               />
             </div>
             <div className="flex flex-col gap-3">
@@ -558,41 +615,15 @@ export default function AdminDashboard() {
           )}
         </Panel>
 
-        <Panel title="Dernières actions admin">
-          {s.recentActions.length === 0 ? (
-            <p className="text-muted-foreground font-body px-4 py-6 text-center text-sm">
-              Aucune action.
-            </p>
-          ) : (
-            s.recentActions.map((a) => (
-              <div
-                key={a.id}
-                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-body text-foreground truncate text-sm font-medium">
-                    {labelForAction(a.action)}
-                  </p>
-                  <p className="text-muted-foreground font-body text-xs">
-                    {a.targetType ?? '—'} · {a.actorId.slice(0, 8)}…
-                  </p>
-                </div>
-                <span className="text-muted-foreground font-body shrink-0 text-xs">
-                  {fmtDateTime(a.createdAt)}
-                </span>
-              </div>
-            ))
-          )}
+        {/* Santé technique (le journal des actions admin a sa propre page —
+            l'unique superadmin y voyait ses propres clics, zéro information). */}
+        <Panel title="Santé technique">
+          <div className="divide-border grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            <OpsStat label="Outbox en attente" value={s.ops.outboxPending} />
+            <OpsStat label="Emails en attente" value={s.ops.emailPending} />
+          </div>
         </Panel>
       </div>
-
-      {/* Ligne 6 — santé technique */}
-      <Panel title="Santé technique">
-        <div className="divide-border grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <OpsStat label="Outbox en attente" value={s.ops.outboxPending} />
-          <OpsStat label="Emails en attente" value={s.ops.emailPending} />
-        </div>
-      </Panel>
     </div>
   );
 }

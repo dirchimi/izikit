@@ -62,8 +62,26 @@ export interface AdminStats {
       status: string;
       activeUntil: string | null;
       daysLeft: number;
+      phone: string | null;
     }>;
   };
+  // File d'appels n°1 : boutiques EN ESSAI, les plus urgentes d'abord, avec
+  // téléphone (relance WhatsApp) et signal d'activation (`salesTotal` — une
+  // boutique qui vend pendant l'essai est prête à payer ; une qui ne vend pas
+  // a besoin d'accompagnement).
+  trials: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    daysLeft: number;
+    salesTotal: number;
+  }>;
+  // File d'appels n°2 : boutiques qui ONT accès (abo/essai en cours) mais
+  // n'ont RIEN vendu depuis 30 jours — churn probable si pas relancées.
+  // (Inscrites depuis ≥ 14 j pour laisser passer l'onboarding.)
+  dormantList: Array<{ id: string; name: string; phone: string | null }>;
+  // Total encaissé cumulé (abonnements CONFIRMED, hors comptes internes).
+  collectedTotal: number;
   // Répartition des abonnements ACTIFS par plan (qui paie quoi).
   planSplit: { premium: number };
   // Classements par boutique : chiffre d'affaires (ventes) et encaissé
@@ -200,6 +218,8 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     subPendingAgg,
     subPendingRows,
     expiringRows,
+    trialRows,
+    collectedTotalAgg,
     activeWeekGroups,
     active30Groups,
     revenueByOrgGroups,
@@ -317,7 +337,32 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       // first`, puis on affine le tri par daysLeft en mémoire.
       orderBy: { currentPeriodEnd: { sort: 'asc', nulls: 'first' } },
       take: 30,
-      select: { id: true, name: true, plan: true, trialEndsAt: true, currentPeriodEnd: true },
+      select: {
+        id: true,
+        name: true,
+        plan: true,
+        trialEndsAt: true,
+        currentPeriodEnd: true,
+        settings: { select: { phone: true } },
+      },
+    }),
+    // Boutiques EN ESSAI (pas d'abo actif), les plus urgentes d'abord — la
+    // liste d'appels de conversion, avec le téléphone pour relancer.
+    prisma.organization.findMany({
+      where: { AND: [{ trialEndsAt: { gte: now } }, notActive], ...orgFilter },
+      orderBy: { trialEndsAt: 'asc' },
+      take: 30,
+      select: {
+        id: true,
+        name: true,
+        trialEndsAt: true,
+        settings: { select: { phone: true } },
+      },
+    }),
+    // Encaissé cumulé (tous les paiements confirmés, hors internes).
+    prisma.subscriptionPayment.aggregate({
+      where: { status: 'CONFIRMED', ...scopeFilter },
+      _sum: { amount: true },
     }),
     // Usage réel : boutiques distinctes ayant une vente ACTIVE sur 7 j / 30 j
     // (une vente annulée ne compte pas comme activité).
@@ -394,11 +439,49 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
         status: view.status,
         activeUntil: view.activeUntil,
         daysLeft: view.daysLeft,
+        phone: o.settings?.phone ?? null,
       };
     })
     .filter((o) => o.status !== 'EXPIRED')
     .sort((a, b) => a.daysLeft - b.daysLeft)
     .slice(0, 8);
+
+  // CA total (toutes périodes) par boutique — sert de signal d'activation pour
+  // la liste des essais (déjà chargé pour les classements, aucune requête en +).
+  const salesTotalByOrg = new Map(
+    revenueByOrgGroups.map((g) => [g.organizationId, g._sum.total ?? 0]),
+  );
+
+  const trials = trialRows.map((o) => ({
+    id: o.id,
+    name: o.name,
+    phone: o.settings?.phone ?? null,
+    daysLeft: o.trialEndsAt
+      ? Math.max(0, Math.ceil((o.trialEndsAt.getTime() - now.getTime()) / DAY_MS))
+      : 0,
+    salesTotal: salesTotalByOrg.get(o.id) ?? 0,
+  }));
+
+  // Dormantes À RELANCER : accès encore valable (abo OU essai) mais aucune
+  // vente ACTIVE depuis 30 j, inscrites depuis ≥ 14 j (onboarding passé). Les
+  // expirées ne sont pas ici — les relancer, c'est le travail de la file
+  // « expirent bientôt » / du statut expiré.
+  const active30Ids = active30Groups.map((g) => g.organizationId);
+  const dormantRows = await prisma.organization.findMany({
+    where: {
+      id: { notIn: [...active30Ids, ...internalIds] },
+      createdAt: { lt: since14 },
+      OR: [{ currentPeriodEnd: { gte: now } }, { trialEndsAt: { gte: now } }],
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 12,
+    select: { id: true, name: true, settings: { select: { phone: true } } },
+  });
+  const dormantList = dormantRows.map((o) => ({
+    id: o.id,
+    name: o.name,
+    phone: o.settings?.phone ?? null,
+  }));
 
   // Nombre d'abonnements Premium actifs (une seule offre payante).
   let premium = 0;
@@ -520,6 +603,9 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       })),
       expiringSoon,
     },
+    trials,
+    dormantList,
+    collectedTotal: collectedTotalAgg._sum.amount ?? 0,
     planSplit: { premium },
     topBoutiques,
     topCities,
