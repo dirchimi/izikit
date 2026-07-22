@@ -46,6 +46,7 @@ const ORG_SELECT = {
   name: true,
   slug: true,
   plan: true,
+  internal: true,
   trialEndsAt: true,
   currentPeriodEnd: true,
   createdAt: true,
@@ -135,6 +136,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         id: o.id,
         name: o.name,
         slug: o.slug,
+        internal: o.internal,
         ownerName: o.owner.name,
         ownerEmail: o.owner.email,
         phone: o.settings?.phone ?? null,
@@ -151,30 +153,53 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     // Totaux plateforme — seulement en 1re page (pas de cursor).
+    //
+    // Comptes INTERNES (test / associés) exclus de tous les totaux — ce ne sont
+    // pas de vrais clients. `active` ne compte que les abonnées PAYANTES (≥ 1
+    // paiement CONFIRMÉ) ; une boutique active sans paiement (jours offerts via
+    // grant-access) est comptée à part dans `offered` — sinon elle gonflait
+    // « Abonnées actives » alors que rien n'a été encaissé.
     let summary: {
       boutiques: number;
       active: number;
+      offered: number;
       trial: number;
       expired: number;
       collected: number;
       sellers: number;
     } | null = null;
     if (!cursor) {
-      const [boutiques, active, trial, collectedAgg, sellers] = await Promise.all([
-        prisma.organization.count(),
-        prisma.organization.count({ where: statusWhere('ACTIVE', now)! }),
-        prisma.organization.count({ where: statusWhere('TRIAL', now)! }),
-        prisma.subscriptionPayment.aggregate({
-          where: { status: 'CONFIRMED' },
-          _sum: { amount: true },
-        }),
-        prisma.organizationMember.count({ where: { role: { not: 'OWNER' } } }),
-      ]);
+      const notInternal = { internal: false } as const;
+      const [boutiques, accessActive, payingActive, trial, collectedAgg, sellers] =
+        await Promise.all([
+          prisma.organization.count({ where: notInternal }),
+          prisma.organization.count({ where: { AND: [statusWhere('ACTIVE', now)!, notInternal] } }),
+          prisma.organization.count({
+            where: {
+              AND: [
+                statusWhere('ACTIVE', now)!,
+                notInternal,
+                { subPayments: { some: { status: 'CONFIRMED' } } },
+              ],
+            },
+          }),
+          prisma.organization.count({ where: { AND: [statusWhere('TRIAL', now)!, notInternal] } }),
+          prisma.subscriptionPayment.aggregate({
+            where: { status: 'CONFIRMED', organization: notInternal },
+            _sum: { amount: true },
+          }),
+          prisma.organizationMember.count({
+            where: { role: { not: 'OWNER' }, organization: notInternal },
+          }),
+        ]);
       summary = {
         boutiques,
-        active,
+        active: payingActive,
+        offered: accessActive - payingActive,
         trial,
-        expired: boutiques - active - trial,
+        // L'expiration se calcule sur l'accès (une boutique offerte n'est ni
+        // payante ni expirée).
+        expired: boutiques - accessActive - trial,
         collected: collectedAgg._sum.amount ?? 0,
         sellers,
       };

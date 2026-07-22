@@ -54,6 +54,7 @@ function orgRow(o: OrgRowOverrides = {}) {
     id,
     name: o.name ?? 'Chez Ali',
     slug: `${id}-slug`,
+    internal: false,
     plan: o.plan ?? 'PREMIUM',
     // `in` checks so an explicit `null` isn't coalesced back to a default date.
     trialEndsAt: 'trialEndsAt' in o ? o.trialEndsAt! : null,
@@ -152,8 +153,9 @@ describe('/api/admin/boutiques — list', () => {
 
   it('computes summary on first page and skips the aggregate queries entirely on empty page', async () => {
     prismaMock.organization.findMany.mockResolvedValueOnce([] as never);
-    prismaMock.organization.count.mockResolvedValueOnce(10 as never); // total
-    prismaMock.organization.count.mockResolvedValueOnce(6 as never); // active
+    prismaMock.organization.count.mockResolvedValueOnce(10 as never); // total (hors internes)
+    prismaMock.organization.count.mockResolvedValueOnce(6 as never); // accès actif (payant OU offert)
+    prismaMock.organization.count.mockResolvedValueOnce(5 as never); // payantes (≥1 paiement CONFIRMED)
     prismaMock.organization.count.mockResolvedValueOnce(3 as never); // trial
     prismaMock.subscriptionPayment.aggregate.mockResolvedValueOnce({
       _sum: { amount: 630000 },
@@ -166,6 +168,7 @@ describe('/api/admin/boutiques — list', () => {
       summary: {
         boutiques: number;
         active: number;
+        offered: number;
         trial: number;
         expired: number;
         collected: number;
@@ -175,9 +178,12 @@ describe('/api/admin/boutiques — list', () => {
     expect(body.items).toEqual([]);
     expect(body.summary).toEqual({
       boutiques: 10,
-      active: 6,
+      // `active` = payantes uniquement ; l'accès offert (grant-access, aucun
+      // paiement) est compté à part et n'est PAS une expirée.
+      active: 5,
+      offered: 1,
       trial: 3,
-      expired: 1,
+      expired: 1, // 10 − 6 (accès actif) − 3 (essai)
       collected: 630000,
       sellers: 118,
     });

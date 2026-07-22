@@ -122,9 +122,10 @@ describe('computeAdminStats', () => {
   it('derives subscription metrics: active/trial/expired, MRR, pending queue, expiring soon', async () => {
     prismaMock.organization.count
       .mockResolvedValueOnce(5 as never) // boutiquesTotal
-      .mockResolvedValueOnce(2 as never) // active (currentPeriodEnd >= now)
+      .mockResolvedValueOnce(2 as never) // accès actif (payant OU offert)
+      .mockResolvedValueOnce(1 as never) // payantes (≥1 paiement CONFIRMED)
       .mockResolvedValueOnce(1 as never); // trial
-    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'PREMIUM', _count: 2 }]);
+    asMock(prismaMock.organization.groupBy).mockResolvedValue([{ plan: 'PREMIUM', _count: 1 }]);
     prismaMock.subscriptionPayment.aggregate.mockResolvedValue({
       _count: 3,
       _sum: { amount: 45000 },
@@ -152,10 +153,13 @@ describe('computeAdminStats', () => {
 
     const s = await computeAdminStats(prismaMock as never, now);
 
-    expect(s.subscriptions.active).toBe(2);
+    // `active` = payantes uniquement ; l'accès offert (grant-access sans
+    // paiement) est compté à part dans `offered` et n'entre pas dans le MRR.
+    expect(s.subscriptions.active).toBe(1);
+    expect(s.subscriptions.offered).toBe(1); // 2 accès actifs − 1 payante
     expect(s.subscriptions.trial).toBe(1);
-    expect(s.subscriptions.expired).toBe(2); // 5 − 2 − 1
-    expect(s.subscriptions.mrr).toBe(100000); // 2 × 50000 (PREMIUM)
+    expect(s.subscriptions.expired).toBe(2); // 5 − 2 (accès actif) − 1 (essai)
+    expect(s.subscriptions.mrr).toBe(50000); // 1 × 50000 (PREMIUM payante)
     expect(s.subscriptions.pendingCount).toBe(3);
     expect(s.subscriptions.pendingAmount).toBe(45000);
     expect(s.subscriptions.pending[0]).toMatchObject({

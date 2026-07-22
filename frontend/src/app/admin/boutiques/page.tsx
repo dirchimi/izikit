@@ -13,6 +13,7 @@ interface AdminBoutique {
   id: string;
   name: string;
   slug: string;
+  internal: boolean;
   ownerName: string | null;
   ownerEmail: string;
   phone: string | null;
@@ -30,6 +31,7 @@ interface AdminBoutique {
 interface Summary {
   boutiques: number;
   active: number;
+  offered: number;
   trial: number;
   expired: number;
   collected: number;
@@ -64,6 +66,16 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: 'TRIAL', label: 'En essai' },
   { value: 'EXPIRED', label: 'Expirées' },
 ];
+
+// Badge d'abonnement AFFICHÉ : un compte interne (test/associé) est marqué
+// « Interne » ; une boutique active SANS aucun paiement confirmé (jours offerts
+// via grant-access) est marquée « Offert » — pas « Abonné », qui laisserait
+// croire qu'elle paie.
+function displayBadge(b: AdminBoutique): { label: string; tone: string } {
+  if (b.internal) return { label: 'Interne', tone: 'purple' };
+  if (b.status === 'ACTIVE' && b.collected === 0) return { label: 'Offert', tone: 'blue' };
+  return { label: STATUS_LABEL[b.status], tone: STATUS_TONE[b.status] };
+}
 
 // Sous-libellé de statut : « 12 j restants » (essai/abo) ou date d'expiration.
 function statusSub(b: AdminBoutique): string {
@@ -135,7 +147,7 @@ export default function AdminBoutiquesPage() {
       b.phone ?? '',
       b.city ?? '',
       b.sellers,
-      STATUS_LABEL[b.status],
+      displayBadge(b).label,
       b.plan ? (PLAN_LABEL[b.plan] ?? b.plan) : '',
       b.activeUntil ? new Date(b.activeUntil).toLocaleDateString('fr-FR') : '',
       b.collected,
@@ -190,7 +202,7 @@ export default function AdminBoutiquesPage() {
           <StatCard
             label="Boutiques"
             value={String(summary.boutiques)}
-            sub={`${summary.active} abonnées · ${summary.trial} essai · ${summary.expired} expirées`}
+            sub={`${summary.active} abonnées${summary.offered > 0 ? ` · ${summary.offered} offertes` : ''} · ${summary.trial} essai · ${summary.expired} expirées`}
             icon="store"
           />
           <StatCard
@@ -207,9 +219,9 @@ export default function AdminBoutiquesPage() {
             icon="users"
           />
           <StatCard
-            label="Abonnées actives"
+            label="Abonnées payantes"
             value={String(summary.active)}
-            sub={`sur ${summary.boutiques} boutiques`}
+            sub={`sur ${summary.boutiques} boutiques${summary.offered > 0 ? ` · ${summary.offered} offerte(s)` : ''}`}
             icon="badge-check"
           />
         </div>
@@ -240,7 +252,7 @@ export default function AdminBoutiquesPage() {
                   {b.ownerName ?? b.ownerEmail}
                 </p>
               </div>
-              <Badge tone={STATUS_TONE[b.status]}>{STATUS_LABEL[b.status]}</Badge>
+              <Badge tone={displayBadge(b).tone}>{displayBadge(b).label}</Badge>
             </div>
             <div className="text-muted-foreground font-body mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span>{b.city ?? '—'}</span>
@@ -329,7 +341,7 @@ export default function AdminBoutiquesPage() {
                 <td className="text-foreground font-body px-4 py-3 text-center">{b.sellers}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Badge tone={STATUS_TONE[b.status]}>{STATUS_LABEL[b.status]}</Badge>
+                    <Badge tone={displayBadge(b).tone}>{displayBadge(b).label}</Badge>
                     {b.plan ? (
                       <span className="text-muted-foreground font-body text-xs">
                         {PLAN_LABEL[b.plan] ?? b.plan}

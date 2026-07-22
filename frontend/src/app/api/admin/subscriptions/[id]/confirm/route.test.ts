@@ -91,6 +91,63 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
     );
   });
 
+  it('conserve la remise code promo : le montant RÉDUIT de la demande est gardé tel quel', async () => {
+    // Demande annuelle avec code promo : 200000 au lieu du plein tarif 500000.
+    prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce({
+      id: 'pay1',
+      status: 'PENDING',
+      months: 12,
+      plan: 'PREMIUM',
+      amount: 200000,
+      organizationId: 'org1',
+      organization: { currentPeriodEnd: null },
+    } as never);
+    const res = await POST(makePost({}), params);
+    expect(res.status).toBe(200);
+    // AVANT ce correctif, la confirmation recalculait planPrice(12) = 500000 et
+    // écrasait la remise — l'encaissé affiché était gonflé au plein tarif.
+    expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ months: 12, amount: 200000 }),
+      }),
+    );
+  });
+
+  it('durée forcée différente : la remise effective est conservée (mise à l’échelle)', async () => {
+    // Annuel remisé 250000 (plein tarif 500000 → 50 %). Confirmé en 3 mois :
+    // 250000 × 135000/500000 = 67500 (la remise de 50 % suit la grille).
+    prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce({
+      id: 'pay1',
+      status: 'PENDING',
+      months: 12,
+      plan: 'PREMIUM',
+      amount: 250000,
+      organizationId: 'org1',
+      organization: { currentPeriodEnd: null },
+    } as never);
+    const res = await POST(makePost({ months: 3 }), params);
+    expect(res.status).toBe(200);
+    expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ months: 3, amount: 67500 }),
+      }),
+    );
+  });
+
+  it('montant explicite du superadmin : il fait foi (montant réellement reçu)', async () => {
+    const res = await POST(makePost({ amount: 45000 }), params);
+    expect(res.status).toBe(200);
+    expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ months: 1, amount: 45000 }),
+      }),
+    );
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ amount: 45000 }) }),
+    );
+  });
+
   it('409 si la demande n’est plus PENDING (déjà traitée)', async () => {
     prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce({
       id: 'pay1',

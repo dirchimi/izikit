@@ -23,6 +23,9 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 const Body = z.object({
   // Optionnel : force une durée différente de celle demandée.
   months: z.number().int().min(1).max(24).optional(),
+  // Optionnel : montant RÉELLEMENT reçu (encaissement manuel — remise verbale,
+  // arrondi…). S'il est fourni, il fait foi.
+  amount: z.number().int().min(0).max(50_000_000).optional(),
   note: z.string().max(500).optional(),
 });
 
@@ -70,10 +73,21 @@ export async function POST(
       if (payment.status !== 'PENDING') return { kind: 'NOT_PENDING' as const };
 
       const months = parsed.data.months ?? payment.months;
-      // Si le superadmin force une durée différente de celle demandée, le montant
-      // encaissé doit suivre (cohérence comptable : montant = prix × mois). Repli
-      // sur le montant d'origine si le plan stocké n'est pas reconnu.
-      const amount = isPlanId(payment.plan) ? planPrice(payment.plan, months) : payment.amount;
+      // Montant encaissé, par priorité :
+      //  1. saisi explicitement par le superadmin (montant réellement reçu) ;
+      //  2. durée inchangée → montant de la DEMANDE tel quel (réduction code
+      //     promo comprise — l'ancien recalcul au plein tarif `planPrice`
+      //     écrasait la remise et gonflait l'encaissé affiché) ;
+      //  3. durée forcée différente → mise à l'échelle de la nouvelle durée en
+      //     CONSERVANT la remise effective (ratio des prix grille).
+      let amount = payment.amount;
+      if (parsed.data.amount !== undefined) {
+        amount = parsed.data.amount;
+      } else if (months !== payment.months && isPlanId(payment.plan)) {
+        const oldPrice = planPrice(payment.plan, payment.months);
+        const newPrice = planPrice(payment.plan, months);
+        amount = oldPrice > 0 ? Math.round((payment.amount * newPrice) / oldPrice) : payment.amount;
+      }
       const { periodStart, periodEnd } = extendPeriod(
         payment.organization.currentPeriodEnd,
         now,

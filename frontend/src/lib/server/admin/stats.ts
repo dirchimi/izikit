@@ -35,11 +35,15 @@ export interface AdminStats {
   products: { total: number };
   // Abonnements (cœur du business SaaS) : statuts dérivés + revenu récurrent +
   // file des paiements à valider + boutiques qui expirent bientôt (relances).
+  // `active` = abonnées PAYANTES (accès actif + ≥ 1 paiement CONFIRMÉ) ;
+  // `offered` = accès actif offert via grant-access sans aucun paiement —
+  // compté à part pour ne pas gonfler le MRR ni les « actifs ».
   subscriptions: {
     active: number;
+    offered: number;
     trial: number;
     expired: number;
-    mrr: number; // revenu mensuel récurrent (Σ prix mensuel des abonnements actifs)
+    mrr: number; // revenu mensuel récurrent (Σ prix mensuel des abonnements PAYANTS)
     pendingCount: number;
     pendingAmount: number;
     pending: Array<{
@@ -190,6 +194,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     recentUsersRows,
     recentActionRows,
     subsActive,
+    subsPaying,
     subsTrial,
     activePlanGroups,
     subPendingAgg,
@@ -253,13 +258,28 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       select: { id: true, actorId: true, action: true, targetType: true, createdAt: true },
     }),
     // Abonnements actifs / en essai (statuts dérivés → comptés via dates).
+    // Accès actif (payant OU offert) — sert au calcul des « expirées ».
     prisma.organization.count({ where: { currentPeriodEnd: { gte: now }, ...orgFilter } }),
+    // Abonnées PAYANTES : accès actif + au moins un paiement CONFIRMÉ. Une
+    // boutique à qui on a offert des jours (grant-access, aucun encaissement)
+    // ne compte ni ici ni dans le MRR.
+    prisma.organization.count({
+      where: {
+        currentPeriodEnd: { gte: now },
+        subPayments: { some: { status: 'CONFIRMED' } },
+        ...orgFilter,
+      },
+    }),
     prisma.organization.count({
       where: { AND: [{ trialEndsAt: { gte: now } }, notActive], ...orgFilter },
     }),
     prisma.organization.groupBy({
       by: ['plan'],
-      where: { currentPeriodEnd: { gte: now }, ...orgFilter },
+      where: {
+        currentPeriodEnd: { gte: now },
+        subPayments: { some: { status: 'CONFIRMED' } },
+        ...orgFilter,
+      },
       _count: true,
     }) as unknown as Promise<Array<{ plan: string | null; _count: number }>>,
     prisma.subscriptionPayment.aggregate({
@@ -345,12 +365,15 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
 
   const openAmount = (receivablesAgg._sum.amount ?? 0) - (receivablesAgg._sum.amountPaid ?? 0);
 
-  // MRR = somme du prix mensuel de référence des abonnements actifs.
+  // MRR = somme du prix mensuel de référence des abonnements PAYANTS
+  // (activePlanGroups exclut déjà les accès offerts sans paiement).
   const mrr = activePlanGroups.reduce((sum, g) => {
     const price = isPlanId(g.plan) ? MONTHLY_PRICE : 0;
     return sum + price * g._count;
   }, 0);
+  // Expirées = ni accès actif (payant ou offert) ni essai en cours.
   const expired = Math.max(0, boutiquesTotal - subsActive - subsTrial);
+  const offered = Math.max(0, subsActive - subsPaying);
 
   // Usage : boutiques actives (vente ≤7 j) vs dormantes (aucune vente ≤30 j).
   const activeWeek = activeWeekGroups.length;
@@ -479,7 +502,8 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
     receivables: { openAmount, openCount: receivablesAgg._count },
     products: { total: productsTotal },
     subscriptions: {
-      active: subsActive,
+      active: subsPaying,
+      offered,
       trial: subsTrial,
       expired,
       mrr,

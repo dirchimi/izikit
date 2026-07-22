@@ -25,6 +25,7 @@ interface AdminStats {
   products: { total: number };
   subscriptions: {
     active: number;
+    offered: number;
     trial: number;
     expired: number;
     mrr: number;
@@ -228,14 +229,14 @@ export default function AdminDashboard() {
           <StatCard
             label="Revenu mensuel récurrent"
             value={fcfa(s.subscriptions.mrr)}
-            sub={`${s.subscriptions.active} abonnement(s) actif(s)`}
+            sub={`${s.subscriptions.active} abonnement(s) payant(s)`}
             icon="trending-up"
             accent
           />
           <StatCard
-            label="Abonnements actifs"
+            label="Abonnements payants"
             value={String(s.subscriptions.active)}
-            sub={`${s.subscriptions.trial} en essai · ${s.subscriptions.expired} expiré(s)`}
+            sub={`${s.subscriptions.offered > 0 ? `${s.subscriptions.offered} offert(s) · ` : ''}${s.subscriptions.trial} en essai · ${s.subscriptions.expired} expiré(s)`}
             icon="badge-check"
             href="/admin/subscriptions"
           />
@@ -254,7 +255,7 @@ export default function AdminDashboard() {
           <StatCard
             label="Boutiques"
             value={String(s.boutiques.total)}
-            sub={`${s.subscriptions.active + s.subscriptions.trial} actives · ${s.subscriptions.expired} inactives`}
+            sub={`${s.subscriptions.active + s.subscriptions.offered + s.subscriptions.trial} actives · ${s.subscriptions.expired} inactives`}
             icon="store"
           />
         </div>

@@ -86,12 +86,15 @@ export default function AdminSubscriptionsPage() {
   const [method, setMethod] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Action en cours de confirmation dans la modale (confirmer / refuser).
+  // Action en cours dans la modale (confirmer / refuser / corriger le montant).
   const [action, setAction] = useState<{
-    kind: 'confirm' | 'reject';
+    kind: 'confirm' | 'reject' | 'amount';
     payment: AdminSubPayment;
   } | null>(null);
   const [reason, setReason] = useState('');
+  // Montant (FCFA) éditable : pré-rempli avec le montant de la demande à la
+  // confirmation, avec le montant enregistré pour une correction.
+  const [amountStr, setAmountStr] = useState('');
   // Brève animation de succès dans la modale après une confirmation.
   const [celebrate, setCelebrate] = useState(false);
 
@@ -110,12 +113,21 @@ export default function AdminSubscriptionsPage() {
 
   function openConfirm(payment: AdminSubPayment) {
     setReason('');
+    setAmountStr(String(payment.amount));
     setAction({ kind: 'confirm', payment });
   }
   function openReject(payment: AdminSubPayment) {
     setReason('');
     setAction({ kind: 'reject', payment });
   }
+  function openAmount(payment: AdminSubPayment) {
+    setReason('');
+    setAmountStr(String(payment.amount));
+    setAction({ kind: 'amount', payment });
+  }
+
+  // Montant saisi → entier FCFA (null si vide/invalide → boutons désactivés).
+  const parsedAmount = /^\d+$/.test(amountStr.trim()) ? Number(amountStr.trim()) : null;
 
   // Après une confirmation OU un refus, invalide les caches useApi qui
   // affichent ces montants ailleurs (dashboard admin « Paiements à valider »/
@@ -133,10 +145,16 @@ export default function AdminSubscriptionsPage() {
       if (kind === 'confirm') {
         const res = await api<{ status: AdminSubPayment['status']; currentPeriodEnd: string }>(
           `/api/admin/subscriptions/${payment.id}/confirm`,
-          { method: 'POST', body: {} },
+          // Le montant saisi (pré-rempli avec celui de la demande, réduction
+          // comprise) part avec la confirmation : c'est ce qui est encaissé.
+          { method: 'POST', body: parsedAmount !== null ? { amount: parsedAmount } : {} },
         );
         setItems((prev) =>
-          prev.map((x) => (x.id === payment.id ? { ...x, status: res.status } : x)),
+          prev.map((x) =>
+            x.id === payment.id
+              ? { ...x, status: res.status, amount: parsedAmount ?? x.amount }
+              : x,
+          ),
         );
         revalidateAdminStats();
         // Animation « c'est fait ! » dans la modale, puis fermeture + toast.
@@ -148,6 +166,17 @@ export default function AdminSubscriptionsPage() {
           toast('Abonnement activé 🎉', 'success');
         }, 1200);
         return;
+      } else if (kind === 'amount') {
+        if (parsedAmount === null) return;
+        const res = await api<{ amount: number }>(`/api/admin/subscriptions/${payment.id}/amount`, {
+          method: 'POST',
+          body: { amount: parsedAmount },
+        });
+        setItems((prev) =>
+          prev.map((x) => (x.id === payment.id ? { ...x, amount: res.amount } : x)),
+        );
+        revalidateAdminStats();
+        toast('Montant corrigé.', 'success');
       } else {
         const trimmed = reason.trim();
         const res = await api<{ status: AdminSubPayment['status'] }>(
@@ -256,6 +285,15 @@ export default function AdminSubscriptionsPage() {
                     Refuser
                   </button>
                 </div>
+              ) : canConfirm && p.status === 'CONFIRMED' ? (
+                <button
+                  type="button"
+                  onClick={() => openAmount(p)}
+                  disabled={busyId === p.id}
+                  className="text-primary font-body text-xs font-semibold disabled:opacity-50"
+                >
+                  Corriger le montant
+                </button>
               ) : (
                 <span className="text-muted-foreground font-body text-xs">
                   {new Date(p.createdAt).toLocaleDateString('fr-FR')}
@@ -332,6 +370,15 @@ export default function AdminSubscriptionsPage() {
                         Refuser
                       </button>
                     </div>
+                  ) : canConfirm && p.status === 'CONFIRMED' ? (
+                    <button
+                      type="button"
+                      onClick={() => openAmount(p)}
+                      disabled={busyId === p.id}
+                      className="text-primary font-body text-xs font-semibold disabled:opacity-50"
+                    >
+                      Corriger le montant
+                    </button>
                   ) : (
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
@@ -364,7 +411,9 @@ export default function AdminSubscriptionsPage() {
             ? 'Encaissement confirmé'
             : action?.kind === 'confirm'
               ? 'Confirmer l’encaissement'
-              : 'Refuser la demande'
+              : action?.kind === 'amount'
+                ? 'Corriger le montant encaissé'
+                : 'Refuser la demande'
         }
         size="sm"
       >
@@ -387,11 +436,31 @@ export default function AdminSubscriptionsPage() {
               </span>
             </div>
 
-            {action.kind === 'confirm' ? (
-              <p className="text-muted-foreground font-body text-sm">
-                L’abonnement sera activé et la période d’accès prolongée de {action.payment.months}{' '}
-                mois. Cette action est enregistrée dans le journal.
-              </p>
+            {action.kind === 'confirm' || action.kind === 'amount' ? (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-foreground font-body text-sm font-medium">
+                    Montant réellement reçu (FCFA)
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={amountStr}
+                    onChange={(e) => setAmountStr(e.target.value)}
+                    className="border-border bg-input text-foreground focus:border-primary rounded-md border px-3 py-2 text-sm outline-none"
+                  />
+                  {action.payment.amount !== parsedAmount && parsedAmount !== null && (
+                    <span className="text-muted-foreground font-body text-xs">
+                      Enregistré actuellement : {formatFCFA(action.payment.amount)} FCFA
+                    </span>
+                  )}
+                </label>
+                <p className="text-muted-foreground font-body text-sm">
+                  {action.kind === 'confirm'
+                    ? `L’abonnement sera activé et la période d’accès prolongée de ${action.payment.months} mois. Cette action est enregistrée dans le journal.`
+                    : 'Correction comptable pure : le statut et la période d’accès ne changent pas. L’ancien et le nouveau montant sont enregistrés dans le journal.'}
+                </p>
+              </>
             ) : (
               <label className="flex flex-col gap-1.5">
                 <span className="text-foreground font-body text-sm font-medium">
@@ -419,18 +488,20 @@ export default function AdminSubscriptionsPage() {
               <button
                 type="button"
                 onClick={() => void runAction()}
-                disabled={!!busyId}
+                disabled={!!busyId || (action.kind !== 'reject' && parsedAmount === null)}
                 className={`font-body rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
-                  action.kind === 'confirm'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-red-600 hover:bg-red-700'
+                  action.kind === 'reject'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}
               >
                 {busyId
                   ? 'Traitement…'
                   : action.kind === 'confirm'
                     ? 'Confirmer l’encaissement'
-                    : 'Refuser la demande'}
+                    : action.kind === 'amount'
+                      ? 'Corriger le montant'
+                      : 'Refuser la demande'}
               </button>
             </div>
           </div>
