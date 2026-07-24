@@ -1,6 +1,6 @@
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { computeAdminStats } from './stats';
+import { computeAdminStats, redactAdminStats, type AdminStats } from './stats';
 
 const now = new Date('2026-06-24T12:00:00.000Z');
 
@@ -278,5 +278,50 @@ describe('computeAdminStats', () => {
       action: 'user.role_change',
       createdAt: now.toISOString(),
     });
+  });
+});
+
+describe('redactAdminStats — confidentialité clients pour le rôle ADMIN', () => {
+  it("expurge les CHIFFRES clients, garde les signaux et l'argent Sahilley", () => {
+    const base = {
+      sales: { volume: 123456, count: 42 },
+      receivables: { openAmount: 9000, openCount: 3 },
+      trials: [
+        { id: 'o1', name: 'A', phone: null, daysLeft: 5, salesTotal: 75000, hasSold: true },
+        { id: 'o2', name: 'B', phone: null, daysLeft: 2, salesTotal: 0, hasSold: false },
+      ],
+      topBoutiques: {
+        byRevenue: [{ id: 'o1', name: 'A', value: 75000 }],
+        byCollected: [{ id: 'o1', name: 'A', value: 50000 }],
+      },
+      topCities: [{ city: 'Moundou', revenue: 75000, boutiques: 2 }],
+      subscriptions: { mrr: 50000 },
+      collectedTotal: 600000,
+      redacted: false,
+    } as unknown as AdminStats;
+
+    const r = redactAdminStats(base);
+
+    // Chiffres CLIENTS expurgés.
+    expect(r.redacted).toBe(true);
+    expect(r.sales).toEqual({ volume: 0, count: 0 });
+    expect(r.receivables).toEqual({ openAmount: 0, openCount: 0 });
+    expect(r.trials.map((t) => t.salesTotal)).toEqual([0, 0]);
+    expect(r.topBoutiques.byRevenue).toEqual([]);
+    expect(r.topCities[0]?.revenue).toBe(0);
+
+    // Signaux d'activité conservés (l'outil de travail terrain reste utile).
+    expect(r.trials.map((t) => t.hasSold)).toEqual([true, false]);
+    expect(r.topCities[0]?.boutiques).toBe(2);
+
+    // Argent SAHILLEY (abonnements) intact — c'est celui de l'entreprise.
+    expect(r.topBoutiques.byCollected).toHaveLength(1);
+    expect(r.subscriptions.mrr).toBe(50000);
+    expect(r.collectedTotal).toBe(600000);
+
+    // Pure : l'objet d'origine n'est pas muté.
+    expect(base.redacted).toBe(false);
+    expect(base.sales.volume).toBe(123456);
+    expect(base.trials[0]?.salesTotal).toBe(75000);
   });
 });

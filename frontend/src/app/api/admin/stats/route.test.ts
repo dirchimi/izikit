@@ -7,9 +7,11 @@ vi.mock('@/lib/server/middleware/rate-limit-by-userid', () => ({
   enforceAdminRateLimit: vi.fn(),
 }));
 
-const statsObj = { users: { total: 7 } };
+const statsObj = { users: { total: 7 }, redacted: false };
+const redactedObj = { users: { total: 7 }, redacted: true };
 vi.mock('@/lib/server/admin/stats', () => ({
   computeAdminStats: vi.fn(() => Promise.resolve(statsObj)),
+  redactAdminStats: vi.fn(() => redactedObj),
 }));
 
 import { requireAdmin } from '@/lib/server/middleware';
@@ -24,6 +26,10 @@ const mockCompute = vi.mocked(computeAdminStats);
 const adminCtx = {
   user: { sub: 'admin1', email: 'a@x.io' },
   admin: { id: 'admin1', email: 'a@x.io', role: 'ADMIN' as const },
+};
+const superCtx = {
+  user: { sub: 'root1', email: 's@x.io' },
+  admin: { id: 'root1', email: 's@x.io', role: 'SUPERADMIN' as const },
 };
 
 beforeEach(() => {
@@ -46,11 +52,18 @@ describe('GET /api/admin/stats', () => {
     expect(mockCompute).not.toHaveBeenCalled();
   });
 
-  it('returns the computed stats for an admin', async () => {
+  it('SUPERADMIN reçoit les stats complètes (non expurgées)', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(superCtx as never);
     const res = await GET(makeReq());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(statsObj);
     expect(mockCompute).toHaveBeenCalledWith(prismaMock, expect.any(Date));
+  });
+
+  it('ADMIN (équipe) reçoit la version EXPURGÉE — chiffres clients masqués côté serveur', async () => {
+    const res = await GET(makeReq()); // adminCtx (role ADMIN) par défaut
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(redactedObj);
   });
 
   it('honours the admin rate limiter', async () => {

@@ -80,6 +80,9 @@ export interface AdminStats {
     phone: string | null;
     daysLeft: number;
     salesTotal: number;
+    /** Signal d'activation SANS montant — seul champ conservé quand les
+     * chiffres clients sont expurgés pour un ADMIN (voir `redactAdminStats`). */
+    hasSold: boolean;
   }>;
   // File d'appels n°2 : boutiques qui ONT accès (abo/essai en cours) mais
   // n'ont RIEN vendu depuis 30 jours — churn probable si pas relancées.
@@ -121,6 +124,10 @@ export interface AdminStats {
     targetType: string | null;
     createdAt: string;
   }>;
+  // true quand les chiffres d'affaires CLIENTS ont été expurgés (rôle ADMIN,
+  // pas SUPERADMIN) : promesse de confidentialité « l'équipe terrain ne voit
+  // pas vos montants ». L'argent de Sahilley (abonnements) reste visible.
+  redacted: boolean;
 }
 
 /** Clé de jour UTC (YYYY-MM-DD). */
@@ -485,6 +492,7 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       ? Math.max(0, Math.ceil((o.trialEndsAt.getTime() - now.getTime()) / DAY_MS))
       : 0,
     salesTotal: salesTotalByOrg.get(o.id) ?? 0,
+    hasSold: (salesTotalByOrg.get(o.id) ?? 0) > 0,
   }));
 
   // Dormantes À RELANCER : accès encore valable (abo OU essai) mais aucune
@@ -658,5 +666,30 @@ export async function computeAdminStats(prisma: PrismaClient, now: Date): Promis
       targetType: a.targetType,
       createdAt: a.createdAt.toISOString(),
     })),
+    redacted: false,
+  };
+}
+
+/**
+ * Version « équipe » des stats — expurge les chiffres d'affaires CLIENTS pour
+ * un rôle ADMIN (l'associé terrain) tout en gardant l'outil de travail :
+ * files d'appel (essais/relances/expirations, avec le signal binaire « a
+ * vendu »), compteurs de boutiques/utilisateurs et TOUT l'argent de Sahilley
+ * (abonnements, encaissé, MRR — c'est l'argent de l'entreprise, pas celui
+ * des clients). C'est la matérialisation de l'engagement de confidentialité :
+ * seul le SUPERADMIN (fondateur) voit les montants des boutiques.
+ *
+ * La rédaction se fait CÔTÉ SERVEUR (ici, appelée par la route selon le
+ * rôle) — masquer côté client ne serait pas une protection.
+ */
+export function redactAdminStats(s: AdminStats): AdminStats {
+  return {
+    ...s,
+    sales: { volume: 0, count: 0 },
+    receivables: { openAmount: 0, openCount: 0 },
+    trials: s.trials.map((t) => ({ ...t, salesTotal: 0 })),
+    topBoutiques: { byRevenue: [], byCollected: s.topBoutiques.byCollected },
+    topCities: s.topCities.map((c) => ({ ...c, revenue: 0 })),
+    redacted: true,
   };
 }

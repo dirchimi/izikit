@@ -88,7 +88,8 @@ describe('/api/admin/boutiques/[id] — detail', () => {
     expect(((await res.json()) as { error: string }).error).toBe('BOUTIQUE_NOT_FOUND');
   });
 
-  it('returns owner, settings, derived subscription, stats, team, payments and sales', async () => {
+  it('returns owner, settings, derived subscription, stats, team, payments and sales (SUPERADMIN = chiffres complets)', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(superCtx as never);
     prismaMock.organization.findUnique.mockResolvedValueOnce({
       id: 'org1',
       name: 'Chez Ali',
@@ -180,6 +181,65 @@ describe('/api/admin/boutiques/[id] — detail', () => {
     expect(members.map((m) => m.role)).toEqual(['OWNER', 'MEMBER']);
     expect((boutique as { payments: unknown[] }).payments).toHaveLength(1);
     expect((boutique as { recentSales: unknown[] }).recentSales).toHaveLength(1);
+    expect((boutique as { redacted: boolean }).redacted).toBe(false);
+  });
+
+  it('ADMIN (équipe) : chiffres CLIENTS expurgés côté serveur — CA/créances/montants de ventes à 0, encaissé Sahilley intact', async () => {
+    // adminCtx (role ADMIN) est le défaut du beforeEach.
+    prismaMock.organization.findUnique.mockResolvedValueOnce({
+      id: 'org1',
+      name: 'Chez Ali',
+      slug: 'chez-ali',
+      plan: 'PREMIUM',
+      trialEndsAt: null,
+      currentPeriodEnd: FUTURE,
+      createdAt: new Date('2026-05-01T00:00:00Z'),
+      owner: { id: 'u_owner', name: 'Ali Sow', email: 'ali@test.local' },
+      settings: null,
+      _count: { members: 2, products: 37 },
+    } as never);
+    prismaMock.subscriptionPayment.aggregate.mockResolvedValueOnce({
+      _sum: { amount: 45000 },
+    } as never);
+    prismaMock.sale.aggregate.mockResolvedValueOnce({
+      _sum: { total: 120000 },
+      _count: 8,
+    } as never);
+    prismaMock.receivable.aggregate.mockResolvedValueOnce({
+      _sum: { amount: 30000, amountPaid: 10000 },
+    } as never);
+    prismaMock.sale.findMany.mockResolvedValueOnce([
+      {
+        id: 's1',
+        number: '0001',
+        total: 5000,
+        method: 'CASH',
+        status: 'ACTIVE',
+        createdAt: new Date(),
+      },
+    ] as never);
+
+    const res = await GET(makeGet(), paramsOf('org1'));
+    expect(res.status).toBe(200);
+    const { boutique } = (await res.json()) as {
+      boutique: {
+        redacted: boolean;
+        stats: Record<string, number>;
+        recentSales: Array<{ number: string; total: number }>;
+      };
+    };
+
+    expect(boutique.redacted).toBe(true);
+    // Chiffres clients à zéro ; signaux d'activité et argent Sahilley gardés.
+    expect(boutique.stats).toMatchObject({
+      collected: 45000, // abonnements = argent Sahilley
+      salesTotal: 0,
+      salesCount: 8, // signal d'activité sans montant
+      receivablesOpen: 0,
+      sellers: 2,
+      products: 37,
+    });
+    expect(boutique.recentSales[0]).toMatchObject({ number: '0001', total: 0 });
   });
 
   it('propagates 403 from requireAdmin without querying', async () => {

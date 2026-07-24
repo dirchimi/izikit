@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/server/middleware';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { prisma } from '@/lib/server/prisma';
-import { computeAdminStats } from '@/lib/server/admin/stats';
+import { computeAdminStats, redactAdminStats } from '@/lib/server/admin/stats';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -23,7 +23,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (limited) return limited;
 
     const stats = await computeAdminStats(prisma, new Date());
+    // Confidentialité clients : un ADMIN (équipe terrain) reçoit la version
+    // expurgée — pas de CA/montants des boutiques, seulement des signaux.
+    // Seul le SUPERADMIN (fondateur) voit les chiffres exacts.
+    const out = auth.admin.role === 'SUPERADMIN' ? stats : redactAdminStats(stats);
 
-    return NextResponse.json(stats, { headers: { 'x-request-id': ctx.requestId } });
+    return NextResponse.json(out, { headers: { 'x-request-id': ctx.requestId } });
   });
 }

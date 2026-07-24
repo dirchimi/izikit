@@ -57,6 +57,7 @@ interface AdminStats {
     phone: string | null;
     daysLeft: number;
     salesTotal: number;
+    hasSold: boolean;
   }>;
   dormantList: Array<{ id: string; name: string; phone: string | null }>;
   collectedTotal: number;
@@ -86,6 +87,9 @@ interface AdminStats {
     targetType: string | null;
     createdAt: string;
   }>;
+  /** true = chiffres clients expurgés côté serveur (rôle ADMIN — équipe
+   * terrain) : on masque les tuiles/montants correspondants. */
+  redacted: boolean;
 }
 
 const fcfa = (n: number) => `${formatFCFA(n)} FCFA`;
@@ -300,12 +304,14 @@ export default function AdminDashboard() {
             sub={`${s.subscriptions.active + s.subscriptions.offered + s.subscriptions.trial} actives · ${s.subscriptions.expired} inactives`}
             icon="store"
           />
-          <StatCard
-            label="Volume de ventes"
-            value={fcfa(s.sales.volume)}
-            sub={`${s.sales.count} vente(s) — toutes boutiques`}
-            icon="receipt"
-          />
+          {!s.redacted && (
+            <StatCard
+              label="Volume de ventes"
+              value={fcfa(s.sales.volume)}
+              sub={`${s.sales.count} vente(s) — toutes boutiques`}
+              icon="receipt"
+            />
+          )}
           <StatCard
             label="Utilisateurs"
             value={String(s.users.total)}
@@ -389,10 +395,12 @@ export default function AdminDashboard() {
                   <p className="font-body text-xs">
                     {/* Signal d'activation : une boutique qui VEND pendant son
                         essai est prête à payer ; une qui ne vend pas a besoin
-                        d'accompagnement — deux conversations différentes. */}
-                    {t.salesTotal > 0 ? (
+                        d'accompagnement — deux conversations différentes. Le
+                        montant exact n'apparaît que pour le SUPERADMIN
+                        (chiffres clients expurgés pour l'équipe). */}
+                    {t.hasSold ? (
                       <span className="text-success font-semibold">
-                        A vendu · {fcfa(t.salesTotal)}
+                        A vendu{s.redacted ? '' : ` · ${fcfa(t.salesTotal)}`}
                       </span>
                     ) : (
                       <span className="text-warning font-semibold">Jamais vendu</span>
@@ -469,9 +477,11 @@ export default function AdminDashboard() {
           Classements
         </h2>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <Panel title="Top boutiques — chiffre d'affaires">
-            <RankedList items={s.topBoutiques.byRevenue} empty="Aucune vente." />
-          </Panel>
+          {!s.redacted && (
+            <Panel title="Top boutiques — chiffre d'affaires">
+              <RankedList items={s.topBoutiques.byRevenue} empty="Aucune vente." />
+            </Panel>
+          )}
           <Panel title="Top boutiques — encaissé">
             <RankedList items={s.topBoutiques.byCollected} empty="Aucun encaissement." />
           </Panel>
@@ -499,9 +509,11 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                   </div>
-                  <span className="font-headings text-foreground shrink-0 text-sm font-bold">
-                    {fcfa(c.revenue)}
-                  </span>
+                  {!s.redacted && (
+                    <span className="font-headings text-foreground shrink-0 text-sm font-bold">
+                      {fcfa(c.revenue)}
+                    </span>
+                  )}
                 </div>
               ))
             )}

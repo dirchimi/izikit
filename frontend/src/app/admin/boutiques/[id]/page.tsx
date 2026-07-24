@@ -29,6 +29,10 @@ interface BoutiqueDetail {
     currency: string;
     businessType: string | null;
   } | null;
+  /** true = chiffres clients expurgés côté serveur (rôle ADMIN — équipe
+   * terrain) : CA, créances et montants des ventes arrivent à 0 et ne
+   * doivent pas être affichés. */
+  redacted: boolean;
   subscription: {
     plan: string | null;
     status: 'ACTIVE' | 'TRIAL' | 'EXPIRED';
@@ -481,16 +485,21 @@ export default function AdminBoutiqueDetailPage() {
         </div>
       )}
 
-      {/* Agrégats */}
+      {/* Agrégats — CA et créances (chiffres CLIENTS) réservés au SUPERADMIN ;
+          « Encaissé » reste : c'est l'argent des abonnements Sahilley. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Encaissé" value={fcfa(b.stats.collected)} icon="wallet" accent />
-        <StatCard label="Chiffre d'affaires" value={fcfa(b.stats.salesTotal)} icon="receipt" />
+        {!b.redacted && (
+          <StatCard label="Chiffre d'affaires" value={fcfa(b.stats.salesTotal)} icon="receipt" />
+        )}
         <StatCard label="Ventes" value={String(b.stats.salesCount)} icon="shopping-bag" />
-        <StatCard
-          label="Créances ouvertes"
-          value={fcfa(b.stats.receivablesOpen)}
-          icon="notebook-pen"
-        />
+        {!b.redacted && (
+          <StatCard
+            label="Créances ouvertes"
+            value={fcfa(b.stats.receivablesOpen)}
+            icon="notebook-pen"
+          />
+        )}
         <StatCard label="Vendeurs" value={String(b.stats.sellers)} icon="users" />
         <StatCard label="Produits" value={String(b.stats.products)} icon="package" />
       </div>
@@ -580,15 +589,17 @@ export default function AdminBoutiqueDetailPage() {
                     {METHOD_LABEL[v.method] ?? v.method} · {fmtDate(v.createdAt)}
                   </p>
                 </div>
-                <span
-                  className={`font-headings shrink-0 text-sm font-bold ${
-                    v.status === 'CANCELLED'
-                      ? 'text-muted-foreground line-through'
-                      : 'text-foreground'
-                  }`}
-                >
-                  {fcfa(v.total)}
-                </span>
+                {!b.redacted && (
+                  <span
+                    className={`font-headings shrink-0 text-sm font-bold ${
+                      v.status === 'CANCELLED'
+                        ? 'text-muted-foreground line-through'
+                        : 'text-foreground'
+                    }`}
+                  >
+                    {fcfa(v.total)}
+                  </span>
+                )}
               </div>
             ))
           )}

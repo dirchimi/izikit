@@ -133,6 +133,13 @@ export async function GET(
     const receivablesOpen =
       (receivablesAgg._sum.amount ?? 0) - (receivablesAgg._sum.amountPaid ?? 0);
 
+    // Confidentialité clients : un ADMIN (équipe terrain) ne voit PAS les
+    // montants de la boutique (CA, créances, totaux des ventes) — seulement
+    // des signaux d'activité (nombre de ventes, dates). Les paiements
+    // d'ABONNEMENT restent visibles : c'est l'argent de Sahilley, pas celui
+    // du client. Rédaction côté serveur — l'affichage n'est pas une garde.
+    const redacted = auth.admin.role !== 'SUPERADMIN';
+
     const boutique = {
       id: org.id,
       name: org.name,
@@ -142,6 +149,7 @@ export async function GET(
       adminNote: org.adminNote,
       owner: org.owner,
       settings: org.settings,
+      redacted,
       subscription: {
         plan: sub.plan,
         status: org.internal ? 'ACTIVE' : sub.status,
@@ -152,9 +160,9 @@ export async function GET(
       },
       stats: {
         collected: collectedAgg._sum.amount ?? 0,
-        salesTotal: salesAgg._sum.total ?? 0,
+        salesTotal: redacted ? 0 : (salesAgg._sum.total ?? 0),
         salesCount: salesAgg._count,
-        receivablesOpen,
+        receivablesOpen: redacted ? 0 : receivablesOpen,
         sellers: org._count.members,
         products: org._count.products,
       },
@@ -169,7 +177,7 @@ export async function GET(
           joinedAt: m.createdAt,
         })),
       payments,
-      recentSales,
+      recentSales: redacted ? recentSales.map((v) => ({ ...v, total: 0 })) : recentSales,
     };
 
     return NextResponse.json({ boutique }, { headers: { 'x-request-id': reqCtx.requestId } });

@@ -18,7 +18,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
     title: 'Politique de confidentialité',
     intro:
       'Votre confiance compte. Voici quelles données nous traitons, pourquoi, et comment nous les protégeons.',
-    updated: 'Dernière mise à jour : juin 2026',
+    updated: 'Dernière mise à jour : juillet 2026',
     sections: [
       {
         heading: '1. Données que nous collectons',
@@ -47,35 +47,44 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         ],
       },
       {
-        heading: '5. Sécurité',
+        heading: '5. Qui, chez Sahilley, peut voir vos données ?',
+        bullets: [
+          'Vos vendeurs ne voient pas vos chiffres : bénéfices, rapports et statistiques sont réservés aux rôles que VOUS choisissez (Patron / Gérant).',
+          'Notre équipe terrain et support ne voit pas vos montants : ses écrans d’administration affichent uniquement des signaux d’activité (boutique active ou non), jamais votre chiffre d’affaires ni vos créances.',
+          'Seul le fondateur dispose d’un accès complet, utilisé uniquement pour l’assistance et la facturation — et chaque action d’administration est enregistrée dans un journal.',
+          'Nous ne partageons jamais vos chiffres avec d’autres boutiques, des concurrents, ni qui que ce soit.',
+        ],
+      },
+      {
+        heading: '6. Sécurité',
         paragraphs: [
           'Les échanges sont chiffrés (HTTPS), les mots de passe sont hachés, et l’accès aux données est restreint. Aucun système n’est sûr à 100 %, mais nous prenons votre sécurité au sérieux.',
         ],
       },
       {
-        heading: '6. Conservation',
+        heading: '7. Conservation',
         paragraphs: [
           'Nous conservons vos données tant que votre compte est actif. Vous pouvez demander leur suppression à tout moment.',
         ],
       },
       {
-        heading: '7. Vos droits',
+        heading: '8. Vos droits',
         paragraphs: [
           'Vous pouvez accéder à vos données, les corriger ou demander leur suppression. Écrivez-nous et nous donnerons suite dans des délais raisonnables.',
         ],
       },
       {
-        heading: '8. Enfants',
+        heading: '9. Enfants',
         paragraphs: ['Sahilley est un outil professionnel et n’est pas destiné aux mineurs.'],
       },
       {
-        heading: '9. Modifications',
+        heading: '10. Modifications',
         paragraphs: [
           'Nous pouvons mettre à jour cette politique. La date de dernière mise à jour figure en haut de cette page.',
         ],
       },
       {
-        heading: '10. Contact',
+        heading: '11. Contact',
         paragraphs: [
           'Pour toute question sur vos données : info.sahilley@gmail.com ou la page Contact.',
         ],
@@ -86,7 +95,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
     eyebrow: 'Legal',
     title: 'Privacy Policy',
     intro: 'Your trust matters. Here is what data we process, why, and how we protect it.',
-    updated: 'Last updated: June 2026',
+    updated: 'Last updated: July 2026',
     sections: [
       {
         heading: '1. Data we collect',
@@ -115,35 +124,44 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         ],
       },
       {
-        heading: '5. Security',
+        heading: '5. Who at Sahilley can see your data?',
+        bullets: [
+          'Your sellers cannot see your figures: profits, reports and statistics are restricted to the roles YOU choose (Owner / Manager).',
+          'Our field and support team cannot see your amounts: their back-office screens only show activity signals (shop active or not), never your revenue or receivables.',
+          'Only the founder has full access, used strictly for support and billing — and every admin action is recorded in an audit log.',
+          'We never share your figures with other shops, competitors, or anyone else.',
+        ],
+      },
+      {
+        heading: '6. Security',
         paragraphs: [
           'Traffic is encrypted (HTTPS), passwords are hashed, and data access is restricted. No system is 100% secure, but we take your security seriously.',
         ],
       },
       {
-        heading: '6. Retention',
+        heading: '7. Retention',
         paragraphs: [
           'We keep your data while your account is active. You can request deletion at any time.',
         ],
       },
       {
-        heading: '7. Your rights',
+        heading: '8. Your rights',
         paragraphs: [
           'You can access, correct or request deletion of your data. Write to us and we will respond within a reasonable time.',
         ],
       },
       {
-        heading: '8. Children',
+        heading: '9. Children',
         paragraphs: ['Sahilley is a professional tool and is not intended for minors.'],
       },
       {
-        heading: '9. Changes',
+        heading: '10. Changes',
         paragraphs: [
           'We may update this policy. The last-updated date appears at the top of this page.',
         ],
       },
       {
-        heading: '10. Contact',
+        heading: '11. Contact',
         paragraphs: [
           'For any question about your data: info.sahilley@gmail.com or the Contact page.',
         ],
@@ -154,7 +172,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
     eyebrow: 'قانوني',
     title: 'سياسة الخصوصية',
     intro: 'ثقتك تهمّنا. إليك البيانات التي نعالجها، ولماذا، وكيف نحميها.',
-    updated: 'آخر تحديث: يونيو 2026',
+    updated: 'آخر تحديث: يوليو 2026',
     sections: [
       {
         heading: '1. البيانات التي نجمعها',
@@ -183,31 +201,40 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         ],
       },
       {
-        heading: '5. الأمان',
+        heading: '5. من في Sahilley يمكنه رؤية بياناتك؟',
+        bullets: [
+          'بائعوك لا يرون أرقامك: الأرباح والتقارير والإحصاءات مقصورة على الأدوار التي تختارها أنت (المالك / المدير).',
+          'فريقنا الميداني وفريق الدعم لا يرى مبالغك: شاشات الإدارة لديه تعرض مؤشرات نشاط فقط (متجر نشط أم لا)، وليس رقم أعمالك ولا ديونك أبداً.',
+          'المؤسس وحده يملك وصولاً كاملاً، يُستخدم حصراً للدعم والفوترة — وكل إجراء إداري يُسجَّل في سجل تدقيق.',
+          'لا نشارك أرقامك أبداً مع متاجر أخرى أو منافسين أو أي جهة كانت.',
+        ],
+      },
+      {
+        heading: '6. الأمان',
         paragraphs: [
           'الاتصالات مشفّرة (HTTPS)، وكلمات المرور مُجزّأة، والوصول إلى البيانات مقيّد. لا يوجد نظام آمن 100%، لكننا نأخذ أمنك على محمل الجدّ.',
         ],
       },
       {
-        heading: '6. مدة الحفظ',
+        heading: '7. مدة الحفظ',
         paragraphs: ['نحتفظ ببياناتك ما دام حسابك نشطاً. ويمكنك طلب حذفها في أي وقت.'],
       },
       {
-        heading: '7. حقوقك',
+        heading: '8. حقوقك',
         paragraphs: [
           'يمكنك الاطّلاع على بياناتك أو تصحيحها أو طلب حذفها. راسلنا وسنستجيب خلال مدة معقولة.',
         ],
       },
       {
-        heading: '8. الأطفال',
+        heading: '9. الأطفال',
         paragraphs: ['Sahilley أداة مهنية وغير موجّهة للقاصرين.'],
       },
       {
-        heading: '9. التعديلات',
+        heading: '10. التعديلات',
         paragraphs: ['قد نُحدّث هذه السياسة. يظهر تاريخ آخر تحديث أعلى هذه الصفحة.'],
       },
       {
-        heading: '10. التواصل',
+        heading: '11. التواصل',
         paragraphs: ['لأي سؤال حول بياناتك: info.sahilley@gmail.com أو صفحة التواصل.'],
       },
     ],
