@@ -8,6 +8,17 @@
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@5": ">=5.0.7",
+      "postcss@8.4.31": "8.5.12"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-f88m-g3jw-g9cj"
+      ]
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter frontend run dev",
     "build": "pnpm --filter frontend run build",
