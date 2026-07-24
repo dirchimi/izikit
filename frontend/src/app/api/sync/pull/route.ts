@@ -90,6 +90,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       documents,
       stockMovements,
       repayments,
+      memberRows,
     ] = await Promise.all([
       prisma.product.findMany({ where: { organizationId, ...updatedAtFilter } }),
       prisma.customer.findMany({ where: { organizationId, ...updatedAtFilter } }),
@@ -102,6 +103,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       prisma.document.findMany({ where: { organizationId, ...updatedAtFilter } }),
       prisma.stockMovement.findMany({ where: { organizationId, ...updatedAtFilter } }),
       prisma.repayment.findMany({ where: { organizationId, ...createdAtFilter } }),
+      // Annuaire de l'équipe (id → nom d'affichage) : toujours complet (pas de
+      // filtre since — table minuscule). Le miroir local s'en sert pour
+      // afficher le NOM du vendeur sur les ventes (Sale.createdById) au lieu
+      // d'un id technique, y compris hors ligne.
+      prisma.organizationMember.findMany({
+        where: { organizationId },
+        select: { userId: true, user: { select: { name: true, email: true } } },
+      }),
     ]);
 
     return NextResponse.json(
@@ -120,6 +129,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // customers/adjust/repay) need an org id but have no referenced row
         // to derive it from the way `createSaleOffline` derives it from the
         // sale's products.
+        // Annuaire de l'équipe — additif : nom d'affichage par userId (name,
+        // sinon email), stocké dans `meta.members` par `pullAll()` et lu par
+        // `getMemberNames()` pour résoudre le vendeur d'une vente hors ligne.
+        members: memberRows.map((m) => ({ id: m.userId, name: m.user.name ?? m.user.email })),
         orgId: organizationId,
         // Task 5.3 — additive: the caller's org role (already resolved above
         // for the `requireOrgRole` gate — no extra query). Stored into

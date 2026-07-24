@@ -84,6 +84,22 @@ describe('aggregateSales', () => {
     expect(out[0]?.items).toEqual([]);
   });
 
+  it("résout sellerName via l'annuaire memberNames (userId → nom), null si inconnu", () => {
+    const out = aggregateSales(
+      [
+        sale({ id: 's1', createdById: 'u1', createdAt: '2026-07-20T10:00:00.000Z' }),
+        sale({ id: 's2', createdById: 'u-parti', createdAt: '2026-07-20T08:00:00.000Z' }),
+      ],
+      [],
+      [],
+      { u1: 'Faris' },
+    );
+    expect(out[0]?.sellerName).toBe('Faris');
+    // Membre supprimé depuis / annuaire incomplet → null (l'UI retombe sur l'id).
+    expect(out[1]?.sellerName).toBeNull();
+    expect(out[1]?.sellerId).toBe('u-parti');
+  });
+
   it('maps synced: false through unchanged (row still queued for the outbox)', () => {
     const out = aggregateSales([sale({ id: 's1', synced: false })], [], []);
     expect(out[0]?.synced).toBe(false);

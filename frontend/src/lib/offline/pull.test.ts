@@ -10,7 +10,14 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from './db';
 import { api } from '@/lib/api';
-import { pullAll, pullResource, getOrgId, getRole, type PullResponse } from './pull';
+import {
+  pullAll,
+  pullResource,
+  getOrgId,
+  getRole,
+  getMemberNames,
+  type PullResponse,
+} from './pull';
 
 vi.mock('@/lib/api', () => ({
   api: vi.fn(),
@@ -151,6 +158,10 @@ function makeResponse(overrides: Partial<PullResponse> = {}): PullResponse {
         createdAt: '2026-07-20T00:00:00.000Z',
       },
     ],
+    members: [
+      { id: 'u1', name: 'Faris' },
+      { id: 'u2', name: 'sansnom@example.com' },
+    ],
     serverTime: '2026-07-20T00:00:00.000Z',
     orgId: 'o1',
     role: 'ADMIN',
@@ -226,6 +237,24 @@ describe('pullAll', () => {
 
     const cursor = await db.meta.get('lastPull');
     expect(cursor?.value).toBe(res.serverTime);
+
+    // Annuaire d'équipe stocké → getMemberNames résout userId → nom.
+    expect(await getMemberNames()).toEqual({ u1: 'Faris', u2: 'sansnom@example.com' });
+  });
+
+  it("getMemberNames est vide (et l'annuaire existant survit) si le serveur ne renvoie pas members", async () => {
+    // Réponse d'un serveur pas encore à jour : pas de champ `members`.
+    const withoutMembers: Partial<PullResponse> = { ...makeResponse() };
+    delete withoutMembers.members;
+    mockedApi.mockResolvedValueOnce(withoutMembers as PullResponse);
+    await pullAll();
+    expect(await getMemberNames()).toEqual({});
+
+    // Un annuaire déjà stocké n'est pas écrasé par une réponse sans members.
+    await db.meta.put({ key: 'members', value: [{ id: 'u9', name: 'Awa' }] });
+    mockedApi.mockResolvedValueOnce(withoutMembers as PullResponse);
+    await pullAll();
+    expect(await getMemberNames()).toEqual({ u9: 'Awa' });
   });
 
   it('marks pulled repayments synced:true, overwriting an optimistic local echo with the same id (Task 5.2)', async () => {
@@ -406,6 +435,47 @@ describe('pullAll — garde anti-mélange de comptes (changement de boutique)', 
     expect(await db.repayments.count()).toBe(0);
     expect(await getOrgId()).toBe('o2');
     expect((await db.meta.get('lastPull'))?.value).toBe('2026-07-21T00:00:00.000Z');
+  });
+
+  it('auto-guérison : miroir déjà contaminé (meta.orgId déjà écrasé par l’ancien code) → purge + re-fetch complet', async () => {
+    // État hérité d'AVANT la garde : des produits d'une autre boutique (o2)
+    // traînent dans le miroir, mais meta.orgId vaut DÉJÀ 'o1' (l'ancien code
+    // l'écrasait à chaque pull) et un curseur existe — la comparaison
+    // d'orgId seule ne détecte rien.
+    await db.products.put({
+      id: 'p-etranger',
+      organizationId: 'o2',
+      ref: 'X-1',
+      name: 'Produit fantôme',
+      category: 'Test',
+      buyPrice: 1,
+      sellPrice: 2,
+      prixGros: 0,
+      unite: 'piece',
+      qty: 1,
+      threshold: 0,
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    });
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await db.meta.put({ key: 'lastPull', value: '2026-07-19T00:00:00.000Z' });
+
+    // Le serveur répond pour o1 (incrémental), puis re-fetch complet.
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    await pullAll();
+
+    expect(mockedApi).toHaveBeenCalledTimes(2);
+    expect(mockedApi).toHaveBeenNthCalledWith(
+      1,
+      '/api/sync/pull?since=2026-07-19T00%3A00%3A00.000Z',
+    );
+    // Re-fetch SANS curseur : le curseur contaminé a fait sauter des pans du
+    // catalogue de la boutique courante — seul un snapshot complet répare.
+    expect(mockedApi).toHaveBeenNthCalledWith(2, '/api/sync/pull');
+
+    const products = await db.products.toArray();
+    expect(products.map((p) => p.id)).toEqual(['p1']); // le fantôme o2 a disparu
+    expect(await getOrgId()).toBe('o1');
   });
 
   it('même boutique → pull incrémental normal, jamais de purge', async () => {

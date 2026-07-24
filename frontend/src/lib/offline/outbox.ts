@@ -99,9 +99,11 @@ export async function markSyncing(seq: number): Promise<void> {
   await db.outbox.update(seq, { status: 'syncing' });
 }
 
-/** Marks a row as successfully replayed (terminal — excluded from `pendingCount()`). */
+/** Marks a row as successfully replayed (terminal — excluded from
+ * `pendingCount()`). `syncedAt` horodate le succès pour l'historique
+ * « Dernières synchronisations » (`sync-history.ts`). */
 export async function markDone(seq: number): Promise<void> {
-  await db.outbox.update(seq, { status: 'done' });
+  await db.outbox.update(seq, { status: 'done', syncedAt: new Date().toISOString() });
 }
 
 /**

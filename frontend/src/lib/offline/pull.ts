@@ -57,6 +57,11 @@ const ORG_ID_KEY = 'orgId';
  * the SERVER still enforces the real role at sync regardless (defense in
  * depth, see `requireOrgRole` on every mutating route). */
 const ROLE_KEY = 'role';
+/** Clé `meta` de l'annuaire d'équipe (`[{ id, name }]`, écrit par `pullAll()`
+ * depuis `res.members`, lu par `getMemberNames()`) — sert à afficher le NOM
+ * du vendeur d'une vente (Sale.createdById) au lieu d'un id technique, y
+ * compris hors ligne (le miroir n'a pas de table users). */
+const MEMBERS_KEY = 'members';
 
 // ---------------------------------------------------------------------------
 // Server response shapes — mirror the Prisma models field-for-field as they
@@ -197,6 +202,9 @@ export interface PullResponse {
   expenses: ServerExpense[];
   documents: ServerDocument[];
   stockMovements: ServerStockMovement[];
+  /** Annuaire de l'équipe (additif) : nom d'affichage par userId, pour
+   * résoudre `Sale.createdById` → nom du vendeur hors ligne. */
+  members: Array<{ id: string; name: string }>;
   /** Task 5.2 — the org's Repayment rows (append-only, `createdAt`-filtered).
    * Additive on the server response, same shape contract as the other 7
    * resources. */
@@ -421,6 +429,30 @@ async function getCursor(): Promise<string | undefined> {
   return typeof row?.value === 'string' ? row.value : undefined;
 }
 
+/** Nombre de lignes du miroir appartenant à une AUTRE boutique que `orgId` —
+ * la signature d'une contamination datant d'AVANT la garde anti-mélange (voir
+ * le commentaire dans `pullAll`). 8 counts indexés (organizationId), coût
+ * négligeable par pull. `saleItems` n'a pas d'organizationId : ses lignes
+ * étrangères disparaissent avec la purge complète déclenchée par les tables
+ * qui en ont un. */
+async function countForeignRows(orgId: string): Promise<number> {
+  const tables = [
+    db.products,
+    db.customers,
+    db.sales,
+    db.receivables,
+    db.expenses,
+    db.documents,
+    db.stockMovements,
+    db.repayments,
+  ] as const;
+  let total = 0;
+  for (const table of tables) {
+    total += await table.where('organizationId').notEqual(orgId).count();
+  }
+  return total;
+}
+
 async function fetchPull(since: string | undefined): Promise<PullResponse> {
   const qs = since ? `?since=${encodeURIComponent(since)}` : '';
   return api<PullResponse>(`/api/sync/pull${qs}`);
@@ -498,8 +530,17 @@ export async function pullAll(): Promise<void> {
   // de l'ancienne boutique, donc incomplet pour la nouvelle). Ceinture +
   // bretelles avec la purge d'AuthContext au changement d'utilisateur — cette
   // garde-ci couvre aussi un snapshot de session absent/expiré.
+  //
+  // Auto-guérison des appareils DÉJÀ contaminés : avant cette garde, l'ancien
+  // code écrasait `meta.orgId` à chaque pull — un miroir mélangé de longue
+  // date a donc un `meta.orgId` déjà égal à la boutique courante (la simple
+  // comparaison ne détecte rien) ET un curseur qui a fait sauter des pans
+  // entiers du catalogue de la nouvelle boutique. La présence de la moindre
+  // ligne d'une AUTRE boutique dans le miroir est la signature de cet état →
+  // même remède : purge + re-fetch complet sans curseur.
   const storedOrg = await getOrgId();
-  if (storedOrg !== null && storedOrg !== res.orgId) {
+  const orgChanged = storedOrg !== null && storedOrg !== res.orgId;
+  if (orgChanged || (await countForeignRows(res.orgId)) > 0) {
     await wipeLocalMirror();
     res = await fetchPull(undefined);
   }
@@ -533,8 +574,32 @@ export async function pullAll(): Promise<void> {
       // same atomicity guarantee (never left pointing at an unpersisted
       // pull). Feeds the offline fallback for `canManage`-style gates.
       await db.meta.put({ key: ROLE_KEY, value: res.role });
+      // Annuaire d'équipe (garde défensive : un serveur pas encore à jour
+      // n'envoie pas `members` → on n'écrase pas l'annuaire existant).
+      if (Array.isArray(res.members)) {
+        await db.meta.put({ key: MEMBERS_KEY, value: res.members });
+      }
     },
   );
+}
+
+/**
+ * Annuaire d'équipe local : `userId → nom d'affichage`, tel que stocké par le
+ * dernier `pullAll()`. Vide avant le premier pull (ou si le serveur ne
+ * renvoie pas encore `members`) — l'appelant retombe alors sur l'id brut.
+ */
+export async function getMemberNames(): Promise<Record<string, string>> {
+  const row = await db.meta.get(MEMBERS_KEY);
+  const out: Record<string, string> = {};
+  if (Array.isArray(row?.value)) {
+    for (const entry of row.value) {
+      if (entry && typeof entry === 'object') {
+        const { id, name } = entry as Record<string, unknown>;
+        if (typeof id === 'string' && typeof name === 'string') out[id] = name;
+      }
+    }
+  }
+  return out;
 }
 
 /**

@@ -41,6 +41,7 @@ function emptyFindManyMocks(): void {
   prismaMock.document.findMany.mockResolvedValue([]);
   prismaMock.stockMovement.findMany.mockResolvedValue([]);
   prismaMock.repayment.findMany.mockResolvedValue([]);
+  prismaMock.organizationMember.findMany.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -183,6 +184,22 @@ describe('GET /api/sync/pull', () => {
     const res = await GET(makeGet());
     const body = await res.json();
     expect(body.orgId).toBe('org1');
+  });
+
+  it('renvoie members (annuaire équipe : userId → nom, sinon email) scopé org', async () => {
+    prismaMock.organizationMember.findMany.mockResolvedValueOnce([
+      { userId: 'u1', user: { name: 'Faris', email: 'faris@example.com' } },
+      { userId: 'u2', user: { name: null, email: 'sansnom@example.com' } },
+    ] as never);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.members).toEqual([
+      { id: 'u1', name: 'Faris' },
+      { id: 'u2', name: 'sansnom@example.com' },
+    ]);
+    expect(prismaMock.organizationMember.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: 'org1' } }),
+    );
   });
 
   it('renvoie role (Task 5.3 — rôle de l’appelant, pour meta.role côté client)', async () => {

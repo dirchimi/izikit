@@ -234,6 +234,11 @@ export interface OutboxRow {
    * comportement historique mono-compte). */
   orgId?: string;
   createdAt: string; // ISO
+  /** ISO — posé par `markDone` au moment où le serveur a accepté l'écriture.
+   * Alimente l'historique « Dernières synchronisations » de l'écran
+   * `/synchronisation` (voir `sync-history.ts`). Absent sur les lignes
+   * terminées avant l'ajout du champ → l'historique retombe sur `createdAt`. */
+  syncedAt?: string;
   retryAt?: string; // ISO — set by `markError` for backoff
   /** Failure/conflict reason, set by `markError`/`markConflict`. */
   error?: string;
@@ -349,6 +354,13 @@ class LocalDatabase extends Dexie {
     // it (the drain patches by primary key), so an index would be dead weight.
     this.version(3).stores({
       repayments: 'id, customerId, createdAt',
+    });
+
+    // Garde anti-mélange de comptes — `pull.ts`'s `countForeignRows` fait un
+    // `where('organizationId')` sur les 8 tables miroir ; `repayments` était
+    // la seule sans cet index (les 7 autres l'ont depuis la version 1).
+    this.version(4).stores({
+      repayments: 'id, organizationId, customerId, createdAt',
     });
   }
 }

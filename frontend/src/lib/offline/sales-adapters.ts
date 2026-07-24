@@ -15,11 +15,12 @@
  * The join is `sales` × `saleItems` (by `saleId`) × `customers` (by
  * `customerId`) — the three tables `pull.ts` already mirrors.
  *
- * One display-only limitation vs the server version (never a money value): the
- * Dexie mirror has no local `users` table, so `sellerName` is always `null`
- * (the seller filter still works — it falls back to `sellerId`, which is the
- * sale's `createdById`, present on pulled sales). The server view resolves the
- * seller's display name; offline, the id is all we have.
+ * Seller display names: the Dexie mirror has no local `users` table, but
+ * `pullAll()` stores the org's member directory in `meta.members`
+ * (`getMemberNames()` in pull.ts) — pass it as `memberNames` to resolve
+ * `sellerName` from the sale's `createdById`. Without it (pre-first-pull, or
+ * a member deleted since), `sellerName` is `null` and the UI falls back to
+ * the raw id.
  */
 import type { SaleRow, SaleItemRow, CustomerRow, SaleMethod } from './db';
 
@@ -60,11 +61,18 @@ export interface ApiSale {
  * shape `VentesManager` renders, newest-first (matching the server's
  * `orderBy: { createdAt: 'desc' }`). Pure (no Dexie / clock), so it is
  * unit-testable directly.
+ *
+ * `memberNames` (facultatif) : annuaire `userId → nom d'affichage` stocké par
+ * `pullAll()` (`getMemberNames()` dans pull.ts) — résout `sellerName` pour
+ * que le filtre vendeurs et les lignes affichent un NOM et plus un id
+ * technique, y compris hors ligne. Absent/incomplet → `sellerName: null` et
+ * l'UI retombe sur l'id (comportement d'avant).
  */
 export function aggregateSales(
   sales: SaleRow[],
   items: SaleItemRow[],
   customers: CustomerRow[],
+  memberNames?: Record<string, string>,
 ): ApiSale[] {
   const itemsBySale = new Map<string, SaleItemRow[]>();
   for (const it of items) {
@@ -92,7 +100,7 @@ export function aggregateSales(
         status: s.status,
         createdAt: s.createdAt,
         sellerId: s.createdById ?? null,
-        sellerName: null,
+        sellerName: s.createdById ? (memberNames?.[s.createdById] ?? null) : null,
         customerName: customer?.name ?? null,
         customerPhone: customer?.phone ?? null,
         synced: s.synced !== false,

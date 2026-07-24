@@ -160,6 +160,16 @@ const messages: Record<string, Msg> = {
     en: 'Sync retry started.',
     ar: 'تم بدء إعادة محاولة المزامنة.',
   },
+  'sync.history.heading': {
+    fr: 'Dernières synchronisations',
+    en: 'Recently synced',
+    ar: 'آخر عمليات المزامنة',
+  },
+  'sync.history.empty': {
+    fr: 'Rien de synchronisé pour l’instant.',
+    en: 'Nothing synced yet.',
+    ar: 'لا شيء تمت مزامنته بعد.',
+  },
   'sync.kind.sale': { fr: 'Vente', en: 'Sale', ar: 'بيع' },
   'sync.kind.expense': { fr: 'Dépense', en: 'Expense', ar: 'مصروف' },
   'sync.kind.repay': { fr: 'Remboursement', en: 'Repayment', ar: 'سداد' },

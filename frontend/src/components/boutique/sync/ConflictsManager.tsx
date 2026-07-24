@@ -34,6 +34,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
 import { db, type ConflictRow, type OutboxRow } from '@/lib/offline/db';
 import { retryOutboxRow } from '@/lib/offline/outbox';
+import { listRecentSynced } from '@/lib/offline/sync-history';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { useSyncStatus } from '@/lib/offline/useSyncStatus';
@@ -80,6 +81,15 @@ export default function ConflictsManager() {
 
   const { data: failedRows, loading: loadingFailed } = useLocalResource(
     () => db.outbox.where('status').equals('error').sortBy('seq'),
+    [],
+    [],
+  );
+
+  // Historique : les dernières écritures synchronisées avec succès (lignes
+  // outbox `done`), libellé résolu en best-effort depuis le miroir local —
+  // répond à « qu'est-ce qui a été synchronisé, au juste ? ».
+  const { data: history, loading: loadingHistory } = useLocalResource(
+    () => listRecentSynced(),
     [],
     [],
   );
@@ -232,6 +242,44 @@ export default function ConflictsManager() {
                     <Icon i="refresh-cw" size={13} />
                     {t('sync.error.retry')}
                   </button>
+                </div>
+              ))}
+            </div>
+          </AsyncState>
+        </section>
+
+        {/* Dernières synchronisations — petites lignes de texte : QUOI a été
+            envoyé au serveur et QUAND, pour que la synchro ne soit pas une
+            boîte noire. */}
+        <section className="flex flex-col gap-3">
+          <h2 className="font-headings text-foreground text-base font-bold">
+            {t('sync.history.heading')}
+          </h2>
+          <AsyncState
+            loading={loadingHistory}
+            error={null}
+            isEmpty={history.length === 0}
+            emptyLabel={t('sync.history.empty')}
+            emptyIcon="history"
+          >
+            <div className="bg-surface border-border divide-border flex flex-col divide-y rounded-lg border">
+              {history.map((entry) => (
+                <div
+                  key={entry.seq}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Icon i="check-circle-2" size={14} className="text-success shrink-0" />
+                    <p className="font-body text-foreground truncate text-sm">
+                      {t(`sync.kind.${entry.kind}`)}
+                      {entry.detail && (
+                        <span className="text-muted-foreground"> — {ltrIsolate(entry.detail)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="text-muted-foreground font-body shrink-0 text-xs">
+                    {relativeTime(entry.at, t)}
+                  </span>
                 </div>
               ))}
             </div>

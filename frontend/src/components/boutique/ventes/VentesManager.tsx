@@ -17,7 +17,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
 import { db } from '@/lib/offline/db';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
-import { getRole, pullResource } from '@/lib/offline/pull';
+import { getMemberNames, getRole, pullResource } from '@/lib/offline/pull';
 import { createCancelOffline } from '@/lib/offline/mutations';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { aggregateSales } from '@/lib/offline/sales-adapters';
@@ -87,9 +87,12 @@ export default function VentesManager() {
   const { data: saleRows, loading } = useLocalResource(() => db.sales.toArray(), [], []);
   const { data: itemRows } = useLocalResource(() => db.saleItems.toArray(), [], []);
   const { data: customerRows } = useLocalResource(() => db.customers.toArray(), [], []);
+  // Annuaire d'équipe (userId → nom) stocké par pullAll : sans lui le filtre
+  // vendeurs affichait des ids techniques (cmr…) au lieu des noms.
+  const { data: memberNames } = useLocalResource(() => getMemberNames(), [], {});
   const sales = useMemo(
-    () => aggregateSales(saleRows, itemRows, customerRows),
-    [saleRows, itemRows, customerRows],
+    () => aggregateSales(saleRows, itemRows, customerRows, memberNames),
+    [saleRows, itemRows, customerRows, memberNames],
   );
 
   // Le bouton « Annuler » n'est visible que pour le Patron (OWNER) et le

@@ -90,6 +90,8 @@ describe('outbox.ts (client write-queue)', () => {
 
     const stored = await db.outbox.get(row.seq as number);
     expect(stored?.status).toBe('done');
+    // Horodatage du succès — alimente « Dernières synchronisations ».
+    expect(typeof stored?.syncedAt).toBe('string');
     expect(await pendingCount()).toBe(0);
   });
 

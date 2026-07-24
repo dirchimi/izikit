@@ -26,6 +26,11 @@ jobs:
         with:
           version: 9.15.0
 
+      # .nvmrc = Node 24 — aligné sur le poste de dev. Node 20 ne sait pas
+      # require() un module ESM (ERR_REQUIRE_ESM) : html-encoding-sniffer@6
+      # (dépendance de jsdom, via le lockfile) est ESM-only et cassait TOUS
+      # les runs CI depuis le 2026-07-21 alors que la même suite passait en
+      # local (Node 24). Vercel n'utilise pas .nvmrc (réglage projet).
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
