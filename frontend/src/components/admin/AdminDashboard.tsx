@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, type ReactNode } from 'react';
 import { useApi } from '@/lib/useApi';
 import { formatFCFA } from '@/lib/boutique/format';
 import { waLink } from '@/lib/wa';
@@ -173,6 +174,30 @@ function WaButton({ phone, label }: { phone: string | null; label: string }) {
   );
 }
 
+// Liste plafonnée : 5 lignes visibles, le reste derrière « Afficher les N
+// autres » — le tableau de bord se lit d'un coup d'œil, sans scroller.
+const LIST_CAP = 5;
+function CappedRows<T>({ items, render }: { items: T[]; render: (item: T) => ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  const hidden = items.length - LIST_CAP;
+  const visible = expanded ? items : items.slice(0, LIST_CAP);
+  return (
+    <>
+      {visible.map(render)}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-primary font-body hover:bg-muted flex w-full items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition"
+        >
+          <Icon i={expanded ? 'chevron-up' : 'chevron-down'} size={14} />
+          {expanded ? 'Réduire' : `Afficher les ${hidden} autres`}
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function AdminDashboard() {
   const { data, loading, error, refresh } = useApi<AdminStats>('/api/admin/stats');
 
@@ -337,102 +362,122 @@ export default function AdminDashboard() {
               </a>
             }
           >
-            {s.subscriptions.pending.map((p) => (
-              <div
-                key={p.id}
-                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-body text-foreground truncate text-sm font-medium">{p.org}</p>
-                  <p className="text-muted-foreground font-body text-xs">
-                    {(p.plan && PLAN_LABEL[p.plan]) ?? p.plan ?? '—'} · {p.months} mois ·{' '}
-                    {METHOD_LABEL[p.method] ?? p.method} · {fmtDate(p.createdAt)}
-                    {p.discountCode ? (
-                      <span className="text-primary font-medium"> · Code {p.discountCode}</span>
-                    ) : null}
-                  </p>
+            <CappedRows
+              items={s.subscriptions.pending}
+              render={(p) => (
+                <div
+                  key={p.id}
+                  className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-body text-foreground truncate text-sm font-medium">
+                      {p.org}
+                    </p>
+                    <p className="text-muted-foreground font-body text-xs">
+                      {(p.plan && PLAN_LABEL[p.plan]) ?? p.plan ?? '—'} · {p.months} mois ·{' '}
+                      {METHOD_LABEL[p.method] ?? p.method} · {fmtDate(p.createdAt)}
+                      {p.discountCode ? (
+                        <span className="text-primary font-medium"> · Code {p.discountCode}</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <span className="font-headings text-foreground shrink-0 text-sm font-bold">
+                    {fcfa(p.amount)}
+                  </span>
                 </div>
-                <span className="font-headings text-foreground shrink-0 text-sm font-bold">
-                  {fcfa(p.amount)}
-                </span>
-              </div>
-            ))}
+              )}
+            />
           </Panel>
         )}
 
         {s.subscriptions.expiringSoon.length > 0 && (
           <Panel title="Abonnements qui expirent bientôt">
-            {s.subscriptions.expiringSoon.map((o) => (
-              <div
-                key={o.id}
-                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-body text-foreground truncate text-sm font-medium">{o.name}</p>
-                  <p className="text-muted-foreground font-body text-xs">
-                    {(o.plan && PLAN_LABEL[o.plan]) ?? o.plan ?? '—'} ·{' '}
-                    {o.status === 'TRIAL' ? 'Essai' : 'Abonnement'}
-                  </p>
+            <CappedRows
+              items={s.subscriptions.expiringSoon}
+              render={(o) => (
+                <div
+                  key={o.id}
+                  className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-body text-foreground truncate text-sm font-medium">
+                      {o.name}
+                    </p>
+                    <p className="text-muted-foreground font-body text-xs">
+                      {(o.plan && PLAN_LABEL[o.plan]) ?? o.plan ?? '—'} ·{' '}
+                      {o.status === 'TRIAL' ? 'Essai' : 'Abonnement'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge tone={urgencyTone(o.daysLeft)}>{daysLeftLabel(o.daysLeft)}</Badge>
+                    <WaButton phone={o.phone} label={o.name} />
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge tone={urgencyTone(o.daysLeft)}>{daysLeftLabel(o.daysLeft)}</Badge>
-                  <WaButton phone={o.phone} label={o.name} />
-                </div>
-              </div>
-            ))}
+              )}
+            />
           </Panel>
         )}
 
         {s.trials.length > 0 && (
           <Panel title={`Essais en cours — à convertir (${s.trials.length})`}>
-            {s.trials.map((t) => (
-              <div
-                key={t.id}
-                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-body text-foreground truncate text-sm font-medium">{t.name}</p>
-                  <p className="font-body text-xs">
-                    {/* Signal d'activation : une boutique qui VEND pendant son
-                        essai est prête à payer ; une qui ne vend pas a besoin
-                        d'accompagnement — deux conversations différentes. Le
-                        montant exact n'apparaît que pour le SUPERADMIN
-                        (chiffres clients expurgés pour l'équipe). */}
-                    {t.hasSold ? (
-                      <span className="text-success font-semibold">
-                        A vendu{s.redacted ? '' : ` · ${fcfa(t.salesTotal)}`}
-                      </span>
-                    ) : (
-                      <span className="text-warning font-semibold">Jamais vendu</span>
-                    )}
-                    {t.phone ? <span className="text-muted-foreground"> · {t.phone}</span> : null}
-                  </p>
+            <CappedRows
+              items={s.trials}
+              render={(t) => (
+                <div
+                  key={t.id}
+                  className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-body text-foreground truncate text-sm font-medium">
+                      {t.name}
+                    </p>
+                    <p className="font-body text-xs">
+                      {/* Signal d'activation : une boutique qui VEND pendant son
+                          essai est prête à payer ; une qui ne vend pas a besoin
+                          d'accompagnement — deux conversations différentes. Le
+                          montant exact n'apparaît que pour le SUPERADMIN
+                          (chiffres clients expurgés pour l'équipe). */}
+                      {t.hasSold ? (
+                        <span className="text-success font-semibold">
+                          A vendu{s.redacted ? '' : ` · ${fcfa(t.salesTotal)}`}
+                        </span>
+                      ) : (
+                        <span className="text-warning font-semibold">Jamais vendu</span>
+                      )}
+                      {t.phone ? <span className="text-muted-foreground"> · {t.phone}</span> : null}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge tone={urgencyTone(t.daysLeft)}>{daysLeftLabel(t.daysLeft)}</Badge>
+                    <WaButton phone={t.phone} label={t.name} />
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge tone={urgencyTone(t.daysLeft)}>{daysLeftLabel(t.daysLeft)}</Badge>
-                  <WaButton phone={t.phone} label={t.name} />
-                </div>
-              </div>
-            ))}
+              )}
+            />
           </Panel>
         )}
 
         {s.dormantList.length > 0 && (
           <Panel title={`À relancer — 30 j sans vente (${s.dormantList.length})`}>
-            {s.dormantList.map((d) => (
-              <div
-                key={d.id}
-                className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-body text-foreground truncate text-sm font-medium">{d.name}</p>
-                  <p className="text-muted-foreground font-body text-xs">
-                    {d.phone ?? 'Pas de téléphone renseigné'}
-                  </p>
+            <CappedRows
+              items={s.dormantList}
+              render={(d) => (
+                <div
+                  key={d.id}
+                  className="border-border flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-body text-foreground truncate text-sm font-medium">
+                      {d.name}
+                    </p>
+                    <p className="text-muted-foreground font-body text-xs">
+                      {d.phone ?? 'Pas de téléphone renseigné'}
+                    </p>
+                  </div>
+                  <WaButton phone={d.phone} label={d.name} />
                 </div>
-                <WaButton phone={d.phone} label={d.name} />
-              </div>
-            ))}
+              )}
+            />
           </Panel>
         )}
       </div>

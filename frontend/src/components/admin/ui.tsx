@@ -206,7 +206,12 @@ export function MiniBars({
   return (
     <div className="flex h-28 items-end gap-1.5">
       {data.map((d, i) => (
-        <div key={`${d.label}-${i}`} className="group flex flex-1 flex-col items-center gap-1">
+        // h-full est indispensable : sans hauteur définie sur la colonne, le
+        // height:% de la barre se résout en auto (0px) et le graphe paraît vide.
+        <div
+          key={`${d.label}-${i}`}
+          className="group flex h-full flex-1 flex-col items-center gap-1"
+        >
           <div className="flex w-full flex-1 items-end">
             <div
               title={d.hint ?? `${d.label}: ${d.value}`}
