@@ -223,6 +223,16 @@ export interface OutboxRow {
   /** The API route this op replays against, e.g. `/api/sales` — what
    * `sync-engine.ts` (Task 2.2) POSTs the `payload` to. */
   endpoint: string;
+  /** Boutique à laquelle cette écriture appartient (estampillée par
+   * `enqueue()` depuis `meta.orgId`). Non indexé (pas de bump de version
+   * Dexie). `listPending()` ne sert que les lignes de la boutique courante :
+   * après un changement de compte sur le même appareil, les écritures de
+   * l'ancienne boutique ne doivent JAMAIS être rejouées sous la session du
+   * nouveau compte (le serveur les enregistrerait dans la mauvaise
+   * boutique) — elles attendent le retour de leur compte. Absent sur les
+   * lignes d'avant ce champ (traitées comme « boutique courante », le
+   * comportement historique mono-compte). */
+  orgId?: string;
   createdAt: string; // ISO
   retryAt?: string; // ISO — set by `markError` for backoff
   /** Failure/conflict reason, set by `markError`/`markConflict`. */

@@ -23,6 +23,7 @@
  * rows are terminal-success and excluded, obviously.
  */
 import { db, type OutboxRow, type OutboxStatus } from './db';
+import { getOrgId } from './pull';
 
 export type { OutboxRow, OutboxStatus };
 
@@ -48,12 +49,20 @@ export async function enqueue(input: {
   opId: string;
   endpoint: string;
 }): Promise<OutboxRow> {
+  // Estampille la boutique courante (meta.orgId, posé par pullAll) : c'est ce
+  // qui empêche `listPending()` de rejouer cette écriture sous la session
+  // d'un AUTRE compte après un changement de compte sur le même appareil.
+  // `null` avant le tout premier pull → ligne non estampillée, traitée comme
+  // « boutique courante » (elle vient forcément d'être créée par la session
+  // active).
+  const orgId = await getOrgId().catch(() => null);
   const row: OutboxRow = {
     status: 'pending',
     kind: input.kind,
     payload: input.payload,
     opId: input.opId,
     endpoint: input.endpoint,
+    ...(orgId !== null ? { orgId } : {}),
     createdAt: new Date().toISOString(),
   };
   const seq = await db.outbox.add(row);
@@ -67,9 +76,22 @@ export async function enqueue(input: {
  * returned; `syncing`/`error`/`conflict` rows are the sync engine's own
  * concern (retry scheduling, conflict surfacing) and intentionally excluded
  * here to keep this function simple.
+ *
+ * Filtre par boutique : une ligne estampillée d'un `orgId` différent de la
+ * boutique courante (`meta.orgId`) n'est PAS servie — la rejouer sous la
+ * session d'un autre compte l'enregistrerait dans la mauvaise boutique
+ * côté serveur. Elle reste `pending` et repartira quand son compte se
+ * reconnectera sur cet appareil. Une ligne SANS estampille (héritage
+ * d'avant ce champ) est toujours servie (comportement mono-compte
+ * historique) ; quand `meta.orgId` est absent (miroir tout juste purgé,
+ * premier pull pas encore passé), seules ces lignes-là partent — le FIFO
+ * par boutique est préservé (la causalité n'existe qu'à l'intérieur d'une
+ * même boutique).
  */
 export async function listPending(): Promise<OutboxRow[]> {
-  return db.outbox.where('status').equals('pending').sortBy('seq');
+  const rows = await db.outbox.where('status').equals('pending').sortBy('seq');
+  const currentOrg = await getOrgId().catch(() => null);
+  return rows.filter((r) => r.orgId == null || r.orgId === currentOrg);
 }
 
 /** Marks a row as currently being replayed (set right before the POST). */

@@ -150,3 +150,61 @@ describe('outbox.ts (client write-queue)', () => {
     expect(pending.map((r) => r.seq)).toEqual([row.seq]);
   });
 });
+
+describe('outbox.ts — estampillage boutique (anti-mélange de comptes)', () => {
+  beforeEach(async () => {
+    await db.outbox.clear();
+    await db.meta.clear();
+  });
+
+  it('enqueue estampille la ligne avec meta.orgId quand il existe, sinon la laisse vierge', async () => {
+    const unstamped = await enqueue({
+      kind: 'sale',
+      payload: {},
+      opId: 'op-sans',
+      endpoint: '/api/sales',
+    });
+    expect(unstamped.orgId).toBeUndefined();
+
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    const stamped = await enqueue({
+      kind: 'sale',
+      payload: {},
+      opId: 'op-avec',
+      endpoint: '/api/sales',
+    });
+    expect(stamped.orgId).toBe('o1');
+  });
+
+  it("listPending ne sert JAMAIS les lignes d'une AUTRE boutique (les rejouer sous la mauvaise session enregistrerait les données dans la mauvaise boutique)", async () => {
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await enqueue({ kind: 'sale', payload: {}, opId: 'op-o1', endpoint: '/api/sales' });
+
+    // Changement de compte sur le même appareil : la boutique courante
+    // devient o2 — la ligne d'o1 reste pending mais invisible au drain.
+    await db.meta.put({ key: 'orgId', value: 'o2' });
+    await enqueue({ kind: 'expense', payload: {}, opId: 'op-o2', endpoint: '/api/expenses' });
+
+    const pending = await listPending();
+    expect(pending.map((r) => r.opId)).toEqual(['op-o2']);
+
+    // Retour du compte o1 : SA ligne repart, celle d'o2 attend à son tour.
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    expect((await listPending()).map((r) => r.opId)).toEqual(['op-o1']);
+  });
+
+  it('listPending sert les lignes non estampillées (héritage mono-compte) ; miroir purgé (orgId absent) → seulement celles-là', async () => {
+    await enqueue({ kind: 'sale', payload: {}, opId: 'op-legacy', endpoint: '/api/sales' });
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await enqueue({ kind: 'sale', payload: {}, opId: 'op-o1', endpoint: '/api/sales' });
+
+    // Boutique courante o1 : les deux partent (FIFO préservé).
+    expect((await listPending()).map((r) => r.opId)).toEqual(['op-legacy', 'op-o1']);
+
+    // Après wipeLocalMirror (meta vidé, premier pull pas encore passé) :
+    // seule la ligne héritage part — jamais celle estampillée d'une boutique
+    // qu'on ne peut plus identifier comme courante.
+    await db.meta.clear();
+    expect((await listPending()).map((r) => r.opId)).toEqual(['op-legacy']);
+  });
+});

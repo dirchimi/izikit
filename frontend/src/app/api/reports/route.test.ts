@@ -80,8 +80,12 @@ describe('GET /api/reports', () => {
     // Remboursements isolés (compris dans collectedCash).
     expect(body.summary.repaidCash).toBe(1000);
     expect(body.summary.repaidMobile).toBe(0);
-    expect(body.topProducts[0].name).toBe('Riz'); // CA 12000 > Eau 1500
-    expect(body.topProducts[0].ca).toBe(12000);
+    // Classement par quantité vendue : Eau (3 unités, CA 1500) devant
+    // Riz (2 unités, CA 12000) — la rotation prime sur la valeur.
+    expect(body.topProducts[0].name).toBe('Eau');
+    expect(body.topProducts[0].qty).toBe(3);
+    expect(body.topProducts[1].name).toBe('Riz');
+    expect(body.topProducts[1].ca).toBe(12000);
     expect(Array.isArray(body.series)).toBe(true);
   });
 

@@ -13,6 +13,7 @@ import { useApi } from '@/lib/useApi';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useT } from '@/contexts/LocaleContext';
 import { authGateState } from '@/lib/offline/auth-gate';
+import { RECENT_APP_COOKIE, RECENT_APP_MAX_AGE_S } from '@/lib/constants';
 import { installSyncTriggers } from '@/lib/offline/sync-triggers';
 import { pullAll } from '@/lib/offline/pull';
 import { requestShellPrecache } from '@/lib/offline/precache-shells';
@@ -57,6 +58,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // lifetime regardless of the auth-gate state below (unconditional hook,
   // same rule as the other hooks above).
   useEffect(() => installSyncTriggers(), []);
+
+  // Ré-arme le marqueur « a ouvert l'app récemment » (72 h) à chaque écran
+  // boutique visité — c'est lui que le header marketing lit pour décider
+  // d'afficher « Mon tableau de bord » plutôt que Se connecter / Essai
+  // gratuit (voir RECENT_APP_COOKIE dans lib/constants.ts).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const secure = window.location.protocol === 'https:' ? '; secure' : '';
+    document.cookie = `${RECENT_APP_COOKIE}=1; path=/; max-age=${RECENT_APP_MAX_AGE_S}; samesite=lax${secure}`;
+  }, [pathname]);
 
   // Seed/refresh the local Dexie mirror (Task 3.3) so offline reads (e.g. the
   // POS catalogue) aren't empty. Best-effort: fire on mount and whenever the

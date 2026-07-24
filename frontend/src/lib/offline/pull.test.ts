@@ -335,3 +335,92 @@ describe('pullResource', () => {
     expect(saleItems[0]?.saleId).toBe('s1');
   });
 });
+
+describe('pullAll — garde anti-mélange de comptes (changement de boutique)', () => {
+  /** Réponse minimale pour une AUTRE boutique (o2) : un seul produit, tout le
+   * reste vide — ce qui compte est que rien d'o1 ne doit survivre. */
+  function makeO2Response(): PullResponse {
+    return makeResponse({
+      orgId: 'o2',
+      products: [
+        {
+          id: 'p9',
+          organizationId: 'o2',
+          ref: 'THE-1',
+          name: 'Thé',
+          category: 'Alimentation',
+          buyPrice: 100,
+          sellPrice: 200,
+          prixGros: 0,
+          unite: 'piece',
+          qty: 3,
+          threshold: 1,
+          imageUrl: null,
+          barcode: null,
+          expiryDate: null,
+          updatedAt: '2026-07-21T00:00:00.000Z',
+        },
+      ],
+      customers: [],
+      sales: [],
+      receivables: [],
+      expenses: [],
+      documents: [],
+      stockMovements: [],
+      repayments: [],
+      serverTime: '2026-07-21T00:00:00.000Z',
+    });
+  }
+
+  it('vide le miroir puis re-fetch un snapshot COMPLET (sans curseur) quand la boutique du serveur change', async () => {
+    // 1er pull : boutique o1 — remplit le miroir, stocke meta.orgId = o1.
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    await pullAll();
+    expect(await getOrgId()).toBe('o1');
+    expect(await db.products.count()).toBe(1);
+    expect(await db.sales.count()).toBe(1);
+
+    // 2e pull : un AUTRE compte (boutique o2) est connecté sur le même
+    // appareil. Le fetch incrémental (parti avec le curseur d'o1) répond o2 →
+    // la garde vide le miroir et re-fetch complet, SANS ?since.
+    mockedApi.mockResolvedValueOnce(makeO2Response());
+    mockedApi.mockResolvedValueOnce(makeO2Response());
+    await pullAll();
+
+    expect(mockedApi).toHaveBeenCalledTimes(3);
+    expect(mockedApi).toHaveBeenNthCalledWith(
+      2,
+      '/api/sync/pull?since=2026-07-20T00%3A00%3A00.000Z',
+    );
+    expect(mockedApi).toHaveBeenNthCalledWith(3, '/api/sync/pull');
+
+    // Plus AUCUNE donnée d'o1 : le miroir est intégralement celui d'o2.
+    const products = await db.products.toArray();
+    expect(products).toHaveLength(1);
+    expect(products[0]?.id).toBe('p9');
+    expect(await db.customers.count()).toBe(0);
+    expect(await db.sales.count()).toBe(0);
+    expect(await db.saleItems.count()).toBe(0);
+    expect(await db.receivables.count()).toBe(0);
+    expect(await db.expenses.count()).toBe(0);
+    expect(await db.repayments.count()).toBe(0);
+    expect(await getOrgId()).toBe('o2');
+    expect((await db.meta.get('lastPull'))?.value).toBe('2026-07-21T00:00:00.000Z');
+  });
+
+  it('même boutique → pull incrémental normal, jamais de purge', async () => {
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    await pullAll();
+
+    // Deuxième pull, même orgId : un seul fetch (incrémental), miroir intact.
+    mockedApi.mockResolvedValueOnce(
+      makeResponse({ products: [], customers: [], serverTime: '2026-07-22T00:00:00.000Z' }),
+    );
+    await pullAll();
+
+    expect(mockedApi).toHaveBeenCalledTimes(2);
+    expect(await db.products.count()).toBe(1);
+    expect(await db.customers.count()).toBe(1);
+    expect(await getOrgId()).toBe('o1');
+  });
+});

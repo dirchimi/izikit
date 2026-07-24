@@ -111,7 +111,7 @@ describe('computeReportLocalPeriod — today', () => {
     expect(r.series[0]?.value).toBe(15000);
   });
 
-  it('top produits classés par CA, produit fantôme (vente annulée) exclu', () => {
+  it('top produits classés par quantité vendue, produit fantôme (vente annulée) exclu', () => {
     expect(r.topProducts).toEqual([
       { rank: 1, name: 'Riz', qty: 2, ca: 10000 },
       { rank: 2, name: 'Sucre', qty: 1, ca: 5000 },

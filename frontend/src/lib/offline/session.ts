@@ -77,6 +77,18 @@ export async function loadSession(): Promise<SessionSnapshot | null> {
   };
 }
 
+/**
+ * Identité brute du snapshot, SANS le contrôle d'âge de 7 jours — sert à
+ * détecter un changement de compte au login. Même expiré, un snapshot prouve
+ * que le miroir local appartient à CET utilisateur-là : si un autre id se
+ * connecte, `AuthContext` purge le miroir (voir `wipe.ts`) avant de sauver
+ * la nouvelle session.
+ */
+export async function peekSessionUserId(): Promise<string | null> {
+  const row = await db.session.get(SESSION_KEY);
+  return row?.userId ?? null;
+}
+
 /** Deletes the persisted snapshot. Call this on logout (shared-device hygiene). */
 export async function clearSession(): Promise<void> {
   await db.session.delete(SESSION_KEY);

@@ -8,7 +8,7 @@
 //   expenses    = Σ Expense.amount
 //   netProfit   = grossMargin − expenses
 //   series[]    = CA par compartiment (jour/mois) pour le graphe
-//   topProducts = top 5 produits par CA
+//   topProducts = top 5 produits par quantité vendue (rotation, pas valeur)
 // Org-scopé, rôle min ADMIN (données financières réservées Patron/Manager).
 export const runtime = 'nodejs';
 

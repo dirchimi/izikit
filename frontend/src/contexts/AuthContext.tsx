@@ -9,8 +9,10 @@ import {
   saveSession,
   loadSession,
   clearSession,
+  peekSessionUserId,
   type SessionSnapshot,
 } from '@/lib/offline/session';
+import { wipeLocalMirror } from '@/lib/offline/wipe';
 
 export interface User {
   id: string;
@@ -74,6 +76,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await api<{ user: User; csrfToken?: string }>('/api/auth/me');
+      // Changement de compte sur le même appareil : si le dernier snapshot
+      // local appartient à un AUTRE utilisateur, le miroir Dexie contient
+      // encore les données de l'ancien compte — on le purge AVANT de rendre
+      // quoi que ce soit, sinon le nouveau compte affiche (et fusionne à la
+      // synchro suivante) les données de l'ancien. L'outbox survit : ses
+      // lignes sont estampillées par boutique et ne partent que quand LEUR
+      // compte est reconnecté (voir lib/offline/wipe.ts).
+      try {
+        const prevUserId = await peekSessionUserId();
+        if (prevUserId && prevUserId !== res.user.id) await wipeLocalMirror();
+      } catch {
+        // best-effort — la garde orgId de pullAll couvre ce cas au pire
+      }
       setUser(res.user);
       if (res.csrfToken) storeCsrfToken(res.csrfToken);
       // Task 1.4: refresh the offline snapshot on every successful online

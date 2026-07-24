@@ -25,6 +25,7 @@
  * differently between the two entry points.
  */
 import { api } from '@/lib/api';
+import { wipeLocalMirror } from './wipe';
 import {
   db,
   type ProductRow,
@@ -488,7 +489,20 @@ const ALL_RESOURCES: readonly ResourceName[] = [
  */
 export async function pullAll(): Promise<void> {
   const since = await getCursor();
-  const res = await fetchPull(since);
+  let res = await fetchPull(since);
+
+  // Garde anti-mélange de comptes (même appareil, boutique différente) : si
+  // la boutique renvoyée par le serveur n'est pas celle du miroir local, TOUT
+  // le miroir appartient à l'ancienne boutique → on le vide puis on re-fetch
+  // un snapshot COMPLET (le fetch ci-dessus était incrémental sur le curseur
+  // de l'ancienne boutique, donc incomplet pour la nouvelle). Ceinture +
+  // bretelles avec la purge d'AuthContext au changement d'utilisateur — cette
+  // garde-ci couvre aussi un snapshot de session absent/expiré.
+  const storedOrg = await getOrgId();
+  if (storedOrg !== null && storedOrg !== res.orgId) {
+    await wipeLocalMirror();
+    res = await fetchPull(undefined);
+  }
 
   await db.transaction(
     'rw',

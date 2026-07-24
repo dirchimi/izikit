@@ -84,14 +84,24 @@ describe('marginPct', () => {
 });
 
 describe('rankTopProducts', () => {
-  it('regroupe par produit, trie par CA, classe', () => {
+  it('regroupe par produit, trie par QUANTITÉ vendue (pas par CA), classe', () => {
+    // Eau : 10 unités pour 5 000 F de CA ; Riz : 3 unités pour 18 000 F.
+    // Le produit qui TOURNE le plus est n°1, même si son CA est plus petit.
     const top = rankTopProducts([
       { name: 'Riz', qty: 2, unitPrice: 6000, productId: 'p1' },
       { name: 'Riz', qty: 1, unitPrice: 6000, productId: 'p1' },
       { name: 'Eau', qty: 10, unitPrice: 500, productId: 'p2' },
     ]);
-    expect(top[0]).toEqual({ rank: 1, name: 'Riz', qty: 3, ca: 18000 });
-    expect(top[1]).toEqual({ rank: 2, name: 'Eau', qty: 10, ca: 5000 });
+    expect(top[0]).toEqual({ rank: 1, name: 'Eau', qty: 10, ca: 5000 });
+    expect(top[1]).toEqual({ rank: 2, name: 'Riz', qty: 3, ca: 18000 });
+  });
+  it("départage à quantité égale par le CA le plus élevé d'abord", () => {
+    const top = rankTopProducts([
+      { name: 'Sucre', qty: 5, unitPrice: 1000, productId: 'p1' },
+      { name: 'Huile', qty: 5, unitPrice: 2000, productId: 'p2' },
+    ]);
+    expect(top[0]?.name).toBe('Huile');
+    expect(top[1]?.name).toBe('Sucre');
   });
   it('regroupe par nom les lignes sans produit (supprimé)', () => {
     const top = rankTopProducts([

@@ -151,7 +151,10 @@ export function marginPct(grossMargin: number, revenue: number): number {
   return revenue > 0 ? Math.round((grossMargin / revenue) * 100) : 0;
 }
 
-/** Top produits par chiffre d'affaires (regroupe par produit, ou par nom si supprimé). */
+/** Top produits par QUANTITÉ vendue, à égalité par CA (regroupe par produit,
+ * ou par nom si supprimé). Le classement mesure la rotation, pas la valeur :
+ * un article à 500 F vendu 20 fois passe devant un article à 200 000 F vendu
+ * une seule fois — le CA reste affiché à côté, mais ne décide pas du rang. */
 export function rankTopProducts(items: AggItem[], limit = 5): TopProduct[] {
   const map = new Map<string, { name: string; qty: number; ca: number }>();
   for (const it of items) {
@@ -162,7 +165,7 @@ export function rankTopProducts(items: AggItem[], limit = 5): TopProduct[] {
     map.set(key, cur);
   }
   return [...map.values()]
-    .sort((a, b) => b.ca - a.ca)
+    .sort((a, b) => b.qty - a.qty || b.ca - a.ca)
     .slice(0, limit)
     .map((p, i) => ({ rank: i + 1, name: p.name, qty: p.qty, ca: p.ca }));
 }

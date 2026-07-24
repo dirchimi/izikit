@@ -4,6 +4,7 @@ import Icon from '@/components/ui/Icon';
 import LanguageSwitcher from '@/components/boutique/LanguageSwitcher';
 import ThemeToggle from '@/components/boutique/ThemeToggle';
 import { verifyToken, COOKIE_NAME, CSRF_COOKIE_NAME } from '@/lib/server/auth';
+import { RECENT_APP_COOKIE } from '@/lib/constants';
 import { getServerT } from '@/lib/i18n/server';
 import {
   CONTACT_EMAIL,
@@ -37,9 +38,18 @@ export default async function MarketingHeader() {
   // déconnexion) est un marqueur de session fiable et lisible ici → on l'utilise
   // en repli. Pire cas : session en réalité morte → la garde du dashboard
   // renverra vers /connexion.
+  //
+  // ET on exige en plus le marqueur « a ouvert l'app dans les 72 h »
+  // (RECENT_APP_COOKIE, posé par AppShell) : la session glisse de 7 jours à
+  // chaque visite du site — condition nécessaire au mode hors-ligne — donc
+  // sans ce marqueur, quelqu'un qui n'a pas OUVERT l'app depuis des semaines
+  // verrait « Mon tableau de bord » indéfiniment. Au-delà de 72 h sans
+  // utiliser l'app, la landing redevient la vitrine normale.
   const token = store.get(COOKIE_NAME)?.value;
+  const recentlyUsedApp = !!store.get(RECENT_APP_COOKIE)?.value;
   const hasSession = !!store.get(CSRF_COOKIE_NAME)?.value;
-  const authenticated = hasSession || (token ? !!(await verifyToken(token)) : false);
+  const authenticated =
+    recentlyUsedApp && (hasSession || (token ? !!(await verifyToken(token)) : false));
 
   return (
     <>
