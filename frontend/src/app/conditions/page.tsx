@@ -66,6 +66,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         heading: '8. Résiliation',
         paragraphs: [
           'Vous pouvez cesser d’utiliser Sahilley à tout moment. Nous pouvons suspendre un compte en cas de non-respect de ces conditions ou d’usage abusif.',
+          'Si votre essai ou votre abonnement prend fin, vos données ne sont pas supprimées : vous conservez l’accès en consultation (ventes, rapports, clients) et pouvez les exporter à tout moment. Seule une demande de votre part entraîne leur suppression.',
         ],
       },
       {
@@ -135,6 +136,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         heading: '8. Termination',
         paragraphs: [
           'You may stop using Sahilley at any time. We may suspend an account in case of breach of these terms or abuse.',
+          'If your trial or subscription ends, your data is not deleted: you keep read access (sales, reports, customers) and can export it at any time. It is only deleted if you request it.',
         ],
       },
       {
@@ -204,6 +206,7 @@ const CONTENT: Record<'fr' | 'en' | 'ar', PageContent> = {
         heading: '8. الإنهاء',
         paragraphs: [
           'يمكنك التوقف عن استخدام Sahilley في أي وقت. وقد نوقف حساباً في حال مخالفة هذه الشروط أو إساءة الاستخدام.',
+          'إذا انتهت تجربتك أو اشتراكك، فلن تُحذف بياناتك: تحتفظ بحق الاطّلاع عليها (المبيعات، التقارير، الزبائن) ويمكنك تصديرها في أي وقت. ولا تُحذف إلا بطلب منك.',
         ],
       },
       {
