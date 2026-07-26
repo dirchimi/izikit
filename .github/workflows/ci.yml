@@ -59,5 +59,19 @@ jobs:
 
       # Fail the build on high/critical CVEs in production deps.
       # Dev-only advisories are tolerated (they don't ship to users).
+      # The npm registry's audit endpoint intermittently serves raw-gzip
+      # responses that pnpm (9 AND 10) can't parse ("is not valid JSON",
+      # payload starts with the gzip magic bytes 1f 8b). That's registry
+      # infrastructure, not a vulnerability — warn and skip instead of
+      # going red; every real audit finding still fails the build.
       - name: Audit (prod deps, high+ severity)
-        run: pnpm audit --prod --audit-level=high
+        run: |
+          set +e
+          out=$(pnpm audit --prod --audit-level=high 2>&1)
+          code=$?
+          echo "$out"
+          if [ $code -ne 0 ] && echo "$out" | grep -q "is not valid JSON"; then
+            echo "::warning::npm audit endpoint returned a corrupt (gzip) response — audit skipped for this run."
+            exit 0
+          fi
+          exit $code
