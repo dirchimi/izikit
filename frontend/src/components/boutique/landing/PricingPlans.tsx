@@ -63,7 +63,9 @@ const ENTREPRISE_ITEMS = [
 
 export default function PricingPlans() {
   const t = useT();
-  const [periodId, setPeriodId] = useState<(typeof PERIODS)[number]['id']>('annual');
+  // On démarre sur le MENSUEL : 50 000 rassure, 500 000 d'entrée fait fuir —
+  // le visiteur découvre les remises trimestrielle/annuelle en cliquant.
+  const [periodId, setPeriodId] = useState<(typeof PERIODS)[number]['id']>('monthly');
   const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[0];
 
   return (

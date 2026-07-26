@@ -580,7 +580,6 @@ const messages: Record<string, Msg> = {
     en: 'Sell, collect payments and manage your stock even with no network; everything syncs automatically when the connection returns, with no duplicates.',
     ar: 'بِع واستلم المدفوعات وأدِر مخزونك حتى دون شبكة؛ ويتزامن كل شيء تلقائياً عند عودة الاتصال، دون تكرار.',
   },
-  'landing.feat.keyPoint': { fr: 'Argument clé', en: 'Key point', ar: 'نقطة أساسية' },
   'landing.problem.eyebrow': {
     fr: 'Vous vous reconnaissez ?',
     en: 'Sound familiar?',
@@ -628,14 +627,14 @@ const messages: Record<string, Msg> = {
     ar: 'بِع واستلم المدفوعات وأدِر مخزونك حتى دون شبكة؛ ويتزامن كل شيء بمجرد عودة الاتصال، دون تكرار.',
   },
   'landing.why.w2.title': {
-    fr: 'Mobile Money intégré',
-    en: 'Mobile Money built in',
-    ar: 'Mobile Money مدمج',
+    fr: 'Mobile Money & espèces',
+    en: 'Mobile Money & cash',
+    ar: 'Mobile Money والنقد',
   },
   'landing.why.w2.desc': {
-    fr: 'Orange Money, Airtel Money, Wave — enregistrez le mode de paiement exact à chaque vente.',
-    en: 'Orange Money, Airtel Money, Wave — record the exact payment method on every sale.',
-    ar: 'Orange Money وAirtel Money وWave — سجّل وسيلة الدفع الدقيقة في كل عملية بيع.',
+    fr: 'Airtel Money, Moov Money ou espèces — enregistrez le mode de paiement exact à chaque vente.',
+    en: 'Airtel Money, Moov Money or cash — record the exact payment method on every sale.',
+    ar: 'Airtel Money أو Moov Money أو نقداً — سجّل وسيلة الدفع الدقيقة في كل عملية بيع.',
   },
   'landing.why.w3.title': {
     fr: 'Francs CFA, trilingue',

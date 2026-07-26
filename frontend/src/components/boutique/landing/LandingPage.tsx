@@ -237,14 +237,6 @@ export default async function LandingPage() {
                 >
                   {t(f.descKey)}
                 </p>
-                {f.highlight && (
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <Icon i="star" size={12} className="text-primary-foreground" />
-                    <span className="text-primary-foreground font-body text-xs font-semibold">
-                      {t('landing.feat.keyPoint')}
-                    </span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
