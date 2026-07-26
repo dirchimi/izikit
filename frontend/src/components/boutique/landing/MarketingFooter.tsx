@@ -116,7 +116,7 @@ export default async function MarketingFooter() {
 
         <div className="border-sidebar-muted flex flex-col items-start justify-between gap-3 border-t pt-6 sm:flex-row sm:items-center">
           <p className="text-sidebar-foreground/60 font-body text-xs">
-            {t('landing.footer.copyright')}
+            {t('landing.footer.copyright', { year: String(new Date().getFullYear()) })}
           </p>
           <div className="text-sidebar-foreground/60 font-body flex flex-wrap items-center gap-2 text-xs">
             <a

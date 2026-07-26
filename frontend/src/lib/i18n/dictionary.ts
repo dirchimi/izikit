@@ -519,9 +519,9 @@ const messages: Record<string, Msg> = {
   'landing.cta.start': { fr: 'Commencer gratuitement', en: 'Get started free', ar: 'ابدأ مجاناً' },
   'landing.cta.demo': { fr: 'Voir une démo', en: 'Watch a demo', ar: 'شاهد عرضاً توضيحياً' },
   'landing.hero.badge': {
-    fr: 'Consultez vos données même hors-ligne',
-    en: 'View your data even offline',
-    ar: 'اطّلع على بياناتك حتى دون اتصال',
+    fr: 'Vendez même sans internet',
+    en: 'Sell even without internet',
+    ar: 'بِع حتى دون إنترنت',
   },
   'landing.hero.title1': { fr: 'Gérez votre boutique,', en: 'Run your shop,', ar: 'أدِر متجرك،' },
   'landing.hero.title2': {
@@ -623,9 +623,9 @@ const messages: Record<string, Msg> = {
     ar: 'اتصال ضعيف؟ لا مشكلة.',
   },
   'landing.why.w1.desc': {
-    fr: 'Consultez vos données même sans réseau ; elles se synchronisent dès que la connexion revient.',
-    en: 'View your data even with no network; it syncs as soon as the connection is back.',
-    ar: 'اطّلع على بياناتك حتى دون شبكة؛ وتتزامن بمجرد عودة الاتصال.',
+    fr: 'Vendez, encaissez et gérez votre stock même sans réseau ; tout se synchronise dès que la connexion revient, sans doublon.',
+    en: 'Sell, take payments and manage your stock even with no network; everything syncs as soon as the connection is back, with no duplicates.',
+    ar: 'بِع واستلم المدفوعات وأدِر مخزونك حتى دون شبكة؛ ويتزامن كل شيء بمجرد عودة الاتصال، دون تكرار.',
   },
   'landing.why.w2.title': {
     fr: 'Mobile Money intégré',
@@ -659,56 +659,6 @@ const messages: Record<string, Msg> = {
     ar: 'تجربة مجانية لمدة 15 يوماً — دون الحاجة إلى بطاقة بنكية',
   },
   'landing.pricing.popular': { fr: 'Populaire', en: 'Popular', ar: 'الأكثر رواجاً' },
-  'landing.pricing.cta': { fr: 'Essayer gratuitement', en: 'Try for free', ar: 'جرّب مجاناً' },
-  'landing.pricing.period': { fr: 'FCFA / mois', en: 'FCFA / month', ar: 'فرنك / شهرياً' },
-  'landing.plan.solo.desc': {
-    fr: 'Pour un commerçant seul',
-    en: 'For a solo merchant',
-    ar: 'لتاجر يعمل بمفرده',
-  },
-  'landing.plan.solo.i1': { fr: '1 utilisateur', en: '1 user', ar: 'مستخدم واحد' },
-  'landing.plan.solo.i2': {
-    fr: 'Ventes & stock illimités',
-    en: 'Unlimited sales & inventory',
-    ar: 'مبيعات ومخزون بلا حدود',
-  },
-  'landing.plan.solo.i3': {
-    fr: 'Factures & proformas',
-    en: 'Invoices & quotes',
-    ar: 'فواتير وعروض أسعار',
-  },
-  'landing.plan.solo.i4': {
-    fr: 'Fonctionne hors-ligne',
-    en: 'Works offline',
-    ar: 'يعمل بدون اتصال',
-  },
-  'landing.plan.solo.i5': {
-    fr: 'Support WhatsApp',
-    en: 'WhatsApp support',
-    ar: 'دعم عبر WhatsApp',
-  },
-  'landing.plan.shop.desc': {
-    fr: 'Pour une boutique avec employés',
-    en: 'For a shop with staff',
-    ar: 'لمتجر فيه موظفون',
-  },
-  'landing.plan.shop.i1': {
-    fr: 'Jusqu’à 5 utilisateurs',
-    en: 'Up to 5 users',
-    ar: 'حتى 5 مستخدمين',
-  },
-  'landing.plan.shop.i2': {
-    fr: 'Tout Solo +',
-    en: 'Everything in Solo +',
-    ar: 'كل ما في باقة الفرد +',
-  },
-  'landing.plan.shop.i3': { fr: 'Rapports avancés', en: 'Advanced reports', ar: 'تقارير متقدّمة' },
-  'landing.plan.shop.i4': {
-    fr: 'Gestion des rôles (Patron / Vendeur)',
-    en: 'Role management (Owner / Seller)',
-    ar: 'إدارة الأدوار (مالك / بائع)',
-  },
-  'landing.plan.shop.i5': { fr: 'Priorité support', en: 'Priority support', ar: 'أولوية في الدعم' },
   'landing.final.title': {
     fr: 'Prêt à mieux gérer votre boutique ?',
     en: 'Ready to run your shop better?',
@@ -753,14 +703,14 @@ const messages: Record<string, Msg> = {
     ar: 'شروط الاستخدام',
   },
   'landing.footer.copyright': {
-    fr: '© 2025 Sahilley. Tous droits réservés.',
-    en: '© 2025 Sahilley. All rights reserved.',
-    ar: '© 2025 Sahilley. جميع الحقوق محفوظة.',
+    fr: '© {year} Sahilley. Tous droits réservés.',
+    en: '© {year} Sahilley. All rights reserved.',
+    ar: '© {year} Sahilley. جميع الحقوق محفوظة.',
   },
   'landing.preview.today': {
-    fr: 'Aujourd’hui — 15 jan 2025',
-    en: 'Today — Jan 15, 2025',
-    ar: 'اليوم — 15 يناير 2025',
+    fr: 'Aujourd’hui — 15 juil 2026',
+    en: 'Today — Jul 15, 2026',
+    ar: 'اليوم — 15 يوليو 2026',
   },
   'landing.preview.revenue': { fr: 'CA du jour', en: 'Today’s revenue', ar: 'إيراد اليوم' },
   'landing.preview.salesUnit': { fr: 'ventes', en: 'sales', ar: 'مبيعات' },
@@ -771,9 +721,9 @@ const messages: Record<string, Msg> = {
   },
   // ── Landing — confiance, étapes, FAQ (refonte premium P0+P1) ──────────────
   'landing.hero.trust.offline': {
-    fr: 'Consultation hors-ligne',
-    en: 'Offline access',
-    ar: 'الاطّلاع دون اتصال',
+    fr: 'Fonctionne 100% hors-ligne',
+    en: 'Works 100% offline',
+    ar: 'يعمل 100% دون اتصال',
   },
   'landing.hero.trust.fcfa': { fr: '100% en FCFA', en: '100% in FCFA', ar: '100% بالفرنك' },
   'landing.hero.trust.langs': {
@@ -908,11 +858,7 @@ const messages: Record<string, Msg> = {
   },
   // ── Tarifs : Gratuit + Premium (mensuel / 3 mois / 6 mois) ────────────────
   'landing.pricing.per.monthly': { fr: 'Mensuel', en: 'Monthly', ar: 'شهري' },
-  'landing.pricing.per.q3': { fr: '3 mois', en: '3 months', ar: '3 أشهر' },
-  'landing.pricing.per.q6': { fr: '6 mois', en: '6 months', ar: '6 أشهر' },
   'landing.pricing.unit.monthly': { fr: 'FCFA / mois', en: 'FCFA / month', ar: 'فرنك / شهرياً' },
-  'landing.pricing.unit.q3': { fr: 'FCFA / 3 mois', en: 'FCFA / 3 months', ar: 'فرنك / 3 أشهر' },
-  'landing.pricing.unit.q6': { fr: 'FCFA / 6 mois', en: 'FCFA / 6 months', ar: 'فرنك / 6 أشهر' },
   'landing.pricing.per.quarterly': { fr: 'Trimestriel', en: 'Quarterly', ar: 'ربع سنوي' },
   'landing.pricing.per.annual': { fr: 'Annuel', en: 'Annual', ar: 'سنوي' },
   'landing.pricing.unit.quarterly': {
@@ -940,11 +886,6 @@ const messages: Record<string, Msg> = {
     fr: '15 jours d’essai Premium gratuits, sans carte bancaire.',
     en: '15-day free Premium trial, no credit card.',
     ar: 'تجربة Premium مجانية لمدة 15 يوماً، بدون بطاقة بنكية.',
-  },
-  'landing.pricing.altDurations': {
-    fr: 'Ou 21 000 FCFA / 3 mois · 36 000 FCFA / 6 mois — jusqu’à −20 %',
-    en: 'Or 21,000 FCFA / 3 months · 36,000 FCFA / 6 months — up to −20%',
-    ar: 'أو 21 000 فرنك / 3 أشهر · 36 000 فرنك / 6 أشهر — حتى −20%',
   },
   'landing.pricing.entreprise.name': { fr: 'Entreprise', en: 'Enterprise', ar: 'مؤسسة' },
   'landing.pricing.entreprise.price': { fr: 'Sur devis', en: 'Custom', ar: 'حسب الطلب' },
@@ -1047,9 +988,9 @@ const messages: Record<string, Msg> = {
     ar: 'تقارير متقدّمة وتصدير',
   },
   'landing.pricing.premium.i5': {
-    fr: 'Consultation hors-ligne',
-    en: 'Offline access',
-    ar: 'الاطّلاع دون اتصال',
+    fr: 'Mode hors-ligne complet',
+    en: 'Full offline mode',
+    ar: 'وضع كامل دون اتصال',
   },
   'landing.pricing.premium.i6': {
     fr: 'Reçus personnalisés (logo)',
