@@ -53,7 +53,7 @@ beforeEach(() => {
     status: 'PENDING',
     months: 1,
     plan: 'PREMIUM',
-    amount: 50000,
+    amount: 35000,
     organizationId: 'org1',
     organization: { currentPeriodEnd: null },
   } as never);
@@ -63,21 +63,21 @@ beforeEach(() => {
 
 describe('POST /api/admin/subscriptions/[id]/confirm', () => {
   it('recalcule le montant quand le superadmin force une durée différente', async () => {
-    // Demande d'origine : PREMIUM 1 mois (50000). Confirmée en forçant 3 mois.
+    // Demande d'origine : PREMIUM 1 mois (35000). Confirmée en forçant 3 mois.
     const res = await POST(makePost({ months: 3 }), params);
     expect(res.status).toBe(200);
 
-    // Le montant suit la grille par durée : 3 mois = 135000 (remise incluse).
+    // Le montant suit la grille par durée : 3 mois = 95000 (remise incluse).
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'pay1', status: 'PENDING' },
-        data: expect.objectContaining({ status: 'CONFIRMED', months: 3, amount: 135000 }),
+        data: expect.objectContaining({ status: 'CONFIRMED', months: 3, amount: 95000 }),
       }),
     );
     // Le journal d'audit reflète le montant recalculé.
     expect(mockAudit).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ metadata: expect.objectContaining({ amount: 135000, months: 3 }) }),
+      expect.objectContaining({ metadata: expect.objectContaining({ amount: 95000, months: 3 }) }),
     );
   });
 
@@ -86,13 +86,13 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ months: 1, amount: 50000 }),
+        data: expect.objectContaining({ months: 1, amount: 35000 }),
       }),
     );
   });
 
   it('conserve la remise code promo : le montant RÉDUIT de la demande est gardé tel quel', async () => {
-    // Demande annuelle avec code promo : 200000 au lieu du plein tarif 500000.
+    // Demande annuelle avec code promo : 200000 au lieu du plein tarif 350000.
     prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce({
       id: 'pay1',
       status: 'PENDING',
@@ -104,7 +104,7 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
     } as never);
     const res = await POST(makePost({}), params);
     expect(res.status).toBe(200);
-    // AVANT ce correctif, la confirmation recalculait planPrice(12) = 500000 et
+    // AVANT ce correctif, la confirmation recalculait planPrice(12) = 350000 et
     // écrasait la remise — l'encaissé affiché était gonflé au plein tarif.
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,14 +114,14 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
   });
 
   it('durée forcée différente : la remise effective est conservée (mise à l’échelle)', async () => {
-    // Annuel remisé 250000 (plein tarif 500000 → 50 %). Confirmé en 3 mois :
-    // 250000 × 135000/500000 = 67500 (la remise de 50 % suit la grille).
+    // Annuel remisé 175000 (plein tarif 350000 → 50 %). Confirmé en 3 mois :
+    // 175000 × 95000/350000 = 47500 (la remise de 50 % suit la grille).
     prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce({
       id: 'pay1',
       status: 'PENDING',
       months: 12,
       plan: 'PREMIUM',
-      amount: 250000,
+      amount: 175000,
       organizationId: 'org1',
       organization: { currentPeriodEnd: null },
     } as never);
@@ -129,7 +129,7 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ months: 3, amount: 67500 }),
+        data: expect.objectContaining({ months: 3, amount: 47500 }),
       }),
     );
   });
@@ -154,7 +154,7 @@ describe('POST /api/admin/subscriptions/[id]/confirm', () => {
       status: 'CONFIRMED',
       months: 1,
       plan: 'PREMIUM',
-      amount: 50000,
+      amount: 35000,
       organizationId: 'org1',
       organization: { currentPeriodEnd: null },
     } as never);

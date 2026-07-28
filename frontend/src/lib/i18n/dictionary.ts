@@ -887,11 +887,17 @@ const messages: Record<string, Msg> = {
     ar: 'تجربة Premium مجانية لمدة 15 يوماً، بدون بطاقة بنكية.',
   },
   'landing.pricing.entreprise.name': { fr: 'Entreprise', en: 'Enterprise', ar: 'مؤسسة' },
-  'landing.pricing.entreprise.price': { fr: 'Sur devis', en: 'Custom', ar: 'حسب الطلب' },
+  'landing.pricing.entreprise.from': { fr: 'À partir de', en: 'From', ar: 'ابتداءً من' },
   'landing.pricing.entreprise.desc': {
-    fr: 'Pour plusieurs boutiques ou de gros volumes.',
-    en: 'For multiple shops or large volumes.',
-    ar: 'لعدة متاجر أو أحجام كبيرة.',
+    fr: 'Pour les grandes boutiques, chaînes et gros volumes.',
+    en: 'For large shops, chains and high volumes.',
+    ar: 'للمتاجر الكبيرة والسلاسل والأحجام الكبيرة.',
+  },
+  'landing.pricing.smallBiz': { fr: 'Petit commerce ?', en: 'Small shop?', ar: 'متجر صغير؟' },
+  'landing.pricing.smallBizCta': {
+    fr: 'Écrivez-nous sur WhatsApp — on trouve une formule adaptée.',
+    en: 'Message us on WhatsApp — we’ll find a plan that fits.',
+    ar: 'راسلنا عبر واتساب — سنجد صيغة تناسبك.',
   },
   'landing.pricing.entreprise.cta': { fr: 'Nous contacter', en: 'Contact us', ar: 'تواصل معنا' },
   'landing.pricing.entreprise.i1': {

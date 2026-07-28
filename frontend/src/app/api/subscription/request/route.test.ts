@@ -55,8 +55,8 @@ describe('POST /api/subscription/request', () => {
     prismaMock.subscriptionPayment.create.mockResolvedValueOnce({
       id: 'p1',
       plan: 'PREMIUM',
-      amount: 50000,
-      baseAmount: 50000,
+      amount: 35000,
+      baseAmount: 35000,
       discountCode: null,
       method: 'CASH',
       months: 1,
@@ -68,8 +68,8 @@ describe('POST /api/subscription/request', () => {
     expect(prismaMock.subscriptionPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          amount: 50000,
-          baseAmount: 50000,
+          amount: 35000,
+          baseAmount: 35000,
           discountCode: null,
           status: 'PENDING',
         }),
@@ -91,8 +91,8 @@ describe('POST /api/subscription/request', () => {
     prismaMock.subscriptionPayment.create.mockResolvedValueOnce({
       id: 'p2',
       plan: 'PREMIUM',
-      amount: 40000,
-      baseAmount: 50000,
+      amount: 25000,
+      baseAmount: 35000,
       discountCode: 'PROMO',
       method: 'CASH',
       months: 1,
@@ -101,12 +101,12 @@ describe('POST /api/subscription/request', () => {
     } as never);
     const res = await POST(makePost({ plan: 'PREMIUM', method: 'CASH', code: 'promo' }));
     expect(res.status).toBe(201);
-    // 50000 − 10000 = 40000, et le code normalisé est stocké.
+    // 35000 − 10000 = 25000, et le code normalisé est stocké.
     expect(prismaMock.subscriptionPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          amount: 40000,
-          baseAmount: 50000,
+          amount: 25000,
+          baseAmount: 35000,
           discountCode: 'PROMO',
         }),
       }),

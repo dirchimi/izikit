@@ -7,12 +7,13 @@ import { useT } from '@/contexts/LocaleContext';
 import { CONTACT_WHATSAPP } from '@/lib/contact';
 import { ltrIsolate } from '@/lib/i18n/bidi';
 
-// Prix Premium ancrés sur l'annuel (500 000 FCFA/an). Remise croissante.
+// Grille Premium (alignée sur SUB_PERIODS dans lib/subscription/plans.ts) :
+// 35 000/mois · 95 000/trim (−10%) · 350 000/an (−17% = 2 mois offerts).
 const PERIODS = [
   {
     id: 'monthly',
     labelKey: 'landing.pricing.per.monthly',
-    total: '50 000',
+    total: '35 000',
     unitKey: 'landing.pricing.unit.monthly',
     perMonth: null,
     savePct: null,
@@ -20,17 +21,17 @@ const PERIODS = [
   {
     id: 'quarterly',
     labelKey: 'landing.pricing.per.quarterly',
-    total: '135 000',
+    total: '95 000',
     unitKey: 'landing.pricing.unit.quarterly',
-    perMonth: '45 000',
+    perMonth: '≈ 31 700',
     savePct: 10,
   },
   {
     id: 'annual',
     labelKey: 'landing.pricing.per.annual',
-    total: '500 000',
+    total: '350 000',
     unitKey: 'landing.pricing.unit.annual',
-    perMonth: '≈ 41 700',
+    perMonth: '≈ 29 200',
     savePct: 17,
   },
 ] as const;
@@ -63,7 +64,7 @@ const ENTREPRISE_ITEMS = [
 
 export default function PricingPlans() {
   const t = useT();
-  // On démarre sur le MENSUEL : 50 000 rassure, 500 000 d'entrée fait fuir —
+  // On démarre sur le MENSUEL : 35 000 rassure, 350 000 d'entrée fait fuir —
   // le visiteur découvre les remises trimestrielle/annuelle en cliquant.
   const [periodId, setPeriodId] = useState<(typeof PERIODS)[number]['id']>('monthly');
   const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[0];
@@ -197,9 +198,20 @@ export default function PricingPlans() {
             <p className="text-muted-foreground font-body mb-1 text-xs font-semibold tracking-widest uppercase">
               {t('landing.pricing.entreprise.name')}
             </p>
+            {/* Ancre haute assumée : à côté de 700 000, le Premium à 350 000
+                devient « le choix raisonnable ». */}
+            <p className="text-muted-foreground font-body text-sm">
+              {t('landing.pricing.entreprise.from')}
+            </p>
             <div className="flex items-end gap-1">
-              <span className="font-headings text-foreground text-[28px] leading-none font-bold">
-                {t('landing.pricing.entreprise.price')}
+              <span
+                dir="ltr"
+                className="font-headings text-foreground text-[28px] leading-none font-bold"
+              >
+                700 000
+              </span>
+              <span className="text-muted-foreground font-body pb-0.5 text-sm">
+                {t('landing.pricing.unit.annual')}
               </span>
             </div>
             <p className="text-muted-foreground font-body mt-2 text-sm">
@@ -225,6 +237,20 @@ export default function PricingPlans() {
           </a>
         </div>
       </div>
+
+      {/* Petits commerces : canal discret vers les remises négociées sur le
+          terrain — on n'affiche jamais de prix cassé public. */}
+      <p className="text-muted-foreground font-body text-center text-sm">
+        {t('landing.pricing.smallBiz')}{' '}
+        <a
+          href={CONTACT_WHATSAPP}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary font-semibold hover:underline"
+        >
+          {t('landing.pricing.smallBizCta')}
+        </a>
+      </p>
     </div>
   );
 }
