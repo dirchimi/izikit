@@ -465,6 +465,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 if (creditAmount > 0 && customerId) {
                   await tx.receivable.create({
                     data: {
+                      // Id DÉTERMINISTE = id de la vente (1 vente ↔ ≤1 créance),
+                      // même convention que la vente elle-même (id client repris
+                      // verbatim) : le miroir offline a créé sa créance optimiste
+                      // avec ce même id, donc le pull FUSIONNE au lieu de
+                      // dupliquer (un id Prisma aléatoire ici = jumelle fantôme
+                      // et dette doublée dans le miroir local).
+                      id: sale.id,
                       organizationId: orgId,
                       customerId,
                       saleId: sale.id,

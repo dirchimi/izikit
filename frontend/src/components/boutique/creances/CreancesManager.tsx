@@ -48,12 +48,13 @@ export default function CreancesManager() {
   // (voir AppShell) et par createRepayOffline() ci-dessous.
   const { data: debtors, loading } = useLocalResource<ApiDebtor[]>(
     async () => {
-      const [customers, receivables, repayments] = await Promise.all([
+      const [customers, receivables, repayments, saleItems] = await Promise.all([
         db.customers.toArray(),
         db.receivables.toArray(),
         db.repayments.toArray(),
+        db.saleItems.toArray(),
       ]);
-      return aggregateDebtors(customers, receivables, repayments);
+      return aggregateDebtors(customers, receivables, repayments, saleItems);
     },
     [],
     [],

@@ -270,6 +270,9 @@ describe('createSaleOffline', () => {
     expect(receivables[0]?.amountPaid).toBe(0);
     expect(receivables[0]?.status).toBe('OPEN');
     expect(receivables[0]?.saleId).toBe(res.id);
+    // Convention anti-doublon : créance.id === vente.id — le serveur crée la
+    // sienne avec le même id, donc le pull FUSIONNE au lieu de dupliquer.
+    expect(receivables[0]?.id).toBe(res.id);
   });
 
   it('creates a new offline customer (name, no id) and references it in the sale + payload', async () => {

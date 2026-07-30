@@ -13,12 +13,12 @@
  *
  * Two deliberate limitations vs the server versions, both DISPLAY-ONLY (never a
  * money value):
- *   1. `history[].label` — the server derives the article label from the
- *      credit sale's items. `aggregateDebtors`'s signature intentionally takes
- *      only customers/receivables/repayments (no sale items), and `ReceivableRow`
- *      carries no item names, so the label is `'—'` (the server's own fallback
- *      for an item-less receivable). The money fields (amount / amountPaid /
- *      status / debt / repaid / totalCredit) are exact.
+ *   1. `history[].label` — derived from the locally-mirrored `saleItems` when
+ *      the caller passes them (same rule as the server: first item name,
+ *      `+N` suffix beyond one). Falls back to `'—'` (the server's own fallback
+ *      for an item-less receivable) when the sale's items aren't in the mirror.
+ *      The money fields (amount / amountPaid / status / debt / repaid /
+ *      totalCredit) are exact.
  *   2. dates — `ReceivableRow`/`CustomerRow` carry only `updatedAt` (no
  *      `createdAt` in the Dexie mirror), so `since` / `lastSale` / `history[].date`
  *      use `updatedAt` as a proxy. This shifts a displayed date at most to the
@@ -32,7 +32,7 @@
  * BALANCES (`debt`/`repaid`) come from `receivables` (pulled + reconciled)
  * independently of this table, so they were always authoritative regardless.
  */
-import type { CustomerRow, ReceivableRow, RepaymentRow, ReceivableStatus } from './db';
+import type { CustomerRow, ReceivableRow, RepaymentRow, ReceivableStatus, SaleItemRow } from './db';
 import type { CreditStatus } from '@/lib/boutique/fixtures';
 
 // ---------------------------------------------------------------------------
@@ -126,7 +126,22 @@ export function aggregateDebtors(
   customers: CustomerRow[],
   receivables: ReceivableRow[],
   repayments: RepaymentRow[],
+  saleItems: SaleItemRow[] = [],
 ): ApiDebtor[] {
+  // Libellé d'article par vente — même règle que `GET /api/receivables` :
+  // premier article, suffixe « +N » s'il y en a plusieurs, « — » sinon.
+  const itemNamesBySale = new Map<string, string[]>();
+  for (const it of saleItems) {
+    const arr = itemNamesBySale.get(it.saleId);
+    if (arr) arr.push(it.name);
+    else itemNamesBySale.set(it.saleId, [it.name]);
+  }
+  const labelFor = (saleId: string | undefined): string => {
+    const names = saleId ? (itemNamesBySale.get(saleId) ?? []) : [];
+    const first = names[0] ?? '—';
+    return names.length > 1 ? `${first} +${names.length - 1}` : first;
+  };
+
   const recByCustomer = new Map<string, ReceivableRow[]>();
   for (const r of receivables) {
     const arr = recByCustomer.get(r.customerId);
@@ -163,7 +178,7 @@ export function aggregateDebtors(
       return {
         id: r.id,
         date: r.updatedAt,
-        label: '—',
+        label: labelFor(r.saleId),
         amount: r.amount,
         amountPaid: r.amountPaid,
         status: toCreditStatus(r.status),

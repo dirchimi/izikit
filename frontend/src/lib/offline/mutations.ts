@@ -292,7 +292,12 @@ export async function createSaleOffline(input: CreateSaleInput): Promise<Provisi
       // Credit portion → open a local receivable.
       if (totals.creditAmount > 0 && customerId) {
         const receivable: ReceivableRow = {
-          id: newId(),
+          // Id DÉTERMINISTE = id de la vente (1 vente ↔ ≤1 créance). Le serveur
+          // crée SA créance avec ce même id (voir /api/sales) : au pull, la
+          // ligne serveur ÉCRASE celle-ci (même clé) au lieu de la dupliquer.
+          // Un id aléatoire ici = jumelle fantôme permanente et dette doublée
+          // à l'écran (bug corrigé — voir aussi la guérison dans pull.ts).
+          id,
           organizationId: orgId,
           customerId,
           saleId: id,

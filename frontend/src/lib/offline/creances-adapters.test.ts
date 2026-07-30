@@ -8,7 +8,7 @@
  * joined, repayment history included.
  */
 import { describe, it, expect } from 'vitest';
-import type { CustomerRow, ReceivableRow, RepaymentRow } from './db';
+import type { CustomerRow, ReceivableRow, RepaymentRow, SaleItemRow } from './db';
 import {
   aggregateDebtors,
   aggregateRepayments,
@@ -72,6 +72,53 @@ describe('aggregateDebtors', () => {
     expect(d.repaid).toBe(400); // 400 + 0
     expect(d.debt).toBe(1100); // (1000-400) + (500-0)
     expect(d.history).toHaveLength(2);
+  });
+
+  it("libelle l'article depuis les saleItems du miroir (règle serveur : 1er article, +N, — sinon)", () => {
+    const items: SaleItemRow[] = [
+      {
+        id: 'i1',
+        saleId: 's1',
+        productId: 'p1',
+        name: 'Riz 50Kg',
+        qty: 1,
+        unitPrice: 25000,
+        buyPrice: 20000,
+      },
+      {
+        id: 'i2',
+        saleId: 's2',
+        productId: 'p1',
+        name: 'Riz 50Kg',
+        qty: 1,
+        unitPrice: 25000,
+        buyPrice: 20000,
+      },
+      {
+        id: 'i3',
+        saleId: 's2',
+        productId: 'p2',
+        name: 'Savon',
+        qty: 2,
+        unitPrice: 500,
+        buyPrice: 300,
+      },
+    ];
+    const debtors = aggregateDebtors(
+      [customer({ id: 'c1', name: 'Awa' })],
+      [
+        receivable({ id: 'r1', customerId: 'c1', saleId: 's1' }),
+        receivable({ id: 'r2', customerId: 'c1', saleId: 's2' }),
+        receivable({ id: 'r3', customerId: 'c1' }), // pas de vente liée → '—'
+      ],
+      [],
+      items,
+    );
+
+    const labels = new Map(debtors[0]!.history.map((h) => [h.id, h.label]));
+    expect(labels.get('r1')).toBe('Riz 50Kg');
+    expect(labels.get('r2')).toBe('Riz 50Kg +1');
+    expect(labels.get('r3')).toBe('—');
   });
 
   it('excludes CANCELLED receivables from totals and history', () => {

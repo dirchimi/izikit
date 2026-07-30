@@ -292,10 +292,12 @@ describe('POST /api/sales (checkout)', () => {
         data: expect.objectContaining({ name: 'Moussa', organizationId: 'org1' }),
       }),
     );
-    // une vente à crédit ouvre une créance pour le montant total
+    // une vente à crédit ouvre une créance pour le montant total, avec un id
+    // DÉTERMINISTE = id de la vente (anti-doublon du miroir offline)
     expect(prismaMock.receivable.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          id: 's1',
           customerId: 'c1',
           saleId: 's1',
           amount: 6000,

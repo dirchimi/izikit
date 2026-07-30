@@ -182,8 +182,16 @@ beforeEach(async () => {
     db.stockMovements.clear(),
     db.repayments.clear(),
     db.meta.clear(),
+    db.outbox.clear(),
   ]);
 });
+
+/** Pose le drapeau « guérison des créances jumelles déjà faite » — les tests
+ * qui vérifient le comportement INCRÉMENTAL normal doivent le poser, sinon
+ * `pullAll()` force un snapshot complet (voir RECEIVABLE_HEAL_KEY). */
+async function markReceivablesHealed(): Promise<void> {
+  await db.meta.put({ key: 'receivableDedupV1', value: true });
+}
 
 describe('pullAll', () => {
   it('seeds every table from the sync/pull response, flattens sale items, and stores the cursor', async () => {
@@ -335,6 +343,105 @@ describe('pullAll', () => {
   });
 });
 
+describe('guérison des créances jumelles (bug id optimiste ≠ id serveur)', () => {
+  const RCV = {
+    organizationId: 'o1',
+    customerId: 'c1',
+    amount: 2000,
+    amountPaid: 0,
+    status: 'OPEN',
+    updatedAt: '2026-07-20T00:00:00.000Z',
+  } as const;
+
+  it('pull incrémental : la ligne serveur écrase sa jumelle optimiste (même saleId, autre id)', async () => {
+    await markReceivablesHealed();
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await db.meta.put({ key: 'lastPull', value: '2026-07-19T00:00:00.000Z' });
+    // Jumelle optimiste d'une vente pré-correctif + une créance sans rapport.
+    await db.receivables.put({ ...RCV, id: 'opt-9', saleId: 's9' });
+    await db.receivables.put({ ...RCV, id: 'r-keep', customerId: 'c2' });
+
+    mockedApi.mockResolvedValueOnce(
+      makeResponse({
+        receivables: [
+          {
+            id: 'srv-9',
+            organizationId: 'o1',
+            customerId: 'c1',
+            saleId: 's9',
+            amount: 2000,
+            amountPaid: 0,
+            status: 'OPEN',
+            updatedAt: '2026-07-20T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    await pullAll();
+
+    expect(mockedApi).toHaveBeenCalledWith(
+      `/api/sync/pull?since=${encodeURIComponent('2026-07-19T00:00:00.000Z')}`,
+    );
+    const ids = (await db.receivables.toArray()).map((r) => r.id).sort();
+    // La jumelle 'opt-9' a disparu ; la créance sans rapport survit.
+    expect(ids).toEqual(['r-keep', 'srv-9']);
+  });
+
+  it('guérison unique : sans drapeau et outbox vide → snapshot complet, purge des orphelines, drapeau posé', async () => {
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await db.meta.put({ key: 'lastPull', value: '2026-07-19T00:00:00.000Z' });
+    // Orpheline du bug : absente du serveur, aucune vente en attente.
+    await db.receivables.put({ ...RCV, id: 'fantome', saleId: 's-vieux' });
+
+    const first = makeResponse({ serverTime: '2026-07-21T00:00:00.000Z' });
+    mockedApi.mockResolvedValueOnce(first);
+    await pullAll();
+
+    // Le curseur stocké est IGNORÉ : fetch complet pour connaître l'ensemble
+    // exact des créances serveur.
+    expect(mockedApi).toHaveBeenNthCalledWith(1, '/api/sync/pull');
+    const ids = (await db.receivables.toArray()).map((r) => r.id);
+    expect(ids).toEqual(['r1']); // l'orpheline 'fantome' a été purgée
+    expect((await db.meta.get('receivableDedupV1'))?.value).toBe(true);
+
+    // Pull suivant : de nouveau incrémental (le drapeau est posé).
+    mockedApi.mockResolvedValueOnce(makeResponse({ serverTime: '2026-07-22T00:00:00.000Z' }));
+    await pullAll();
+    expect(mockedApi).toHaveBeenNthCalledWith(
+      2,
+      `/api/sync/pull?since=${encodeURIComponent('2026-07-21T00:00:00.000Z')}`,
+    );
+  });
+
+  it("guérison DIFFÉRÉE tant que l'outbox contient des écritures à envoyer (jamais purger une créance pas encore synchronisée)", async () => {
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await db.meta.put({ key: 'lastPull', value: '2026-07-19T00:00:00.000Z' });
+    // Vente offline PAS ENCORE synchronisée : sa créance optimiste n'existe
+    // pas côté serveur — la purge doit l'épargner.
+    await db.outbox.put({
+      opId: 'sale-pending',
+      kind: 'sale',
+      endpoint: '/api/sales',
+      payload: {},
+      status: 'pending',
+      createdAt: '2026-07-20T00:00:00.000Z',
+    });
+    await db.receivables.put({ ...RCV, id: 'sale-pending', saleId: 'sale-pending' });
+
+    mockedApi.mockResolvedValueOnce(makeResponse());
+    await pullAll();
+
+    // Pull incrémental normal (pas de snapshot forcé), créance intacte,
+    // drapeau toujours absent → la guérison réessaiera plus tard.
+    expect(mockedApi).toHaveBeenCalledWith(
+      `/api/sync/pull?since=${encodeURIComponent('2026-07-19T00:00:00.000Z')}`,
+    );
+    const ids = (await db.receivables.toArray()).map((r) => r.id).sort();
+    expect(ids).toEqual(['r1', 'sale-pending']);
+    expect(await db.meta.get('receivableDedupV1')).toBeUndefined();
+  });
+});
+
 describe('pullResource', () => {
   it('applies only the requested resource and does not advance the cursor', async () => {
     mockedApi.mockResolvedValueOnce(makeResponse());
@@ -458,6 +565,9 @@ describe('pullAll — garde anti-mélange de comptes (changement de boutique)', 
     });
     await db.meta.put({ key: 'orgId', value: 'o1' });
     await db.meta.put({ key: 'lastPull', value: '2026-07-19T00:00:00.000Z' });
+    // Appareil déjà guéri des créances jumelles : on teste ICI le chemin
+    // contamination (1er fetch incrémental), pas la guérison des créances.
+    await markReceivablesHealed();
 
     // Le serveur répond pour o1 (incrémental), puis re-fetch complet.
     mockedApi.mockResolvedValueOnce(makeResponse());

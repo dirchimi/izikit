@@ -62,6 +62,13 @@ const ROLE_KEY = 'role';
  * du vendeur d'une vente (Sale.createdById) au lieu d'un id technique, y
  * compris hors ligne (le miroir n'a pas de table users). */
 const MEMBERS_KEY = 'members';
+/** Clé `meta` de la guérison unique des créances jumelles : avant le correctif
+ * « créance.id = vente.id », la créance optimiste locale portait un id ≠ id
+ * serveur → deux lignes pour UNE dette après pull (dette affichée doublée).
+ * Tant que ce drapeau est absent (et l'outbox vide), `pullAll()` force un
+ * re-fetch COMPLET pour connaître l'ensemble exact des créances serveur et
+ * purger les jumelles orphelines, puis pose le drapeau. */
+const RECEIVABLE_HEAL_KEY = 'receivableDedupV1';
 
 // ---------------------------------------------------------------------------
 // Server response shapes — mirror the Prisma models field-for-field as they
@@ -460,8 +467,16 @@ async function fetchPull(since: string | undefined): Promise<PullResponse> {
 
 /** Writes one resource's rows from an already-fetched `PullResponse` into
  * its Dexie table(s). The single place both `pullAll` and `pullResource`
- * call into, so the mapping/flatten logic (above) is never duplicated. */
-async function applyResource(name: ResourceName, res: PullResponse): Promise<void> {
+ * call into, so the mapping/flatten logic (above) is never duplicated.
+ *
+ * `opts.replaceReceivables` (pullAll only, pull COMPLET + outbox vide) :
+ * `res.receivables` est alors l'ensemble EXACT des créances serveur — toute
+ * ligne locale absente est une jumelle optimiste orpheline à supprimer. */
+async function applyResource(
+  name: ResourceName,
+  res: PullResponse,
+  opts: { replaceReceivables?: boolean } = {},
+): Promise<void> {
   switch (name) {
     case 'products':
       await db.products.bulkPut(res.products.map(toProductRow));
@@ -482,9 +497,42 @@ async function applyResource(name: ResourceName, res: PullResponse): Promise<voi
       });
       return;
     }
-    case 'receivables':
-      await db.receivables.bulkPut(res.receivables.map(toReceivableRow));
+    case 'receivables': {
+      const rows = res.receivables.map(toReceivableRow);
+      if (opts.replaceReceivables) {
+        // Pull complet : purge des lignes locales absentes du serveur (jumelles
+        // optimistes du bug id-aléatoire — voir RECEIVABLE_HEAL_KEY).
+        const keep = new Set(rows.map((r) => r.id));
+        const stale = (await db.receivables
+          .where('organizationId')
+          .equals(res.orgId)
+          .filter((r) => !keep.has(r.id))
+          .primaryKeys()) as string[];
+        if (stale.length > 0) await db.receivables.bulkDelete(stale);
+      } else if (rows.length > 0) {
+        // Pull incrémental : une ligne serveur qui arrive écrase sa jumelle
+        // optimiste éventuelle — même saleId mais autre id (créances créées
+        // AVANT la convention « créance.id = vente.id » ; depuis, les ids sont
+        // égaux et le bulkPut fusionne naturellement).
+        const serverIdBySale = new Map<string, string>();
+        for (const r of rows) if (r.saleId) serverIdBySale.set(r.saleId, r.id);
+        if (serverIdBySale.size > 0) {
+          const twins = (await db.receivables
+            .where('organizationId')
+            .equals(res.orgId)
+            .filter(
+              (r) =>
+                r.saleId != null &&
+                serverIdBySale.has(r.saleId) &&
+                serverIdBySale.get(r.saleId) !== r.id,
+            )
+            .primaryKeys()) as string[];
+          if (twins.length > 0) await db.receivables.bulkDelete(twins);
+        }
+      }
+      await db.receivables.bulkPut(rows);
       return;
+    }
     case 'expenses':
       await db.expenses.bulkPut(res.expenses.map(toExpenseRow));
       return;
@@ -521,7 +569,18 @@ const ALL_RESOURCES: readonly ResourceName[] = [
  */
 export async function pullAll(): Promise<void> {
   const since = await getCursor();
-  let res = await fetchPull(since);
+
+  // Guérison unique des créances jumelles (voir RECEIVABLE_HEAL_KEY) : tant
+  // que le drapeau est absent, on force un pull COMPLET pour purger les
+  // jumelles — mais SEULEMENT quand l'outbox ne contient plus rien à envoyer :
+  // la créance optimiste d'une vente pas encore synchronisée n'existe pas
+  // encore côté serveur et ne doit surtout pas être supprimée.
+  const healed = (await db.meta.get(RECEIVABLE_HEAL_KEY))?.value === true;
+  const outboxClean = (await db.outbox.filter((r) => r.status !== 'done').count()) === 0;
+  const wantHealPull = !healed && outboxClean;
+
+  let res = await fetchPull(wantHealPull ? undefined : since);
+  let fullPull = wantHealPull || since === undefined;
 
   // Garde anti-mélange de comptes (même appareil, boutique différente) : si
   // la boutique renvoyée par le serveur n'est pas celle du miroir local, TOUT
@@ -543,7 +602,13 @@ export async function pullAll(): Promise<void> {
   if (orgChanged || (await countForeignRows(res.orgId)) > 0) {
     await wipeLocalMirror();
     res = await fetchPull(undefined);
+    fullPull = true;
   }
+
+  // Purge des jumelles UNIQUEMENT sur un snapshot complet avec outbox vide :
+  // c'est le seul cas où « absent de la réponse » ⇒ « n'existe pas côté
+  // serveur » sans risquer d'effacer une créance optimiste en attente de sync.
+  const replaceReceivables = fullPull && outboxClean;
 
   await db.transaction(
     'rw',
@@ -561,7 +626,12 @@ export async function pullAll(): Promise<void> {
     ],
     async () => {
       for (const name of ALL_RESOURCES) {
-        await applyResource(name, res);
+        await applyResource(name, res, { replaceReceivables });
+      }
+      // La guérison a eu lieu (snapshot complet appliqué) → ne plus jamais
+      // forcer de pull complet pour ça sur cet appareil.
+      if (replaceReceivables) {
+        await db.meta.put({ key: RECEIVABLE_HEAL_KEY, value: true });
       }
       await db.meta.put({ key: LAST_PULL_KEY, value: res.serverTime });
       // Task 5.1 foundation — store the boutique id alongside the cursor so
