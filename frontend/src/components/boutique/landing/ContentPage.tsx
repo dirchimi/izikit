@@ -39,8 +39,10 @@ export default async function ContentPage({
 }: ContentPageProps) {
   const { t } = await getServerT();
 
+  // overflow-x-CLIP (pas hidden) : même correctif que LandingPage — `hidden`
+  // cassait le `sticky top-0` du MarketingHeader.
   return (
-    <div className="bg-background font-body flex min-h-screen flex-col overflow-x-hidden">
+    <div className="bg-background font-body flex min-h-screen flex-col overflow-x-clip">
       <MarketingHeader />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-12 md:px-8 md:py-16">

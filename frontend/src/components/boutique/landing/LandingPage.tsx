@@ -89,8 +89,11 @@ const ctaPrimary =
 export default async function LandingPage() {
   const { t } = await getServerT();
 
+  // overflow-x-CLIP (pas hidden) sur le conteneur racine : coupe les
+  // débordements décoratifs sans créer de conteneur de défilement — `hidden`
+  // cassait le `sticky top-0` du MarketingHeader (il disparaissait au scroll).
   return (
-    <div className="bg-background font-body flex flex-col overflow-x-hidden">
+    <div className="bg-background font-body flex flex-col overflow-x-clip">
       <MarketingHeader />
 
       {/* ── HERO ── */}
