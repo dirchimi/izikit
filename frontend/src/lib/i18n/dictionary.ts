@@ -1558,6 +1558,24 @@ const messages: Record<string, Msg> = {
     en: 'Est. net profit',
     ar: 'صافي الربح المقدّر',
   },
+  // Les achats de stock (catégorie « Stock ») restent dans le total des
+  // dépenses (argent sorti) mais ne réduisent pas le bénéfice : le coût des
+  // marchandises est déjà compté à la vente via le prix d'achat.
+  'rapports.kpi.stockIncluded': {
+    fr: 'dont achats de stock :',
+    en: 'incl. stock purchases:',
+    ar: 'منها مشتريات البضاعة:',
+  },
+  'rapports.kpi.stockIncludedNote': {
+    fr: '(non comptés dans le bénéfice)',
+    en: '(not counted in profit)',
+    ar: '(غير محسوبة في الربح)',
+  },
+  'rapports.kpi.stockPurchases': {
+    fr: 'dont achats de stock (non comptés dans le bénéfice)',
+    en: 'incl. stock purchases (not counted in profit)',
+    ar: 'منها مشتريات البضاعة (غير محسوبة في الربح)',
+  },
   // Caisse miroir (argent réellement encaissé)
   'cash.title': { fr: 'Argent encaissé', en: 'Money collected', ar: 'المبلغ المحصَّل' },
   'cash.today': { fr: 'Encaissé aujourd’hui', en: 'Collected today', ar: 'المحصَّل اليوم' },

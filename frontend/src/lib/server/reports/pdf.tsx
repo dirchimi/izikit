@@ -156,14 +156,22 @@ function buildElement(input: ReportPdfInput) {
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Dépenses</Text>
             <Text style={s.kpiValue}>{money(sm.expenses, cur)}</Text>
-            <Text style={s.kpiHint}>charges de la période</Text>
+            <Text style={s.kpiHint}>
+              {sm.stockPurchases > 0
+                ? `dont achats de stock : ${money(sm.stockPurchases, cur)}`
+                : 'charges de la période'}
+            </Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Bénéfice net estimé</Text>
             <Text style={[s.kpiValue, { color: sm.netProfit < 0 ? C.danger : C.brand }]}>
               {money(sm.netProfit, cur)}
             </Text>
-            <Text style={s.kpiHint}>gagné, pas forcément encaissé</Text>
+            <Text style={s.kpiHint}>
+              {sm.stockPurchases > 0
+                ? 'gagné, pas forcément encaissé — hors achats de stock (déjà comptés dans le coût des articles vendus)'
+                : 'gagné, pas forcément encaissé'}
+            </Text>
           </View>
         </View>
 

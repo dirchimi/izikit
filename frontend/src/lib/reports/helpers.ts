@@ -42,6 +42,22 @@ export function parsePeriod(value: string | null): Period {
   return PERIODS.includes(value as Period) ? (value as Period) : 'week';
 }
 
+/**
+ * Une dépense « Stock » (rachat de marchandises) ne réduit PAS le bénéfice net :
+ * le coût des marchandises est déjà compté à la vente via `buyPrice` (COGS).
+ * La soustraire une 2e fois faisait gonfler les dépenses et écrouler le bénéfice
+ * à chaque réapprovisionnement. Elle reste en revanche comptée dans l'argent
+ * sorti de caisse (`expenses` reste le total toutes catégories).
+ * La catégorie est stockée telle quelle depuis `expenseCategories` (français,
+ * quelle que soit la langue de l'UI) — comparaison tolérante par sécurité.
+ * Deux libellés reconnus : « Rachat de stock » (liste actuelle) et « Stock »
+ * (ancien nom — les dépenses déjà enregistrées le gardent en base).
+ */
+export function isStockExpenseCategory(category: string | null | undefined): boolean {
+  const c = (category ?? '').trim().toLowerCase();
+  return c === 'stock' || c === 'rachat de stock';
+}
+
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }

@@ -103,7 +103,27 @@ describe('computeReportLocalPeriod — today', () => {
 
   it('dépenses et bénéfice net sur la fenêtre', () => {
     expect(r.summary.expenses).toBe(2000);
+    expect(r.summary.stockPurchases).toBe(0); // aucune dépense « Stock »
     expect(r.summary.netProfit).toBe(3000); // 5000 − 2000
+  });
+
+  it('les achats de stock comptent dans les dépenses mais pas dans le bénéfice', () => {
+    const base = baseInput();
+    // Rachat de marchandises noté en dépense — le coût du stock vendu est déjà
+    // dans le COGS ; le re-soustraire doublerait le coût à chaque réappro.
+    const input = {
+      ...base,
+      expenses: [
+        ...base.expenses,
+        // Nouveau libellé de la liste ; l'ex-« Stock » est couvert côté serveur
+        // (route.test) — les deux passent par isStockExpenseCategory.
+        { amount: 8000, occurredAt: iso(2026, 6, 21, 12), category: 'Rachat de stock' },
+      ],
+    };
+    const r2 = computeReportLocalPeriod(input, 'today', NOW);
+    expect(r2.summary.expenses).toBe(10000); // 2000 charges + 8000 stock (argent sorti)
+    expect(r2.summary.stockPurchases).toBe(8000);
+    expect(r2.summary.netProfit).toBe(3000); // inchangé : 5000 − 2000 charges
   });
 
   it('série « today » = 1 barre = CA du jour', () => {

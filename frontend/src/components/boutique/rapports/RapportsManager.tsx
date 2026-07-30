@@ -145,6 +145,7 @@ export default function RapportsManager() {
       [t('rapports.kpi.margin'), summary.grossMargin],
       ['%', summary.marginPct],
       [t('nav.depenses'), summary.expenses],
+      [t('rapports.kpi.stockPurchases'), summary.stockPurchases],
       [t('rapports.kpi.netProfit'), summary.netProfit],
       [],
       [`${t('cash.title')} — ${t('cash.cash')}`, summary.collectedCash],
@@ -304,7 +305,17 @@ export default function RapportsManager() {
                 <KpiCard
                   label={t('nav.depenses')}
                   value={formatFCFA(summary.expenses)}
-                  sublabel={t('common.fcfa')}
+                  sublabel={
+                    summary.stockPurchases > 0 ? (
+                      <>
+                        {t('common.fcfa')} · {t('rapports.kpi.stockIncluded')}{' '}
+                        <span dir="ltr">{formatFCFA(summary.stockPurchases)}</span>{' '}
+                        {t('rapports.kpi.stockIncludedNote')}
+                      </>
+                    ) : (
+                      t('common.fcfa')
+                    )
+                  }
                   valueClass="text-warning"
                 />
                 <KpiCard

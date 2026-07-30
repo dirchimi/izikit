@@ -23,6 +23,7 @@ import {
   buildBuckets,
   buildBucketsRange,
   bucketIndexFor,
+  isStockExpenseCategory,
   marginPct,
   rankTopProducts,
   type AggItem,
@@ -52,6 +53,7 @@ export interface SaleItemLike {
 export interface ExpenseLike {
   amount: number;
   occurredAt: string; // ISO
+  category?: string; // « Stock » = rachat de marchandises, exclu du bénéfice net
 }
 export interface RepaymentLike {
   amount: number;
@@ -75,6 +77,10 @@ export interface ReportSummary {
   grossMargin: number;
   marginPct: number;
   expenses: number;
+  // Sous-ensemble de `expenses` : dépenses « Stock » (rachats de marchandises),
+  // comprises dans `expenses` mais exclues du bénéfice net — le coût des
+  // marchandises est déjà compté à la vente via `buyPrice` (COGS).
+  stockPurchases: number;
   netProfit: number;
   collectedCash: number;
   collectedMobile: number;
@@ -158,8 +164,11 @@ function computeForWindow(
   collectedMobile += repaidMobile;
 
   let expenses = 0;
+  let stockPurchases = 0;
   for (const e of input.expenses) {
-    if (inWindow(e.occurredAt, from, to)) expenses += e.amount;
+    if (!inWindow(e.occurredAt, from, to)) continue;
+    expenses += e.amount;
+    if (isStockExpenseCategory(e.category)) stockPurchases += e.amount;
   }
 
   const grossMargin = revenue - cogs;
@@ -173,7 +182,10 @@ function computeForWindow(
       grossMargin,
       marginPct: marginPct(grossMargin, revenue),
       expenses,
-      netProfit: grossMargin - expenses,
+      stockPurchases,
+      // Même règle que le serveur : les achats de stock ne re-réduisent pas le
+      // bénéfice (déjà comptés dans `cogs`).
+      netProfit: grossMargin - (expenses - stockPurchases),
       collectedCash,
       collectedMobile,
       creditGranted,

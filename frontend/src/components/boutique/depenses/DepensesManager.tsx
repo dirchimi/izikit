@@ -18,6 +18,7 @@ import { createExpenseOffline } from '@/lib/offline/mutations';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { expenseRowToApi, type ApiExpense } from '@/lib/offline/expense-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
+import { isStockExpenseCategory } from '@/lib/reports/helpers';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
 import FloatingAddButton from '@/components/boutique/FloatingAddButton';
@@ -93,7 +94,11 @@ export default function DepensesManager() {
           : period === 'today'
             ? sameDay(e.occurredAt, now)
             : pickDate !== '' && isoToYmd(e.occurredAt) === pickDate) &&
-        (categoryFilter === '' || e.category === categoryFilter),
+        (categoryFilter === '' ||
+          e.category === categoryFilter ||
+          // Filtrer « Rachat de stock » doit aussi remonter les anciennes
+          // lignes enregistrées sous l'ex-libellé « Stock ».
+          (isStockExpenseCategory(categoryFilter) && isStockExpenseCategory(e.category))),
     );
   }, [expenses, search, period, pickDate, categoryFilter]);
 

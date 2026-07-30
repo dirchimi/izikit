@@ -334,7 +334,10 @@ export interface Expense {
 }
 
 export const expenseCategories = [
-  'Stock',
+  // Libellé explicite : cette catégorie est exclue du bénéfice net (le coût du
+  // stock est déjà compté à la vente) — voir isStockExpenseCategory. Les
+  // anciennes dépenses enregistrées « Stock » restent reconnues.
+  'Rachat de stock',
   'Transport',
   'Loyer',
   'Charges',
@@ -346,6 +349,7 @@ export const expenseCategories = [
 /** Couleur de badge par catégorie ; défaut = muted. */
 export const expenseCategoryColors: Record<string, string> = {
   Stock: 'bg-badge-mobile text-badge-mobile-foreground',
+  'Rachat de stock': 'bg-badge-mobile text-badge-mobile-foreground',
   Loyer: 'bg-badge-credit text-badge-credit-foreground',
   Salaires: 'bg-secondary text-secondary-foreground',
 };

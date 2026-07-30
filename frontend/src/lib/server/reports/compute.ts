@@ -8,6 +8,7 @@ import {
   buildBuckets,
   buildBucketsRange,
   bucketIndexFor,
+  isStockExpenseCategory,
   marginPct,
   rankTopProducts,
   type AggItem,
@@ -22,6 +23,12 @@ export interface ReportSummary {
   grossMargin: number;
   marginPct: number;
   expenses: number;
+  // Sous-ensemble de `expenses` : dépenses de catégorie « Stock » (rachats de
+  // marchandises). DÉJÀ comprises dans `expenses` (l'argent est bien sorti de
+  // caisse) mais EXCLUES du bénéfice net — le coût des marchandises est compté
+  // à la vente via le prix d'achat (COGS) ; les soustraire ici les compterait
+  // deux fois (voir isStockExpenseCategory).
+  stockPurchases: number;
   netProfit: number;
   // « Caisse miroir » : argent RÉELLEMENT encaissé sur la période (≠ CA, qui
   // compte aussi le crédit). = parts espèces/mobile des ventes + remboursements
@@ -71,7 +78,7 @@ async function computeForWindow(
 ): Promise<ReportResult> {
   const { from, to } = window;
 
-  const [sales, expenseAgg, repayGroups] = await Promise.all([
+  const [sales, expenseGroups, repayGroups] = await Promise.all([
     prisma.sale.findMany({
       // Les ventes annulées ne comptent ni dans le CA ni dans la marge.
       where: { organizationId: orgId, status: 'ACTIVE', createdAt: { gte: from, lt: to } },
@@ -87,10 +94,13 @@ async function computeForWindow(
         },
       },
     }),
-    prisma.expense.aggregate({
+    // Par catégorie : le total nourrit `expenses` (argent sorti), la part
+    // « Stock » est isolée pour être exclue du bénéfice net.
+    prisma.expense.groupBy({
+      by: ['category'],
       where: { organizationId: orgId, occurredAt: { gte: from, lt: to } },
       _sum: { amount: true },
-    }),
+    }) as unknown as Promise<Array<{ category: string; _sum: { amount: number | null } }>>,
     // Remboursements de créances reçus sur la période, par méthode (CASH/MOBILE).
     prisma.repayment.groupBy({
       by: ['method'],
@@ -139,7 +149,13 @@ async function computeForWindow(
   collectedMobile += repaidMobile;
 
   const grossMargin = revenue - cogs;
-  const expenses = expenseAgg._sum.amount ?? 0;
+  let expenses = 0;
+  let stockPurchases = 0;
+  for (const g of expenseGroups) {
+    const amount = g._sum.amount ?? 0;
+    expenses += amount;
+    if (isStockExpenseCategory(g.category)) stockPurchases += amount;
+  }
 
   return {
     period,
@@ -150,7 +166,9 @@ async function computeForWindow(
       grossMargin,
       marginPct: marginPct(grossMargin, revenue),
       expenses,
-      netProfit: grossMargin - expenses,
+      stockPurchases,
+      // Le bénéfice ne re-soustrait pas les achats de stock (déjà dans `cogs`).
+      netProfit: grossMargin - (expenses - stockPurchases),
       collectedCash,
       collectedMobile,
       creditGranted,

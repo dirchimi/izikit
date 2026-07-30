@@ -5,8 +5,11 @@
 //   sales       = nb de ventes
 //   grossMargin = revenue − COGS, COGS = Σ ligne (buyPrice × qty)  (instantané)
 //   marginPct   = marge / CA
-//   expenses    = Σ Expense.amount
-//   netProfit   = grossMargin − expenses
+//   expenses    = Σ Expense.amount (toutes catégories — argent sorti de caisse)
+//   stockPurchases = part « Stock » de expenses (rachats de marchandises)
+//   netProfit   = grossMargin − (expenses − stockPurchases)
+//                 (les achats de stock sont déjà comptés dans le COGS à la
+//                  vente ; les re-soustraire doublerait le coût du stock)
 //   series[]    = CA par compartiment (jour/mois) pour le graphe
 //   topProducts = top 5 produits par quantité vendue (rotation, pas valeur)
 // Org-scopé, rôle min ADMIN (données financières réservées Patron/Manager).
