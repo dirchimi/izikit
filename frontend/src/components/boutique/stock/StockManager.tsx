@@ -342,20 +342,26 @@ export default function StockManager() {
           {/* KPI */}
           <div
             className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
-              canManage ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+              canManage ? 'xl:grid-cols-5' : 'xl:grid-cols-3'
             }`}
           >
             <KpiCard
+              accent={!canManage}
               label={t('stock.kpi.totalProducts')}
               value={String(totalProduits)}
               sublabel={t('stock.kpi.refs')}
             />
-            <KpiCard
-              accent
-              label={t('stock.kpi.stockValue')}
-              value={formatFCFA(stockValue)}
-              sublabel={t('common.fcfa')}
-            />
+            {/* Valeur du stock = patrimoine de la boutique (Σ prix d'achat ×
+                quantité) — info financière réservée au Patron/Manager, comme
+                les dettes fournisseurs ci-dessous. */}
+            {canManage && (
+              <KpiCard
+                accent
+                label={t('stock.kpi.stockValue')}
+                value={formatFCFA(stockValue)}
+                sublabel={t('common.fcfa')}
+              />
+            )}
             <KpiCard
               label={t('stock.kpi.low')}
               value={String(lowCount)}
@@ -494,9 +500,13 @@ export default function StockManager() {
                     <span className="font-body text-muted-foreground w-24 text-xs font-semibold">
                       {t('common.category')}
                     </span>
-                    <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
-                      {t('stock.col.buyPrice')}
-                    </span>
+                    {/* Prix d'achat = info financière (marge déductible) —
+                        Patron/Manager seulement, comme la valeur du stock. */}
+                    {canManage && (
+                      <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
+                        {t('stock.col.buyPrice')}
+                      </span>
+                    )}
                     <span className="font-body text-muted-foreground w-28 text-end text-xs font-semibold">
                       {t('stock.col.sellPrice')}
                     </span>
@@ -546,9 +556,11 @@ export default function StockManager() {
                         <span className="font-body text-muted-foreground w-24 text-xs">
                           {p.category}
                         </span>
-                        <span className="font-body text-muted-foreground w-28 text-end text-sm">
-                          {formatFCFA(p.buyPrice)} {t('common.fcfa')}
-                        </span>
+                        {canManage && (
+                          <span className="font-body text-muted-foreground w-28 text-end text-sm">
+                            {formatFCFA(p.buyPrice)} {t('common.fcfa')}
+                          </span>
+                        )}
                         <span className="font-body text-foreground w-28 text-end text-sm font-semibold">
                           {formatFCFA(p.sellPrice)} {t('common.fcfa')}
                         </span>
@@ -691,10 +703,12 @@ export default function StockManager() {
                     </div>
 
                     <div className="font-body grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">{t('stock.col.buyPrice')}</span>
-                        <span className="text-foreground">{formatFCFA(p.buyPrice)}</span>
-                      </div>
+                      {canManage && (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">{t('stock.col.buyPrice')}</span>
+                          <span className="text-foreground">{formatFCFA(p.buyPrice)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">{t('stock.col.sellPrice')}</span>
                         <span className="text-foreground font-semibold">
