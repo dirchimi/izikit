@@ -316,6 +316,41 @@ describe('drainOutbox', () => {
     expect(s1?.status).toBe('pending');
   });
 
+  it('un 403 CSRF remet la ligne en pending (pas error) et stoppe le drain — jeton périmé, pas un rejet métier', async () => {
+    // Le cookie anti-CSRF a expiré (~7 j sans connexion) : le serveur n'a
+    // jamais évalué l'op. Même traitement que le 401 — remise en `pending` +
+    // stop, pour que le drain suivant (après refresh de session) reparte tout
+    // seul au lieu de geler des ventes valides en « erreur » manuelle.
+    await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+    await enqueue({ kind: 'sale', payload: { id: 's2' }, opId: 's2', endpoint: '/api/sales' });
+    await db.sales.bulkPut([makeSaleRow('s1'), makeSaleRow('s2')]);
+
+    mockedApi.mockRejectedValueOnce(
+      new ApiError(403, 'Invalid CSRF token', { error: 'Invalid CSRF token' }),
+    );
+
+    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+    expect(mockedApi).toHaveBeenCalledTimes(1); // s2 jamais tenté — FIFO préservé
+
+    const pending = await listPending();
+    expect(pending.map((r) => r.opId)).toEqual(['s1', 's2']);
+    const s1 = (await db.outbox.toArray()).find((r) => r.opId === 's1');
+    expect(s1?.status).toBe('pending');
+  });
+
+  it('un 403 NON-CSRF (ex. interdit métier) reste une erreur définitive', async () => {
+    // Garde-fou : seul le 403 « Invalid CSRF token » est transitoire — un
+    // autre 403 (permission refusée…) est bien un rejet de CET op.
+    await enqueue({ kind: 'sale', payload: { id: 's1' }, opId: 's1', endpoint: '/api/sales' });
+    await db.sales.put(makeSaleRow('s1'));
+
+    mockedApi.mockRejectedValueOnce(new ApiError(403, 'Forbidden', { error: 'FORBIDDEN' }));
+
+    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 1 });
+    const s1 = (await db.outbox.toArray()).find((r) => r.opId === 's1');
+    expect(s1?.status).toBe('error');
+  });
+
   it('a non-conflict 4xx (validation) marks error and continues draining', async () => {
     await enqueue({
       kind: 'expense',

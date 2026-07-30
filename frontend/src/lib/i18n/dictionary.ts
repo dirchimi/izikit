@@ -160,6 +160,22 @@ const messages: Record<string, Msg> = {
     en: 'Sync retry started.',
     ar: 'تم بدء إعادة محاولة المزامنة.',
   },
+  'sync.error.discard': { fr: 'Abandonner', en: 'Discard', ar: 'تجاهل' },
+  'sync.error.discardTitle': {
+    fr: 'Abandonner cette écriture ?',
+    en: 'Discard this entry?',
+    ar: 'تجاهل هذه العملية؟',
+  },
+  'sync.error.discardMsg': {
+    fr: '{kind} : cette écriture sera retirée définitivement de la file et ses effets locaux (stock, créance…) seront annulés. À utiliser quand « Réessayer » ne peut plus passer (ex. produit supprimé).',
+    en: '{kind}: this entry will be permanently removed from the queue and its local effects (stock, receivable…) reverted. Use when "Retry" can no longer succeed (e.g. deleted product).',
+    ar: '{kind}: ستُحذف هذه العملية نهائيًا من قائمة الانتظار وسيُلغى أثرها المحلي (المخزون، الدين…). استعملها عندما لا يمكن أن تنجح «إعادة المحاولة» (مثلًا منتج محذوف).',
+  },
+  'sync.error.discardToast': {
+    fr: 'Écriture abandonnée et effets locaux annulés.',
+    en: 'Entry discarded, local effects reverted.',
+    ar: 'تم تجاهل العملية وإلغاء أثرها المحلي.',
+  },
   'sync.history.heading': {
     fr: 'Dernières synchronisations',
     en: 'Recently synced',

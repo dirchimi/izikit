@@ -31,9 +31,11 @@ import TopBar from '@/components/boutique/TopBar';
 import AsyncState from '@/components/boutique/AsyncState';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
 import { db, type ConflictRow, type OutboxRow } from '@/lib/offline/db';
 import { retryOutboxRow } from '@/lib/offline/outbox';
+import { discardErrorRow } from '@/lib/offline/discard';
 import { listRecentSynced } from '@/lib/offline/sync-history';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
@@ -47,6 +49,7 @@ import { syncIndicatorState, isSyncNowDisabled, syncStatusMessage } from './sync
 export default function ConflictsManager() {
   const t = useT();
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   // Statut global + synchronisation manuelle (déplacés ici depuis la sidebar).
   // `conflicts` du hook est renommé `conflictCount` pour ne pas masquer la
@@ -104,6 +107,25 @@ export default function ConflictsManager() {
     await retryOutboxRow(row.seq);
     triggerDrain();
     toast(t('sync.error.retryToast'), 'success');
+  }
+
+  /** Abandon définitif d'un échec (rejet métier que « Réessayer » ne passera
+   * jamais, ex. PRODUCT_NOT_FOUND) : retire la ligne de la file ET défait ses
+   * effets locaux optimistes (vente/créance fantômes, stock) — voir
+   * `discard.ts`. */
+  async function handleDiscard(row: OutboxRow) {
+    if (row.seq === undefined) return;
+    const ok = await confirm({
+      title: t('sync.error.discardTitle'),
+      message: t('sync.error.discardMsg', { kind: t(`sync.kind.${row.kind}`) }),
+      confirmLabel: t('sync.error.discard'),
+      cancelLabel: t('common.cancel'),
+      variant: 'danger',
+      icon: 'trash-2',
+    });
+    if (!ok) return;
+    await discardErrorRow(row);
+    toast(t('sync.error.discardToast'), 'success');
   }
 
   return (
@@ -234,14 +256,24 @@ export default function ConflictsManager() {
                       })}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleRetry(row)}
-                    className="border-border bg-surface text-foreground font-body flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold"
-                  >
-                    <Icon i="refresh-cw" size={13} />
-                    {t('sync.error.retry')}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleRetry(row)}
+                      className="border-border bg-surface text-foreground font-body flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold"
+                    >
+                      <Icon i="refresh-cw" size={13} />
+                      {t('sync.error.retry')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDiscard(row)}
+                      className="border-border bg-surface text-danger font-body flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold"
+                    >
+                      <Icon i="trash-2" size={13} />
+                      {t('sync.error.discard')}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

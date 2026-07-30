@@ -13,7 +13,11 @@
  * server-side before the response reached the device is recognized and
  * dedup-returns 2xx with the already-existing entity — replaying is safe.
  *
- * Four failure branches, each a deliberate choice:
+ * Failure branches, each a deliberate choice:
+ *   - CSRF failure (403 « Invalid CSRF token ») → transient device-wide
+ *     auth-cookie lapse, NOT a business rejection of the op — reset to
+ *     `pending` and STOP, same as the 401 branch below (the CSRF cookie is
+ *     re-minted by /api/auth/refresh at the next session refresh).
  *   - un-refreshable auth failure (`ApiError.status === 401`) → same
  *     treatment as network/offline below: reset to `pending` and STOP. By
  *     the time this reaches the sync engine, `api.ts` already tried (and
@@ -451,6 +455,22 @@ async function drainPending(): Promise<DrainResult> {
         }
         done++;
         continue;
+      }
+
+      // Échec CSRF (403 « Invalid CSRF token » — la chaîne stable que
+      // `verifyCsrf` renvoie dans `body.error`, donc `ApiError.code`) : même
+      // nature TRANSITOIRE que le 401 ci-dessous. Le cookie anti-CSRF du
+      // téléphone est absent/périmé (il expire après ~7 j sans connexion et
+      // est re-frappé par /api/auth/refresh) — le serveur n'a jamais évalué
+      // l'op elle-même. La classer `error` (branche générique plus bas)
+      // gelait des ventes valides derrière un simple jeton périmé, avec un
+      // message anxiogène et un « Réessayer » manuel (vu en prod). Remise en
+      // `pending` + STOP (FIFO préservé) : dès que la session se rafraîchit
+      // (ouverture de l'app en ligne → refresh → cookie re-posé), le drain
+      // suivant repart tout seul.
+      if (err.status === 403 && err.code === 'Invalid CSRF token') {
+        await db.outbox.update(seq, { status: 'pending' });
+        break;
       }
 
       if (err.status === 401) {
