@@ -12,6 +12,7 @@ import { db } from './db';
 import {
   enqueue,
   listPending,
+  listErrors,
   markSyncing,
   markDone,
   markConflict,
@@ -208,5 +209,34 @@ describe('outbox.ts — estampillage boutique (anti-mélange de comptes)', () =>
     // qu'on ne peut plus identifier comme courante.
     await db.meta.clear();
     expect((await listPending()).map((r) => r.opId)).toEqual(['op-legacy']);
+  });
+
+  it("pendingCount ne compte pas les lignes d'une AUTRE boutique — sinon badge « N à synchroniser » bloqué à vie sur un appareil partagé", async () => {
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    await enqueue({ kind: 'sale', payload: {}, opId: 'op-o1', endpoint: '/api/sales' });
+
+    // Changement de compte : la ligne d'o1 devient invisible au drain d'o2 —
+    // elle ne doit PAS gonfler le badge d'o2 (« Synchroniser maintenant »
+    // semblerait ne rien faire).
+    await db.meta.put({ key: 'orgId', value: 'o2' });
+    await enqueue({ kind: 'sale', payload: {}, opId: 'op-o2', endpoint: '/api/sales' });
+    expect(await pendingCount()).toBe(1);
+
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    expect(await pendingCount()).toBe(1);
+  });
+
+  it('listErrors ne montre que les échecs de la boutique courante (les abandonner défairait le mauvais miroir)', async () => {
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    const r1 = await enqueue({ kind: 'sale', payload: {}, opId: 'err-o1', endpoint: '/api/sales' });
+    await markError(r1.seq as number, 'PRODUCT_NOT_FOUND');
+
+    await db.meta.put({ key: 'orgId', value: 'o2' });
+    const r2 = await enqueue({ kind: 'sale', payload: {}, opId: 'err-o2', endpoint: '/api/sales' });
+    await markError(r2.seq as number, 'PRODUCT_NOT_FOUND');
+
+    expect((await listErrors()).map((r) => r.opId)).toEqual(['err-o2']);
+    await db.meta.put({ key: 'orgId', value: 'o1' });
+    expect((await listErrors()).map((r) => r.opId)).toEqual(['err-o1']);
   });
 });

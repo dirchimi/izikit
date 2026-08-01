@@ -1592,6 +1592,22 @@ const messages: Record<string, Msg> = {
     en: 'incl. stock purchases (not counted in profit)',
     ar: 'منها مشتريات البضاعة (غير محسوبة في الربح)',
   },
+  // Écran Dépenses — partage du mois en deux volets (stock vs charges).
+  'depenses.kpi.stockMonth': {
+    fr: 'Rachats de stock (mois)',
+    en: 'Stock purchases (month)',
+    ar: 'مشتريات البضاعة (الشهر)',
+  },
+  'depenses.kpi.chargesMonth': {
+    fr: 'Autres dépenses (mois)',
+    en: 'Other expenses (month)',
+    ar: 'مصاريف أخرى (الشهر)',
+  },
+  'depenses.kpi.chargesNote': {
+    fr: '(comptées dans le bénéfice)',
+    en: '(counted in profit)',
+    ar: '(محسوبة في الربح)',
+  },
   // Caisse miroir (argent réellement encaissé)
   'cash.title': { fr: 'Argent encaissé', en: 'Money collected', ar: 'المبلغ المحصَّل' },
   'cash.today': { fr: 'Encaissé aujourd’hui', en: 'Collected today', ar: 'المحصَّل اليوم' },

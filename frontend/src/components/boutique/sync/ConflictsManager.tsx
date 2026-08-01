@@ -34,7 +34,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
 import { db, type ConflictRow, type OutboxRow } from '@/lib/offline/db';
-import { retryOutboxRow } from '@/lib/offline/outbox';
+import { retryOutboxRow, listErrors } from '@/lib/offline/outbox';
 import { discardErrorRow } from '@/lib/offline/discard';
 import { listRecentSynced } from '@/lib/offline/sync-history';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
@@ -82,11 +82,9 @@ export default function ConflictsManager() {
     [],
   );
 
-  const { data: failedRows, loading: loadingFailed } = useLocalResource(
-    () => db.outbox.where('status').equals('error').sortBy('seq'),
-    [],
-    [],
-  );
+  // Scopé boutique (listErrors) : les échecs d'un autre compte passé par cet
+  // appareil ne sont ni affichés ni abandonnables depuis cette session.
+  const { data: failedRows, loading: loadingFailed } = useLocalResource(() => listErrors(), [], []);
 
   // Historique : les dernières écritures synchronisées avec succès (lignes
   // outbox `done`), libellé résolu en best-effort depuis le miroir local —

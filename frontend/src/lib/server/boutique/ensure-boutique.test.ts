@@ -3,7 +3,7 @@
 // du module testé). slug.ts reste réel (logique pure + retry de collision).
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect } from 'vitest';
-import { ensureBoutique, getPrimaryMembership } from './ensure-boutique';
+import { ensureBoutique, getPrimaryMembership, dissolveEmptyAutoBoutique } from './ensure-boutique';
 
 describe('ensureBoutique', () => {
   it('retourne la boutique possédée existante sans rien créer', async () => {
@@ -127,5 +127,66 @@ describe('getPrimaryMembership', () => {
     prismaMock.organization.findFirst.mockResolvedValueOnce(null);
     prismaMock.organizationMember.findFirst.mockResolvedValueOnce(null);
     expect(await getPrimaryMembership('u1')).toBeNull();
+  });
+});
+
+describe('dissolveEmptyAutoBoutique', () => {
+  // Les 11 tables inspectées par le garde d'inactivité, dans l'ordre du helper.
+  const countedModels = () =>
+    [
+      prismaMock.product,
+      prismaMock.sale,
+      prismaMock.customer,
+      prismaMock.expense,
+      prismaMock.receivable,
+      prismaMock.repayment,
+      prismaMock.document,
+      prismaMock.stockMovement,
+      prismaMock.supplierDebt,
+      prismaMock.subscriptionPayment,
+      prismaMock.invitation,
+    ] as const;
+
+  function mockCounts(overrides: Partial<Record<number, number>> = {}) {
+    countedModels().forEach((m, i) => {
+      m.count.mockResolvedValue((overrides[i] ?? 0) as never);
+    });
+  }
+  const tx = () => prismaMock as unknown as Parameters<typeof dissolveEmptyAutoBoutique>[0];
+
+  it("dissout la boutique auto-créée vide d'un employé fraîchement ajouté (fix : il restait enfermé dedans)", async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: 'org-vide' } as never);
+    mockCounts();
+    prismaMock.organizationMember.findMany.mockResolvedValueOnce([{ userId: 'emp1' }] as never);
+
+    expect(await dissolveEmptyAutoBoutique(tx(), 'emp1')).toBe(true);
+    expect(prismaMock.organization.delete).toHaveBeenCalledWith({ where: { id: 'org-vide' } });
+  });
+
+  it('ne touche à RIEN si la boutique possédée a des données métier (vrai patron invité ailleurs)', async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: 'org-active' } as never);
+    mockCounts({ 1: 3 }); // 3 ventes
+    prismaMock.organizationMember.findMany.mockResolvedValueOnce([{ userId: 'u1' }] as never);
+
+    expect(await dissolveEmptyAutoBoutique(tx(), 'u1')).toBe(false);
+    expect(prismaMock.organization.delete).not.toHaveBeenCalled();
+  });
+
+  it("ne touche à RIEN si la boutique possédée a d'autres membres", async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: 'org-equipe' } as never);
+    mockCounts();
+    prismaMock.organizationMember.findMany.mockResolvedValueOnce([
+      { userId: 'u1' },
+      { userId: 'autre' },
+    ] as never);
+
+    expect(await dissolveEmptyAutoBoutique(tx(), 'u1')).toBe(false);
+    expect(prismaMock.organization.delete).not.toHaveBeenCalled();
+  });
+
+  it('no-op sans boutique possédée (invité qui ne s’était jamais inscrit seul)', async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce(null);
+    expect(await dissolveEmptyAutoBoutique(tx(), 'emp1')).toBe(false);
+    expect(prismaMock.organization.delete).not.toHaveBeenCalled();
   });
 });

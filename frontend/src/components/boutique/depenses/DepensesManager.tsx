@@ -76,6 +76,12 @@ export default function DepensesManager() {
 
   const monthExpenses = expenses.filter((e) => sameMonth(e.occurredAt, now));
   const totalMonth = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  // Partage du mois en deux : rachats de stock (non comptés dans le bénéfice —
+  // déjà dans le coût des produits vendus) vs autres dépenses (charges).
+  const stockMonth = monthExpenses
+    .filter((e) => isStockExpenseCategory(e.category))
+    .reduce((sum, e) => sum + e.amount, 0);
+  const chargesMonth = totalMonth - stockMonth;
   const today = expenses
     .filter((e) => sameDay(e.occurredAt, now))
     .reduce((sum, e) => sum + e.amount, 0);
@@ -172,13 +178,26 @@ export default function DepensesManager() {
 
       <div className="flex flex-col xl:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-5 px-4 py-6 md:px-8">
-          {/* KPI */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {/* KPI — le mois est partagé en deux volets côte à côte : rachats de
+              stock (déjà dans le coût des produits vendus, donc hors bénéfice)
+              vs autres dépenses (les vraies charges). */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <KpiCard
               accent
               label={t('depenses.kpi.totalMonth')}
               value={formatFCFA(totalMonth)}
               sublabel={t('common.fcfa')}
+            />
+            <KpiCard
+              label={t('depenses.kpi.stockMonth')}
+              value={formatFCFA(stockMonth)}
+              sublabel={`${t('common.fcfa')} · ${t('rapports.kpi.stockIncludedNote')}`}
+              valueClass="text-warning"
+            />
+            <KpiCard
+              label={t('depenses.kpi.chargesMonth')}
+              value={formatFCFA(chargesMonth)}
+              sublabel={`${t('common.fcfa')} · ${t('depenses.kpi.chargesNote')}`}
             />
             <KpiCard
               label={t('depenses.kpi.today')}

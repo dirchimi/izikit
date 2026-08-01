@@ -161,14 +161,41 @@ export async function reclaimOrphanedSyncing(): Promise<void> {
   await db.outbox.where('status').equals('syncing').modify({ status: 'pending' });
 }
 
+/** Même règle de scoping boutique que `listPending` : une ligne estampillée
+ * d'un AUTRE `orgId` appartient à un autre compte passé par cet appareil —
+ * elle est invisible pour le drain de la session courante. */
+function belongsToCurrentOrg(row: OutboxRow, currentOrg: string | null): boolean {
+  return row.orgId == null || row.orgId === currentOrg;
+}
+
 /**
  * Count of rows not yet in a terminal-success state: `pending` + `syncing`
  * + `error`. `conflict` rows are deliberately excluded — see the module
  * docblock. This backs the "N à synchroniser" badge.
+ *
+ * Scopé boutique comme `listPending` : sans ce filtre, un téléphone partagé
+ * (autre compte passé avant) affichait « N à synchroniser » à vie — le badge
+ * comptait des lignes d'un autre orgId que le drain ne sert jamais, et
+ * « Synchroniser maintenant » semblait ne rien faire (vu en prod).
  */
 export async function pendingCount(): Promise<number> {
-  return db.outbox
+  const rows = await db.outbox
     .where('status')
     .anyOf(...PENDING_COUNT_STATUSES)
-    .count();
+    .toArray();
+  const currentOrg = await getOrgId().catch(() => null);
+  return rows.filter((r) => belongsToCurrentOrg(r, currentOrg)).length;
+}
+
+/**
+ * Lignes en échec définitif (`error`) de la boutique COURANTE, en ordre FIFO —
+ * la liste « Échecs de synchronisation » de l'écran /synchronisation. Même
+ * scoping que `listPending`/`pendingCount` : les échecs d'un autre compte
+ * passé par cet appareil ne concernent pas la session courante (et les
+ * abandonner ici défairait des effets sur le MAUVAIS miroir local).
+ */
+export async function listErrors(): Promise<OutboxRow[]> {
+  const rows = await db.outbox.where('status').equals('error').sortBy('seq');
+  const currentOrg = await getOrgId().catch(() => null);
+  return rows.filter((r) => belongsToCurrentOrg(r, currentOrg));
 }

@@ -23,6 +23,7 @@ import {
 } from '@/lib/server/auth';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
+import { dissolveEmptyAutoBoutique } from '@/lib/server/boutique/ensure-boutique';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
 
@@ -111,6 +112,11 @@ export async function POST(
             data: { organizationId: orgId, userId, role },
           });
         }
+        // Compte créé AVANT l'acceptation → il possède une boutique auto-créée
+        // vide qui resterait primaire à vie (getPrimaryMembership sert la
+        // possédée d'abord) : on dissout l'artefact pour que la boutique de
+        // l'employeur devienne la sienne.
+        await dissolveEmptyAutoBoutique(tx, userId);
         await tx.invitation.updateMany({
           where: { token, acceptedAt: null },
           data: { acceptedAt: new Date() },

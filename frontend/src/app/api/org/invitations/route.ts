@@ -13,7 +13,10 @@ import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth, requireOrgRole } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
-import { getPrimaryMembership } from '@/lib/server/boutique/ensure-boutique';
+import {
+  getPrimaryMembership,
+  dissolveEmptyAutoBoutique,
+} from '@/lib/server/boutique/ensure-boutique';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { flushEmailsAfterResponse } from '@/lib/server/email/flush-after-response';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
@@ -114,9 +117,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 409, headers: { 'x-request-id': ctx.requestId } },
         );
       }
-      const member = await prisma.organizationMember.create({
-        data: { organizationId: orgId, userId: existingUser.id, role },
-        select: { id: true, userId: true, role: true },
+      const member = await prisma.$transaction(async (tx) => {
+        const m = await tx.organizationMember.create({
+          data: { organizationId: orgId, userId: existingUser.id, role },
+          select: { id: true, userId: true, role: true },
+        });
+        // S'il s'était inscrit tout seul avant d'être ajouté, il POSSÈDE une
+        // boutique auto-créée vide — et getPrimaryMembership (possédée
+        // d'abord) l'y enfermerait à vie : catalogue vide, ventes dans le
+        // mauvais tenant. On dissout l'artefact dans la même transaction.
+        await dissolveEmptyAutoBoutique(tx, existingUser.id);
+        return m;
       });
       return NextResponse.json(
         {

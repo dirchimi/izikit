@@ -15,6 +15,7 @@
  * au premier login ; à durcir (advisory-lock) si le besoin se confirme.
  */
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
 import { slugify, ensureUniqueSlug } from '../slug';
 import type { OrgRole } from '../middleware/require-org-role';
@@ -99,6 +100,65 @@ export async function getPrimaryMembership(
   return membership
     ? { organizationId: membership.organizationId, role: membership.role as OrgRole }
     : null;
+}
+
+/**
+ * Dissout la boutique auto-créée VIDE d'un utilisateur qui devient employé
+ * d'une AUTRE boutique.
+ *
+ * Pourquoi : `getPrimaryMembership` sert la boutique POSSÉDÉE en priorité. Un
+ * vendeur qui s'est inscrit tout seul (l'inscription crée toujours sa boutique
+ * via `ensureBoutique`) PUIS est ajouté par son patron restait enfermé à vie
+ * dans sa boutique vide — catalogue vide, ventes synchronisées dans le mauvais
+ * tenant, patron qui ne voit jamais rien arriver (vu en prod).
+ *
+ * Garde-fous : ne supprime QUE si la boutique possédée est un artefact
+ * d'inscription — zéro donnée métier (produits, ventes, clients, dépenses,
+ * créances, remboursements, documents, mouvements de stock, dettes
+ * fournisseurs, paiements d'abonnement), aucune invitation émise, aucun AUTRE
+ * membre que le propriétaire. Au moindre signe d'activité on ne touche à rien
+ * (l'utilisateur garde ses deux casquettes ; la possédée reste primaire).
+ *
+ * À appeler dans la MÊME transaction que la création d'adhésion (ajout direct
+ * d'un compte existant, ou acceptation d'invitation par lien). La suppression
+ * part par cascade (réglages + adhésion OWNER) ; `Invitation` n'a pas de FK
+ * mais une invitation émise compte comme activité → jamais de ligne à purger.
+ */
+export async function dissolveEmptyAutoBoutique(
+  tx: Prisma.TransactionClient,
+  userId: string,
+): Promise<boolean> {
+  const owned = await tx.organization.findFirst({
+    where: { ownerId: userId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!owned) return false;
+  const where = { organizationId: owned.id };
+
+  const [counts, members] = await Promise.all([
+    Promise.all([
+      tx.product.count({ where }),
+      tx.sale.count({ where }),
+      tx.customer.count({ where }),
+      tx.expense.count({ where }),
+      tx.receivable.count({ where }),
+      tx.repayment.count({ where }),
+      tx.document.count({ where }),
+      tx.stockMovement.count({ where }),
+      tx.supplierDebt.count({ where }),
+      tx.subscriptionPayment.count({ where }),
+      tx.invitation.count({ where }),
+    ]),
+    tx.organizationMember.findMany({ where, select: { userId: true } }),
+  ]);
+
+  const hasActivity = counts.some((c) => c > 0);
+  const onlyOwner = members.every((m) => m.userId === userId);
+  if (hasActivity || !onlyOwner) return false;
+
+  await tx.organization.delete({ where: { id: owned.id } });
+  return true;
 }
 
 export async function ensureBoutique(userId: string, email: string): Promise<BoutiqueContext> {

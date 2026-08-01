@@ -54,18 +54,28 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type OutboxStatus } from './db';
 import { drainOutbox } from './sync-engine';
+import { getOrgId } from './pull';
 
 /** Same set `outbox.ts`'s `pendingCount()` documents — kept as a literal
  * here (rather than imported) since `outbox.ts` doesn't export it. */
 const PENDING_COUNT_STATUSES: readonly OutboxStatus[] = ['pending', 'syncing', 'error'];
 
 /** Live-queryable count backing `pendingCount` — see module docblock for
- * why this isn't just `outbox.ts`'s `pendingCount()` re-exported. */
+ * why this isn't just `outbox.ts`'s `pendingCount()` re-exported.
+ *
+ * Scopé boutique comme `listPending` : une ligne estampillée d'un AUTRE
+ * `orgId` (autre compte passé par cet appareil) est invisible pour le drain
+ * de la session courante — la compter affichait « N à synchroniser » à vie et
+ * « Synchroniser maintenant » semblait ne rien faire (vu en prod). `getOrgId`
+ * lit `db.meta` via Dexie, donc `useLiveQuery` re-calcule aussi quand la
+ * boutique courante change (changement de compte). */
 export async function countPending(): Promise<number> {
-  return db.outbox
+  const rows = await db.outbox
     .where('status')
     .anyOf(...PENDING_COUNT_STATUSES)
-    .count();
+    .toArray();
+  const currentOrg = await getOrgId().catch(() => null);
+  return rows.filter((r) => r.orgId == null || r.orgId === currentOrg).length;
 }
 
 /** Live-queryable count backing `syncing` (`> 0` ⇒ a drain is in flight). */
