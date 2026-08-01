@@ -45,6 +45,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         amountPaid: true,
         status: true,
         createdAt: true,
+        // Rattachement au produit d'origine (scalaire sans FK) — permet au
+        // client de proposer la suppression des dettes liées quand le produit
+        // est supprimé (StockManager.deleteProduct).
+        productId: true,
       },
     });
 
@@ -61,6 +65,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         remaining,
         status: r.status.toLowerCase(), // OPEN|PARTIAL → open|partial (libellé UI)
         createdAt: iso(r.createdAt),
+        productId: r.productId,
       };
     });
 

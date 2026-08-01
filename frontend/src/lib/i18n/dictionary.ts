@@ -1194,6 +1194,38 @@ const messages: Record<string, Msg> = {
   },
   'stock.debts.remaining': { fr: 'Reste dû', en: 'Remaining', ar: 'المتبقّي' },
   'stock.debts.pay': { fr: 'Payer', en: 'Pay', ar: 'دفع' },
+  // Suppression d'une dette (saisie par erreur / produit supprimé) — toujours
+  // confirmée : une dette est de l'argent réellement dû.
+  'stock.debts.deleteTitle': {
+    fr: 'Supprimer cette dette ?',
+    en: 'Delete this debt?',
+    ar: 'حذف هذا الدين؟',
+  },
+  'stock.debts.deleteMsg': {
+    fr: '{label} — {supplier} : la dette de {amount} FCFA sera supprimée définitivement. À faire uniquement si elle a été saisie par erreur ou n’est plus due.',
+    en: '{label} — {supplier}: the {amount} FCFA debt will be permanently deleted. Only do this if it was entered by mistake or is no longer owed.',
+    ar: '{label} — {supplier}: سيُحذف دين {amount} فرنك نهائيًا. افعل ذلك فقط إذا أُدخل بالخطأ أو لم يعد مستحقًا.',
+  },
+  'stock.debts.deletedToast': {
+    fr: 'Dette fournisseur supprimée.',
+    en: 'Supplier debt deleted.',
+    ar: 'تم حذف دين المورّد.',
+  },
+  'stock.debts.deleteLinkedTitle': {
+    fr: 'Dette fournisseur liée',
+    en: 'Linked supplier debt',
+    ar: 'دين مورّد مرتبط',
+  },
+  'stock.debts.deleteLinkedMsg': {
+    fr: 'Ce produit avait une dette fournisseur : {label} — {supplier}, reste dû {amount} FCFA. La supprimer aussi ? Gardez-la si vous devez toujours cet argent au fournisseur.',
+    en: 'This product had a supplier debt: {label} — {supplier}, {amount} FCFA remaining. Delete it too? Keep it if you still owe the supplier this money.',
+    ar: 'كان لهذا المنتج دين مورّد: {label} — {supplier}، المتبقّي {amount} فرنك. أتحذفه أيضًا؟ أبقه إذا كنت لا تزال مدينًا للمورّد بهذا المبلغ.',
+  },
+  'stock.debts.keepDebt': {
+    fr: 'Garder la dette',
+    en: 'Keep the debt',
+    ar: 'إبقاء الدين',
+  },
   'stock.debts.payTitle': { fr: 'Payer le fournisseur', en: 'Pay the supplier', ar: 'دفع للمورّد' },
   'stock.debts.payAmount': {
     fr: 'Montant à payer',

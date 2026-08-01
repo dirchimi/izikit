@@ -5,6 +5,7 @@ import Icon from '@/components/ui/Icon';
 import Modal from '@/components/ui/Modal';
 import { useT } from '@/contexts/LocaleContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { formatFCFA } from '@/lib/boutique/format';
 import { api } from '@/lib/api';
 
@@ -17,6 +18,8 @@ export interface SupplierDebtRow {
   remaining: number;
   status: string; // open | partial
   createdAt: string;
+  /** Produit d'origine (scalaire sans FK — la dette survit au produit). */
+  productId?: string | null;
 }
 
 /**
@@ -37,9 +40,36 @@ export default function SupplierDebtsPanel({
 }) {
   const t = useT();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [target, setTarget] = useState<SupplierDebtRow | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  /** Suppression d'une dette saisie par erreur (ou restée après la suppression
+   * du produit lié). Toujours confirmée : une dette est de l'argent réellement
+   * dû — jamais de cascade silencieuse. */
+  async function removeDebt(row: SupplierDebtRow) {
+    const ok = await confirm({
+      title: t('stock.debts.deleteTitle'),
+      message: t('stock.debts.deleteMsg', {
+        label: row.label,
+        supplier: row.supplierName || t('stock.debts.noSupplier'),
+        amount: formatFCFA(row.remaining),
+      }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
+      variant: 'danger',
+      icon: 'trash-2',
+    });
+    if (!ok) return;
+    try {
+      await api(`/api/supplier-debts/${row.id}`, { method: 'DELETE' });
+      toast(t('stock.debts.deletedToast'), 'success');
+      onPaid();
+    } catch {
+      toast(t('async.error'), 'error');
+    }
+  }
 
   function openPay(row: SupplierDebtRow) {
     setTarget(row);
@@ -136,6 +166,14 @@ export default function SupplierDebtsPanel({
               >
                 <Icon i="check" size={13} />
                 {t('stock.debts.pay')}
+              </button>
+              <button
+                type="button"
+                aria-label={t('common.delete')}
+                onClick={() => void removeDebt(d)}
+                className="border-border text-danger hover:bg-danger/10 rounded-md border p-1.5 transition-colors"
+              >
+                <Icon i="trash-2" size={13} />
               </button>
             </div>
           ))}

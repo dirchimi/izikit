@@ -323,9 +323,39 @@ export default function StockManager() {
       onStockChange();
     } catch {
       toast(t('async.error'), 'error');
+      setDeletingId(null);
+      return;
     } finally {
       setDeletingId(null);
     }
+
+    // Dettes fournisseurs liées à ce produit (réappro « en prêt ») : la dette
+    // SURVIT volontairement à la suppression du produit (argent réellement dû,
+    // pas de cascade silencieuse) — mais si la fiche était une erreur, on
+    // propose explicitement de les supprimer aussi, une par une.
+    const linked = debts.filter((d) => d.productId === p.id);
+    for (const d of linked) {
+      const removeIt = await confirm({
+        title: t('stock.debts.deleteLinkedTitle'),
+        message: t('stock.debts.deleteLinkedMsg', {
+          label: d.label,
+          supplier: d.supplierName || t('stock.debts.noSupplier'),
+          amount: formatFCFA(d.remaining),
+        }),
+        confirmLabel: t('common.delete'),
+        cancelLabel: t('stock.debts.keepDebt'),
+        variant: 'danger',
+        icon: 'trash-2',
+      });
+      if (!removeIt) continue;
+      try {
+        await api(`/api/supplier-debts/${d.id}`, { method: 'DELETE' });
+        toast(t('stock.debts.deletedToast'), 'success');
+      } catch {
+        toast(t('async.error'), 'error');
+      }
+    }
+    if (linked.length > 0) void refreshDebts();
   }
 
   return (
