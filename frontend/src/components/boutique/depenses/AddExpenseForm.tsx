@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Icon from '@/components/ui/Icon';
+import ComboBox from '@/components/ui/ComboBox';
 import { useT } from '@/contexts/LocaleContext';
 import { expenseCategories } from '@/lib/boutique/fixtures';
 
@@ -16,13 +17,18 @@ const fieldClass =
   'border-border bg-input text-foreground font-body rounded-md border px-3 py-2 text-sm outline-none focus:border-primary';
 const labelClass = 'text-foreground font-body text-xs font-semibold';
 
-/** Formulaire d'ajout de dépense (contrôlé). Ne se vide qu'en cas de succès. */
+/** Formulaire d'ajout de dépense (contrôlé). Ne se vide qu'en cas de succès.
+ * `categories` = suggestions affichées (fixtures + catégories déjà utilisées
+ * par la boutique, fournies par DepensesManager) ; la ComboBox `creatable`
+ * permet d'en taper une nouvelle — même patron que la catégorie produit. */
 export default function AddExpenseForm({
   onSubmit,
   disabled = false,
+  categories = expenseCategories,
 }: {
   onSubmit: (e: NewExpenseInput) => void | Promise<boolean | void>;
   disabled?: boolean;
+  categories?: string[];
 }) {
   const t = useT();
   const [label, setLabel] = useState('');
@@ -92,22 +98,17 @@ export default function AddExpenseForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className={labelClass} htmlFor="ne-cat">
-            {t('common.category')}
-          </label>
-          <select
-            id="ne-cat"
+          <span className={labelClass}>{t('common.category')}</span>
+          <ComboBox
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className={`${fieldClass} ${category ? '' : 'text-muted-foreground'}`}
-          >
-            <option value="">{t('common.select')}</option>
-            {expenseCategories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setCategory}
+            options={categories}
+            creatable
+            placeholder={t('common.select')}
+          />
+          <p className="text-muted-foreground font-body text-[11px]">
+            {t('depenses.form.categoryHint')}
+          </p>
         </div>
 
         <div className="flex flex-col gap-1">

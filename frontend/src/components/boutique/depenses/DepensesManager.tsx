@@ -72,6 +72,17 @@ export default function DepensesManager() {
     [],
   );
   const expenses = useMemo(() => expenseRows.map(expenseRowToApi), [expenseRows]);
+  // Suggestions de catégorie : la liste de base (fixtures) + toutes les
+  // catégories personnalisées déjà utilisées par la boutique — le filtre et le
+  // formulaire d'ajout (ComboBox creatable) partagent la même liste.
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>(expenseCategories);
+    for (const e of expenses) {
+      const c = e.category.trim();
+      if (c) set.add(c);
+    }
+    return [...set];
+  }, [expenses]);
   const now = new Date();
 
   const monthExpenses = expenses.filter((e) => sameMonth(e.occurredAt, now));
@@ -269,7 +280,7 @@ export default function DepensesManager() {
             <ComboBox
               value={categoryFilter}
               onChange={setCategoryFilter}
-              options={expenseCategories}
+              options={categoryOptions}
               allLabel={t('common.allCategories')}
               searchable
               className="w-44"
@@ -391,7 +402,7 @@ export default function DepensesManager() {
         </div>
 
         {/* Formulaire d'ajout */}
-        <AddExpenseForm onSubmit={addExpense} disabled={submitting} />
+        <AddExpenseForm onSubmit={addExpense} disabled={submitting} categories={categoryOptions} />
       </div>
 
       {/* Bouton flottant « + » (mobile) — le formulaire d'ajout étant en bas de

@@ -153,25 +153,25 @@ function buildElement(input: ReportPdfInput) {
             </Text>
             <Text style={s.kpiHint}>CA − coût d&apos;achat des articles vendus</Text>
           </View>
+          {/* 2e rangée : l'équation du bénéfice, auto-vérifiable de gauche à
+              droite — achats de stock (hors bénéfice, déjà dans le COGS) ·
+              autres dépenses · bénéfice = marge − autres dépenses. */}
           <View style={s.kpi}>
-            <Text style={s.kpiLabel}>Dépenses</Text>
-            <Text style={s.kpiValue}>{money(sm.expenses, cur)}</Text>
-            <Text style={s.kpiHint}>
-              {sm.stockPurchases > 0
-                ? `dont achats de stock : ${money(sm.stockPurchases, cur)}`
-                : 'charges de la période'}
-            </Text>
+            <Text style={s.kpiLabel}>Achats de stock</Text>
+            <Text style={s.kpiValue}>{money(sm.stockPurchases, cur)}</Text>
+            <Text style={s.kpiHint}>déjà comptés dans le coût des articles vendus</Text>
+          </View>
+          <View style={s.kpi}>
+            <Text style={s.kpiLabel}>Autres dépenses</Text>
+            <Text style={s.kpiValue}>{money(sm.expenses - sm.stockPurchases, cur)}</Text>
+            <Text style={s.kpiHint}>comptées dans le bénéfice</Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>Bénéfice net estimé</Text>
             <Text style={[s.kpiValue, { color: sm.netProfit < 0 ? C.danger : C.brand }]}>
               {money(sm.netProfit, cur)}
             </Text>
-            <Text style={s.kpiHint}>
-              {sm.stockPurchases > 0
-                ? 'gagné, pas forcément encaissé — hors achats de stock (déjà comptés dans le coût des articles vendus)'
-                : 'gagné, pas forcément encaissé'}
-            </Text>
+            <Text style={s.kpiHint}>marge brute − autres dépenses ; pas forcément encaissé</Text>
           </View>
         </View>
 

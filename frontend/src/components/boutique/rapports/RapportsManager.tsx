@@ -146,6 +146,7 @@ export default function RapportsManager() {
       ['%', summary.marginPct],
       [t('nav.depenses'), summary.expenses],
       [t('rapports.kpi.stockPurchases'), summary.stockPurchases],
+      [t('rapports.kpi.otherExpenses'), summary.expenses - summary.stockPurchases],
       [t('rapports.kpi.netProfit'), summary.netProfit],
       [],
       [`${t('cash.title')} — ${t('cash.cash')}`, summary.collectedCash],
@@ -279,8 +280,11 @@ export default function RapportsManager() {
         <AsyncState loading={loading} error={error} onRetry={refresh}>
           {summary && data && (
             <div className="flex flex-col gap-6">
-              {/* KPI */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {/* KPI — 2 rangées de 3 : l'activité (CA, ventes, marge) puis
+                  l'équation du bénéfice, auto-vérifiable de gauche à droite :
+                  achats de stock (hors bénéfice, déjà dans le COGS) · autres
+                  dépenses · bénéfice = marge − autres dépenses. */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <KpiCard
                   accent
                   label={t('rapports.kpi.revenue')}
@@ -303,19 +307,15 @@ export default function RapportsManager() {
                   }
                 />
                 <KpiCard
-                  label={t('nav.depenses')}
-                  value={formatFCFA(summary.expenses)}
-                  sublabel={
-                    summary.stockPurchases > 0 ? (
-                      <>
-                        {t('common.fcfa')} · {t('rapports.kpi.stockIncluded')}{' '}
-                        <span dir="ltr">{formatFCFA(summary.stockPurchases)}</span>{' '}
-                        {t('rapports.kpi.stockIncludedNote')}
-                      </>
-                    ) : (
-                      t('common.fcfa')
-                    )
-                  }
+                  label={t('rapports.kpi.stockTile')}
+                  value={formatFCFA(summary.stockPurchases)}
+                  sublabel={`${t('common.fcfa')} · ${t('rapports.kpi.stockTileNote')}`}
+                  valueClass="text-warning"
+                />
+                <KpiCard
+                  label={t('rapports.kpi.otherExpenses')}
+                  value={formatFCFA(summary.expenses - summary.stockPurchases)}
+                  sublabel={`${t('common.fcfa')} · ${t('depenses.kpi.chargesNote')}`}
                   valueClass="text-warning"
                 />
                 <KpiCard

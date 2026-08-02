@@ -1609,11 +1609,6 @@ const messages: Record<string, Msg> = {
   // Les achats de stock (catégorie « Stock ») restent dans le total des
   // dépenses (argent sorti) mais ne réduisent pas le bénéfice : le coût des
   // marchandises est déjà compté à la vente via le prix d'achat.
-  'rapports.kpi.stockIncluded': {
-    fr: 'dont achats de stock :',
-    en: 'incl. stock purchases:',
-    ar: 'منها مشتريات البضاعة:',
-  },
   'rapports.kpi.stockIncludedNote': {
     fr: '(non comptés dans le bénéfice)',
     en: '(not counted in profit)',
@@ -1623,6 +1618,29 @@ const messages: Record<string, Msg> = {
     fr: 'dont achats de stock (non comptés dans le bénéfice)',
     en: 'incl. stock purchases (not counted in profit)',
     ar: 'منها مشتريات البضاعة (غير محسوبة في الربح)',
+  },
+  // Rapports — tuiles séparées achats de stock / autres dépenses (2e rangée
+  // auto-vérifiable : marge − autres dépenses = bénéfice).
+  'rapports.kpi.stockTile': {
+    fr: 'Achats de stock',
+    en: 'Stock purchases',
+    ar: 'مشتريات البضاعة',
+  },
+  'rapports.kpi.stockTileNote': {
+    fr: 'déjà comptés dans le coût des produits vendus',
+    en: 'already counted in cost of goods sold',
+    ar: 'محسوبة أصلًا في تكلفة البضاعة المباعة',
+  },
+  'rapports.kpi.otherExpenses': {
+    fr: 'Autres dépenses',
+    en: 'Other expenses',
+    ar: 'مصاريف أخرى',
+  },
+  // Formulaire de dépense — catégorie libre (ComboBox creatable).
+  'depenses.form.categoryHint': {
+    fr: 'Choisissez une suggestion ou tapez votre propre catégorie.',
+    en: 'Pick a suggestion or type your own category.',
+    ar: 'اختر اقتراحًا أو اكتب فئتك الخاصة.',
   },
   // Écran Dépenses — partage du mois en deux volets (stock vs charges).
   'depenses.kpi.stockMonth': {
