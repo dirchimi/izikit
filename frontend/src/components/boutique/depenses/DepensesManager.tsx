@@ -18,13 +18,15 @@ import { createExpenseOffline } from '@/lib/offline/mutations';
 import { triggerDrain } from '@/lib/offline/sync-triggers';
 import { expenseRowToApi, type ApiExpense } from '@/lib/offline/expense-adapters';
 import { formatFCFA } from '@/lib/boutique/format';
-import { isStockExpenseCategory } from '@/lib/reports/helpers';
+import { isStockExpenseCategory, parseDateRange, periodRange } from '@/lib/reports/helpers';
 import { expenseCategories, expenseCategoryColor } from '@/lib/boutique/fixtures';
 import AddExpenseForm, { type NewExpenseInput } from './AddExpenseForm';
 import FloatingAddButton from '@/components/boutique/FloatingAddButton';
 import RowSyncBadge from '@/components/boutique/sync/RowSyncBadge';
 
-type Period = 'month' | 'today' | 'date';
+// Mêmes périodes que l'écran Rapports (semaine = 7 derniers jours, année =
+// année civile, helpers partagés) + plage libre « du… au… » (bornes incluses).
+type Period = 'today' | 'week' | 'month' | 'year' | 'custom';
 
 /** Date ISO → 'YYYY-MM-DD' local (pour comparer à un <input type="date">). */
 function isoToYmd(iso: string): string {
@@ -59,7 +61,8 @@ export default function DepensesManager() {
   const t = useT();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('month');
-  const [pickDate, setPickDate] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -103,35 +106,50 @@ export default function DepensesManager() {
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return expenses.filter(
-      (e) =>
+    // Fenêtre [from, to) de la période — null si la plage personnalisée est
+    // incomplète ou invalide : la liste reste alors vide (même comportement
+    // que l'ancien « date précise » sans date choisie).
+    const range =
+      period === 'custom'
+        ? from && to
+          ? parseDateRange(from, to)
+          : null
+        : periodRange(period, new Date());
+    if (!range) return [];
+    return expenses.filter((e) => {
+      const d = new Date(e.occurredAt);
+      return (
         (q === '' || e.label.toLowerCase().includes(q) || e.number.toLowerCase().includes(q)) &&
-        (period === 'month'
-          ? sameMonth(e.occurredAt, now)
-          : period === 'today'
-            ? sameDay(e.occurredAt, now)
-            : pickDate !== '' && isoToYmd(e.occurredAt) === pickDate) &&
+        d >= range.from &&
+        d < range.to &&
         (categoryFilter === '' ||
           e.category === categoryFilter ||
           // Filtrer « Rachat de stock » doit aussi remonter les anciennes
           // lignes enregistrées sous l'ex-libellé « Stock ».
-          (isStockExpenseCategory(categoryFilter) && isStockExpenseCategory(e.category))),
-    );
-  }, [expenses, search, period, pickDate, categoryFilter]);
+          (isStockExpenseCategory(categoryFilter) && isStockExpenseCategory(e.category)))
+      );
+    });
+  }, [expenses, search, period, from, to, categoryFilter]);
 
   const todayYmd = isoToYmd(now.toISOString());
+  const fmtYmd = (ymd: string) =>
+    new Date(`${ymd}T00:00:00`).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   const periodLabel =
-    period === 'month'
-      ? t('common.thisMonth')
-      : period === 'today'
-        ? t('common.today')
-        : pickDate
-          ? new Date(`${pickDate}T00:00:00`).toLocaleDateString('fr-FR', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-            })
-          : t('common.pickDate');
+    period === 'today'
+      ? t('common.today')
+      : period === 'week'
+        ? t('common.thisWeek')
+        : period === 'month'
+          ? t('common.thisMonth')
+          : period === 'year'
+            ? t('common.thisYear')
+            : from && to
+              ? `${fmtYmd(from)} → ${fmtYmd(to)}`
+              : t('common.customRange');
 
   /** `createExpenseOffline` throws plain `Error`s whose `.message` carries a
    * stable code (NO_ORG/AMOUNT_INVALID) — same convention as VendrePos's
@@ -252,30 +270,52 @@ export default function DepensesManager() {
               }
               items={[
                 {
-                  label: t('common.thisMonth'),
-                  icon: 'calendar-range',
-                  active: period === 'month',
-                  onClick: () => setPeriod('month'),
-                },
-                {
                   label: t('common.today'),
                   icon: 'sun',
                   active: period === 'today',
                   onClick: () => setPeriod('today'),
                 },
                 {
-                  label: t('common.pickDate'),
+                  label: t('common.thisWeek'),
+                  icon: 'calendar-days',
+                  active: period === 'week',
+                  onClick: () => setPeriod('week'),
+                },
+                {
+                  label: t('common.thisMonth'),
+                  icon: 'calendar-range',
+                  active: period === 'month',
+                  onClick: () => setPeriod('month'),
+                },
+                {
+                  label: t('common.thisYear'),
                   icon: 'calendar',
-                  active: period === 'date',
+                  active: period === 'year',
+                  onClick: () => setPeriod('year'),
+                },
+                {
+                  label: t('common.customRange'),
+                  icon: 'calendar-search',
+                  active: period === 'custom',
                   onClick: () => {
-                    setPeriod('date');
-                    if (!pickDate) setPickDate(todayYmd);
+                    setPeriod('custom');
+                    // Plage pré-remplie sur aujourd'hui pour que la liste ne
+                    // soit jamais vide « sans raison » à l'ouverture.
+                    if (!from) setFrom(todayYmd);
+                    if (!to) setTo(todayYmd);
                   },
                 },
               ]}
             />
-            {period === 'date' && (
-              <DatePicker value={pickDate} onChange={setPickDate} max={todayYmd} />
+            {period === 'custom' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground font-body text-sm">
+                  {t('rapports.from')}
+                </span>
+                <DatePicker value={from} onChange={setFrom} max={to || todayYmd} />
+                <span className="text-muted-foreground font-body text-sm">{t('rapports.to')}</span>
+                <DatePicker value={to} onChange={setTo} min={from || undefined} max={todayYmd} />
+              </div>
             )}
             <ComboBox
               value={categoryFilter}

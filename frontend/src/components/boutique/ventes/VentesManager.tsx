@@ -15,6 +15,7 @@ import { useApi } from '@/lib/useApi';
 import { onSaleChange, onDocumentChange } from '@/lib/boutique/realtime';
 import { api, ApiError } from '@/lib/api';
 import { formatFCFA } from '@/lib/boutique/format';
+import { parseDateRange, periodRange } from '@/lib/reports/helpers';
 import { db } from '@/lib/offline/db';
 import { useLocalResource } from '@/lib/offline/useLocalResource';
 import { getMemberNames, getRole, pullResource } from '@/lib/offline/pull';
@@ -29,7 +30,9 @@ import type { ApiDocument } from '@/components/boutique/documents/types';
 
 type ApiMethod = 'CASH' | 'MOBILE' | 'CREDIT' | 'MIXED';
 
-type Period = 'all' | 'today' | 'date';
+// Mêmes périodes que Rapports/Dépenses (helpers partagés : semaine = 7
+// derniers jours, année civile, plage libre bornes incluses) + « Toutes ».
+type Period = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom';
 type MethodFilter = 'CASH' | 'MOBILE' | 'CREDIT' | 'all';
 
 const METHOD_LABEL: Record<ApiMethod, string> = {
@@ -67,7 +70,8 @@ export default function VentesManager() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('all');
-  const [pickDate, setPickDate] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [method, setMethod] = useState<MethodFilter>('all');
   const [seller, setSeller] = useState<string>('all');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
@@ -239,15 +243,27 @@ export default function VentesManager() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    // Fenêtre [from, to) de la période — undefined si « Toutes » (pas de
+    // contrainte), null si la plage personnalisée est incomplète/invalide
+    // (liste vide, même comportement que l'ancien « date précise » sans date).
+    const range =
+      period === 'all'
+        ? undefined
+        : period === 'custom'
+          ? from && to
+            ? parseDateRange(from, to)
+            : null
+          : periodRange(period, new Date());
+    if (range === null) return [];
     return sales
-      .filter(
-        (s) =>
-          (period === 'all' ||
-            (period === 'today' && sameDay(s.createdAt, now)) ||
-            (period === 'date' && pickDate !== '' && isoToYmd(s.createdAt) === pickDate)) &&
+      .filter((s) => {
+        const d = new Date(s.createdAt);
+        return (
+          (range === undefined || (d >= range.from && d < range.to)) &&
           (method === 'all' || s.method === method) &&
-          (seller === 'all' || s.sellerId === seller),
-      )
+          (seller === 'all' || s.sellerId === seller)
+        );
+      })
       .map((s) => {
         const d = new Date(s.createdAt);
         const label =
@@ -269,21 +285,29 @@ export default function VentesManager() {
       .filter(
         (r) => q === '' || r.label.toLowerCase().includes(q) || r.number.toLowerCase().includes(q),
       );
-  }, [sales, search, period, pickDate, method, seller]);
+  }, [sales, search, period, from, to, method, seller]);
 
   const todayYmd = isoToYmd(now.toISOString());
+  const fmtYmd = (ymd: string) =>
+    new Date(`${ymd}T00:00:00`).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   const periodLabel =
     period === 'all'
       ? t('ventes.period.all')
       : period === 'today'
         ? t('common.today')
-        : pickDate
-          ? new Date(`${pickDate}T00:00:00`).toLocaleDateString('fr-FR', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-            })
-          : t('common.pickDate');
+        : period === 'week'
+          ? t('common.thisWeek')
+          : period === 'month'
+            ? t('common.thisMonth')
+            : period === 'year'
+              ? t('common.thisYear')
+              : from && to
+                ? `${fmtYmd(from)} → ${fmtYmd(to)}`
+                : t('common.customRange');
 
   return (
     <>
@@ -352,18 +376,44 @@ export default function VentesManager() {
                 onClick: () => setPeriod('today'),
               },
               {
-                label: t('common.pickDate'),
+                label: t('common.thisWeek'),
+                icon: 'calendar-days',
+                active: period === 'week',
+                onClick: () => setPeriod('week'),
+              },
+              {
+                label: t('common.thisMonth'),
+                icon: 'calendar-range',
+                active: period === 'month',
+                onClick: () => setPeriod('month'),
+              },
+              {
+                label: t('common.thisYear'),
                 icon: 'calendar',
-                active: period === 'date',
+                active: period === 'year',
+                onClick: () => setPeriod('year'),
+              },
+              {
+                label: t('common.customRange'),
+                icon: 'calendar-search',
+                active: period === 'custom',
                 onClick: () => {
-                  setPeriod('date');
-                  if (!pickDate) setPickDate(todayYmd);
+                  setPeriod('custom');
+                  // Plage pré-remplie sur aujourd'hui pour que la liste ne
+                  // soit jamais vide « sans raison » à l'ouverture.
+                  if (!from) setFrom(todayYmd);
+                  if (!to) setTo(todayYmd);
                 },
               },
             ]}
           />
-          {period === 'date' && (
-            <DatePicker value={pickDate} onChange={setPickDate} max={todayYmd} />
+          {period === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground font-body text-sm">{t('rapports.from')}</span>
+              <DatePicker value={from} onChange={setFrom} max={to || todayYmd} />
+              <span className="text-muted-foreground font-body text-sm">{t('rapports.to')}</span>
+              <DatePicker value={to} onChange={setTo} min={from || undefined} max={todayYmd} />
+            </div>
           )}
 
           <div className="border-border flex flex-wrap items-center overflow-hidden rounded-md border">
