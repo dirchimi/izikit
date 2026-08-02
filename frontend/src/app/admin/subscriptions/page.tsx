@@ -274,6 +274,15 @@ export default function AdminSubscriptionsPage() {
                   {PLAN_LABEL[p.plan] ?? p.plan} · {p.months} mois ·{' '}
                   {METHOD_LABEL[p.method] ?? p.method}
                 </p>
+                {p.note && (
+                  <p
+                    className={`font-body mt-1 text-xs ${
+                      p.status === 'REJECTED' ? 'text-danger' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {p.note}
+                  </p>
+                )}
               </div>
               <Badge tone={TONE[p.status] ?? 'neutral'}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
             </div>
@@ -368,6 +377,15 @@ export default function AdminSubscriptionsPage() {
                   <Badge tone={TONE[p.status] ?? 'neutral'}>
                     {STATUS_LABEL[p.status] ?? p.status}
                   </Badge>
+                  {p.note && (
+                    <p
+                      className={`font-body mt-1 max-w-[220px] text-xs ${
+                        p.status === 'REJECTED' ? 'text-danger' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {p.note}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-end">
                   {canConfirm && p.status === 'PENDING' ? (

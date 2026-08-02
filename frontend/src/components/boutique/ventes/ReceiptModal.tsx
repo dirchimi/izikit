@@ -38,6 +38,9 @@ export interface ReceiptData {
   items: { name: string; qty: number; unitPrice: number }[];
   // Jeton du lien public de reçu (partage WhatsApp avec lien de téléchargement).
   publicToken?: string | null;
+  // Vente annulée : bandeau d'information À L'ÉCRAN uniquement (`no-print`,
+  // jamais dessiné sur l'image partagée) — le ticket client reste intact.
+  cancelled?: { at: string | null; byName: string | null; reason: string } | null;
 }
 
 /** Lignes de paiement non nulles à afficher sur le reçu (ventilation ou méthode unique). */
@@ -379,6 +382,21 @@ export default function ReceiptModal({
     <Modal open={!!receipt} onClose={onClose} size="sm">
       {receipt && (
         <div className="flex flex-col gap-4">
+          {receipt.cancelled && (
+            <div className="no-print bg-danger/10 text-danger font-body rounded-md px-4 py-3 text-sm">
+              <p className="font-bold">{t('ventes.cancelled')}</p>
+              <p className="mt-0.5">
+                {receipt.cancelled.reason}
+                {receipt.cancelled.byName ? ` — ${receipt.cancelled.byName}` : ''}
+                {receipt.cancelled.at
+                  ? ` · ${new Date(receipt.cancelled.at).toLocaleString('fr-FR', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}`
+                  : ''}
+              </p>
+            </div>
+          )}
           {/* Ticket — couleurs papier fixes (indépendantes du thème) */}
           <div className="printable rounded-lg border border-neutral-300 bg-white px-5 py-5 text-neutral-800">
             <div className="flex flex-col items-center text-center">

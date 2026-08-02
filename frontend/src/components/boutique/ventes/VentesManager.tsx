@@ -221,6 +221,10 @@ export default function VentesManager() {
       customerName: s.customerName,
       customerPhone: s.customerPhone,
       items: s.items,
+      cancelled:
+        s.status === 'CANCELLED'
+          ? { at: s.cancelledAt, byName: s.cancelledByName, reason: s.cancelReason ?? '' }
+          : null,
     });
   }
   const now = new Date();
@@ -279,6 +283,8 @@ export default function VentesManager() {
           method: s.method,
           sellerName: s.sellerName,
           cancelled: s.status === 'CANCELLED',
+          cancelReason: s.cancelReason,
+          cancelledByName: s.cancelledByName,
           synced: s.synced,
         };
       })
@@ -518,13 +524,21 @@ export default function VentesManager() {
                     </span>
                     <span className="font-body text-muted-foreground w-24 text-xs">{r.date}</span>
                     <span className="font-body text-muted-foreground w-14 text-xs">{r.time}</span>
-                    <span
-                      className={`font-body flex-1 text-sm font-medium ${
-                        r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
-                      }`}
-                    >
-                      {r.label}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span
+                        className={`font-body block truncate text-sm font-medium ${
+                          r.cancelled ? 'text-muted-foreground line-through' : 'text-foreground'
+                        }`}
+                      >
+                        {r.label}
+                      </span>
+                      {r.cancelled && r.cancelReason && (
+                        <p className="font-body text-danger truncate text-[11px]">
+                          {r.cancelReason}
+                          {r.cancelledByName ? ` — ${r.cancelledByName}` : ''}
+                        </p>
+                      )}
+                    </div>
                     <RowSyncBadge synced={r.synced} />
                     <span className="font-body text-muted-foreground w-8 text-center text-sm">
                       {r.qty}
@@ -654,6 +668,12 @@ export default function VentesManager() {
                   </span>
                   <span className="font-body text-muted-foreground shrink-0 text-xs">×{r.qty}</span>
                 </div>
+                {r.cancelled && r.cancelReason && (
+                  <p className="font-body text-danger text-[11px]">
+                    {r.cancelReason}
+                    {r.cancelledByName ? ` — ${r.cancelledByName}` : ''}
+                  </p>
+                )}
                 <div className="border-border flex items-center justify-between gap-2 border-t pt-2">
                   <span
                     className={`font-body text-base font-bold ${

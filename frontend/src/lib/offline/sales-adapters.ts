@@ -41,6 +41,11 @@ export interface ApiSale {
   mobileAmount: number;
   creditAmount: number;
   status: string; // ACTIVE | CANCELLED
+  /** Contexte d'annulation (null tant que la vente est active). Le nom est
+   * résolu via `memberNames`, comme `sellerName`. */
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancelReason: string | null;
   createdAt: string; // ISO
   sellerId: string | null;
   sellerName: string | null;
@@ -98,6 +103,9 @@ export function aggregateSales(
         mobileAmount: s.mobileAmount,
         creditAmount: s.creditAmount,
         status: s.status,
+        cancelledAt: s.cancelledAt ?? null,
+        cancelledByName: s.cancelledById ? (memberNames?.[s.cancelledById] ?? null) : null,
+        cancelReason: s.cancelReason ?? null,
         createdAt: s.createdAt,
         sellerId: s.createdById ?? null,
         sellerName: s.createdById ? (memberNames?.[s.createdById] ?? null) : null,
