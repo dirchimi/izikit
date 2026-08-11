@@ -3,9 +3,10 @@
 // Isomorphe (client + serveur) : consommé par l'écran Paramètres → Abonnement,
 // la bannière d'expiration et les routes API. AUCUN `server-only` ici.
 //
-// Une seule offre payante : **Premium** (aligné sur le landing). Le prix dépend
-// de la DURÉE choisie (mensuel / trimestriel / annuel), avec remise croissante
-// — ce n'est donc PAS un simple prix mensuel × mois.
+// Deux offres payantes (alignées sur le landing) : **Premium** (mensuel /
+// trimestriel / annuel, remise croissante — ce n'est donc PAS un simple prix
+// mensuel × mois) et **Entreprise** (annuel uniquement, « à partir de » 700 000
+// — le prix négocié s'applique via un code de réduction créé par le superadmin).
 
 export const TRIAL_DAYS = 15;
 
@@ -13,7 +14,7 @@ export const TRIAL_DAYS = 15;
 // (« appli douce ») : un client qui paie avec un léger retard n'est pas coupé.
 export const GRACE_DAYS = 3;
 
-export type PlanId = 'PREMIUM';
+export type PlanId = 'PREMIUM' | 'ENTREPRISE';
 // Modes de paiement proposés à la souscription : espèces ou virement bancaire.
 // « MOBILE » n'est plus proposé mais reste une valeur possible en base pour les
 // anciens paiements (affichage historique via la clé i18n sub.method.mobile).
@@ -30,9 +31,10 @@ export interface PlanDef {
 
 export const PLANS: Record<PlanId, PlanDef> = {
   PREMIUM: { id: 'PREMIUM', nameKey: 'sub.plan.premium', maxUsers: null },
+  ENTREPRISE: { id: 'ENTREPRISE', nameKey: 'sub.plan.entreprise', maxUsers: null },
 };
 
-export const PLAN_IDS: readonly PlanId[] = ['PREMIUM'] as const;
+export const PLAN_IDS: readonly PlanId[] = ['PREMIUM', 'ENTREPRISE'] as const;
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['CASH', 'BANK'] as const;
 
 /** Grille tarifaire par durée (prix TOTAL en FCFA, aligné sur le landing). */
@@ -47,11 +49,17 @@ export const SUB_PERIODS: readonly SubPeriod[] = [
   { months: 12, price: 350_000, labelKey: 'sub.period.annual' },
 ] as const;
 
+/** Durées proposées PAR PLAN (Entreprise : annuel uniquement). */
+export const PLAN_PERIODS: Record<PlanId, readonly SubPeriod[]> = {
+  PREMIUM: SUB_PERIODS,
+  ENTREPRISE: [{ months: 12, price: 700_000, labelKey: 'sub.period.annual' }],
+};
+
 /** Prix mensuel de référence (mensuel sans remise) — sert au MRR admin. */
 export const MONTHLY_PRICE = 35_000;
 
 export function isPlanId(v: unknown): v is PlanId {
-  return v === 'PREMIUM';
+  return v === 'PREMIUM' || v === 'ENTREPRISE';
 }
 
 export function isPaymentMethod(v: unknown): v is PaymentMethod {
@@ -59,12 +67,15 @@ export function isPaymentMethod(v: unknown): v is PaymentMethod {
 }
 
 /**
- * Prix total (FCFA) d'un abonnement de `months` mois. Utilise la grille par
- * durée (remises incluses) ; repli linéaire au tarif mensuel pour une durée non
- * listée. `plan` conservé pour compat (une seule offre aujourd'hui).
+ * Prix total (FCFA) d'un abonnement de `months` mois. Utilise la grille du
+ * plan (remises incluses) ; repli linéaire pour une durée non listée, au
+ * tarif mensuel équivalent de la plus courte durée du plan (Premium : 35 000 ;
+ * Entreprise : 700 000 / 12).
  */
-export function planPrice(_plan: PlanId, months: number): number {
-  const p = SUB_PERIODS.find((x) => x.months === months);
+export function planPrice(plan: PlanId, months: number): number {
+  const grid = PLAN_PERIODS[plan];
+  const p = grid.find((x) => x.months === months);
   if (p) return p.price;
-  return MONTHLY_PRICE * Math.max(1, Math.trunc(months));
+  const base = grid[0] ?? { months: 1, price: MONTHLY_PRICE };
+  return Math.round((base.price / base.months) * Math.max(1, Math.trunc(months)));
 }

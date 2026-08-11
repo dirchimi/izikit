@@ -39,6 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const PLAN_LABEL: Record<string, string> = {
   PREMIUM: 'Premium',
+  ENTREPRISE: 'Entreprise',
   SOLO: 'Solo',
   BOUTIQUE: 'Boutique',
 };
@@ -238,7 +239,10 @@ export default function AdminSubscriptionsPage() {
             applyFilters({ plan: v });
           }}
           allLabel="Tous les plans"
-          options={[{ value: 'PREMIUM', label: 'Premium' }]}
+          options={[
+            { value: 'PREMIUM', label: 'Premium' },
+            { value: 'ENTREPRISE', label: 'Entreprise' },
+          ]}
         />
         <FilterSelect
           value={method}

@@ -2143,6 +2143,7 @@ const messages: Record<string, Msg> = {
     ar: 'مستخدمون غير محدودين — المالك والمديرون والبائعون.',
   },
   'sub.plan.premium': { fr: 'Premium', en: 'Premium', ar: 'بريميوم' },
+  'sub.plan.entreprise': { fr: 'Entreprise', en: 'Enterprise', ar: 'مؤسسة' },
   'sub.plan.premium.desc': {
     fr: 'Toutes les fonctionnalités, utilisateurs illimités (patron, gérants, vendeurs).',
     en: 'All features, unlimited users (owner, managers, sellers).',

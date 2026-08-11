@@ -10,9 +10,10 @@ import { useToast } from '@/contexts/ToastContext';
 import { useT } from '@/contexts/LocaleContext';
 import { formatFCFA } from '@/lib/boutique/format';
 import { ltrIsolate } from '@/lib/i18n/bidi';
+import { CONTACT_WHATSAPP } from '@/lib/contact';
 import {
   PLANS,
-  SUB_PERIODS,
+  PLAN_PERIODS,
   planPrice,
   isPlanId,
   type PlanId,
@@ -270,7 +271,7 @@ export default function AbonnementSection() {
               </div>
               {/* Les 3 durées disponibles (remise croissante). */}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {SUB_PERIODS.map((p) => (
+                {PLAN_PERIODS.PREMIUM.map((p) => (
                   <div
                     key={p.months}
                     className="border-border bg-background rounded-md border px-3 py-2.5 text-center"
@@ -299,6 +300,72 @@ export default function AbonnementSection() {
               >
                 {data.status === 'ACTIVE' ? t('sub.renew') : t('sub.choose')}
               </button>
+            </div>
+
+            {/* Entreprise — même parcours self-serve que Premium (durée, mode de
+                paiement, code de réduction) : le prix négocié « à partir de »
+                s'applique via un code créé par le superadmin. Le lien WhatsApp
+                reste pour ouvrir la négociation. */}
+            <div className="bg-surface border-border flex flex-col gap-4 rounded-lg border p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="font-headings text-foreground text-base font-bold">
+                    {t(PLANS.ENTREPRISE.nameKey)}
+                  </span>
+                  <p className="text-muted-foreground font-body mt-0.5 text-xs">
+                    {t('landing.pricing.entreprise.desc')}
+                  </p>
+                </div>
+                {data.plan === 'ENTREPRISE' && data.status === 'ACTIVE' && (
+                  <span className="bg-primary/15 text-primary font-body shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold">
+                    {t('sub.current')}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {PLAN_PERIODS.ENTREPRISE.map((p) => (
+                  <div
+                    key={p.months}
+                    className="border-border bg-background rounded-md border px-3 py-2.5 text-center"
+                  >
+                    <p className="text-muted-foreground font-body text-[11px] font-semibold uppercase">
+                      {t(p.labelKey)}
+                    </p>
+                    <p className="font-headings text-foreground mt-0.5 text-sm font-bold">
+                      <span dir="ltr">
+                        {formatFCFA(p.price)} {t('common.fcfa')}
+                      </span>
+                    </p>
+                    <p className="text-muted-foreground font-body text-[10px]">
+                      {t('landing.pricing.entreprise.from')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setChoosing('ENTREPRISE');
+                  setMethod('CASH');
+                  setMonths(12);
+                  resetDiscount();
+                }}
+                disabled={!!pending}
+                className="bg-primary text-primary-foreground font-body rounded-md px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+              >
+                {data.plan === 'ENTREPRISE' && data.status === 'ACTIVE'
+                  ? t('sub.renew')
+                  : t('sub.choose')}
+              </button>
+              <a
+                href={CONTACT_WHATSAPP}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-body flex items-center justify-center gap-1.5 text-xs font-semibold hover:underline"
+              >
+                <Icon i="message-circle" size={13} />
+                {t('landing.pricing.entreprise.cta')}
+              </a>
             </div>
             {pending && (
               <p className="text-muted-foreground font-body text-xs">{t('sub.blockedByPending')}</p>
@@ -375,7 +442,7 @@ export default function AbonnementSection() {
                 {t('sub.duration')}
               </span>
               <div className="grid grid-cols-1 gap-2">
-                {SUB_PERIODS.map((p) => (
+                {PLAN_PERIODS[choosing].map((p) => (
                   <button
                     key={p.months}
                     type="button"
