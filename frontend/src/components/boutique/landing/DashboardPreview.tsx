@@ -111,14 +111,17 @@ export default async function DashboardPreview() {
             <p className="font-body text-foreground mb-3 text-xs font-semibold">
               {t('landing.preview.weekSales')}
             </p>
+            {/* Les barres sont des enfants DIRECTS de la rangée h-16 : une
+                hauteur en % ne se résout que contre un parent à hauteur
+                définie — l'ancien wrapper à hauteur auto les écrasait à 0
+                (graphe vide). */}
             <div className="flex h-16 items-end gap-2">
               {weekBars.map((v, i) => (
-                <div key={`bar-${i}`} className="flex flex-1 flex-col items-center gap-1">
-                  <div
-                    className={`w-full rounded-sm ${i === PEAK ? 'bg-primary' : 'bg-primary/50'}`}
-                    style={{ height: `${Math.round((v / BARS_MAX) * 100)}%` }}
-                  />
-                </div>
+                <div
+                  key={`bar-${i}`}
+                  className={`flex-1 rounded-sm ${i === PEAK ? 'bg-primary' : 'bg-primary/50'}`}
+                  style={{ height: `${Math.round((v / BARS_MAX) * 100)}%` }}
+                />
               ))}
             </div>
             <div className="mt-1 flex justify-between">

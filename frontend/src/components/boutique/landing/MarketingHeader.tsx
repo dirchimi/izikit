@@ -92,14 +92,17 @@ export default async function MarketingHeader() {
       </div>
 
       <header className="bg-surface/90 border-border sticky top-0 z-30 border-b backdrop-blur">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-3.5 md:px-10">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-2 px-4 py-3.5 md:gap-4 md:px-10">
           <Link href="/" className="flex items-center gap-2.5">
             <img
               src="/logo-mark.svg"
               alt=""
               className="ring-primary/20 h-9 w-9 rounded-lg shadow-sm ring-1"
             />
-            <span className="font-headings text-foreground text-lg font-bold tracking-tight">
+            {/* Le mot-symbole s'efface sur les tout petits écrans pour laisser
+                la place au sélecteur de langue mobile (l'icône + la barre
+                utilitaire + le héros portent déjà la marque). */}
+            <span className="font-headings text-foreground hidden text-lg font-bold tracking-tight min-[420px]:inline">
               Sahilley
             </span>
           </Link>
@@ -116,7 +119,13 @@ export default async function MarketingHeader() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Sélecteur de langue : compact sur mobile (retour terrain — les
+                visiteurs téléphone doivent pouvoir passer la landing en
+                arabe/anglais sans créer de compte), normal dès md. */}
+            <div className="md:hidden">
+              <LanguageSwitcher compact />
+            </div>
             <div className="hidden md:block">
               <LanguageSwitcher />
             </div>
@@ -126,10 +135,11 @@ export default async function MarketingHeader() {
             {authenticated ? (
               <Link
                 href="/dashboard"
-                className={`${ctaPrimary} flex items-center gap-2 px-5 py-2 text-sm`}
+                className={`${ctaPrimary} flex items-center gap-2 px-3 py-2 text-sm whitespace-nowrap sm:px-5`}
               >
                 <Icon i="layout-dashboard" size={15} />
-                {t('landing.cta.myDashboard')}
+                <span className="hidden sm:inline">{t('landing.cta.myDashboard')}</span>
+                <span className="sm:hidden">{t('nav.dashboard')}</span>
               </Link>
             ) : (
               <>
@@ -139,7 +149,7 @@ export default async function MarketingHeader() {
                 >
                   {t('landing.cta.login')}
                 </Link>
-                <Link href="/inscription" className={`${ctaPrimary} px-5 py-2 text-sm`}>
+                <Link href="/inscription" className={`${ctaPrimary} px-3 py-2 text-sm sm:px-5`}>
                   {t('landing.cta.trial')}
                 </Link>
               </>
