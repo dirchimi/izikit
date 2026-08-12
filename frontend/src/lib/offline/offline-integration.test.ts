@@ -328,14 +328,14 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
     // stops the whole loop (FIFO — never skip ahead past a connectivity
     // blip), so BOTH rows remain untouched.
     const offlineDrain = await drainOutbox();
-    expect(offlineDrain).toEqual({ done: 0, conflicts: 0, errors: 0 });
+    expect(offlineDrain).toEqual({ done: 0, conflicts: 0, errors: 0, stopped: true });
     expect(await pendingCount()).toBe(2);
     expect(salesPostCount()).toBe(1); // the one attempt that hit ApiError(0)
 
     // Now go online and drain for real.
     goOnline();
     const onlineDrain = await drainOutbox();
-    expect(onlineDrain).toEqual({ done: 2, conflicts: 0, errors: 0 });
+    expect(onlineDrain).toEqual({ done: 2, conflicts: 0, errors: 0, stopped: false });
 
     expect(salesPostCount()).toBe(3); // 1 offline attempt + 2 real POSTs
     expect(server.sales.size).toBe(2);
@@ -363,7 +363,7 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
     // -----------------------------------------------------------------------
     // (a) Nothing pending — a second drain is a pure no-op, no network call.
     const noopDrain = await drainOutbox();
-    expect(noopDrain).toEqual({ done: 0, conflicts: 0, errors: 0 });
+    expect(noopDrain).toEqual({ done: 0, conflicts: 0, errors: 0, stopped: false });
     expect(salesPostCount()).toBe(3);
 
     // (b) Force a REPLAY of an already-`done` row — emulating an app crash
@@ -377,7 +377,7 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
     await db.outbox.update(sale1Row.seq, { status: 'pending' });
 
     const replayDrain = await drainOutbox();
-    expect(replayDrain).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(replayDrain).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
     expect(salesPostCount()).toBe(4); // one more POST attempted…
 
     // …but the fake server deduped it: still exactly 2 sales recorded, same
@@ -414,7 +414,7 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
     // `db.conflicts` rows it wrote per op, and `drainPending` folds that into
     // `conflicts` — so sale3's real conflict (asserted via `db.conflicts`
     // below) now correctly counts here too.
-    expect(conflictDrain).toEqual({ done: 2, conflicts: 1, errors: 0 });
+    expect(conflictDrain).toEqual({ done: 2, conflicts: 1, errors: 0, stopped: false });
 
     // The sale is NOT lost: recorded server-side, given a real V- number.
     expect(server.sales.size).toBe(4);
@@ -460,7 +460,7 @@ describe('offline pipeline — end-to-end (Task 6.4)', () => {
 
     goOnline();
     const expenseDrain = await drainOutbox();
-    expect(expenseDrain).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(expenseDrain).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const syncedExpense = await db.expenses.get(expense.id);
     expect(syncedExpense).toMatchObject({ synced: true, number: 'D-0001' });

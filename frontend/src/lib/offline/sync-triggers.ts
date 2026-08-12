@@ -19,11 +19,63 @@
  * maintenant" button (Task 2.4) calls it too. Because `drainOutbox()` is
  * single-flight, any number of callers can fire `triggerDrain()` freely
  * without risking a double-POST.
+ *
+ * Réessai rapide (connexions instables) : quand un drain s'arrête sur une
+ * coupure transitoire (`DrainResult.stopped` — voir sync-engine.ts), attendre
+ * le balayage de 30 s fait ramer la file sur les réseaux qui flanchent par
+ * à-coups de quelques secondes (cas courant au Tchad). On programme donc un
+ * réessai en escalier — 3 s, puis 8 s, puis 20 s, en boucle — tant qu'il
+ * reste des lignes et que l'arrêt est transitoire. L'escalier revient à 3 s
+ * dès qu'un drain fait AVANCER la file (`done > 0` : la connexion marche par
+ * intermittence, on insiste vite) et s'annule sur un drain complet. Chaque
+ * tentative est un unique POST léger, single-flight — pas de tempête de
+ * requêtes.
  */
-import { drainOutbox } from './sync-engine';
+import { drainOutbox, type DrainResult } from './sync-engine';
 import { pendingCount, reclaimOrphanedSyncing } from './outbox';
 
 const SWEEP_INTERVAL_MS = 30_000;
+/** Escalier de réessai après un arrêt transitoire (voir docblock module). */
+export const RETRY_DELAYS_MS: readonly number[] = [3_000, 8_000, 20_000];
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryStep = 0;
+
+function cancelRetry(): void {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
+/** Programme le prochain réessai de l'escalier (no-op si un est déjà armé). */
+function scheduleRetry(): void {
+  if (retryTimer !== null) return;
+  const delay = RETRY_DELAYS_MS[retryStep % RETRY_DELAYS_MS.length] ?? SWEEP_INTERVAL_MS;
+  retryStep++;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    void pendingCount().then((count) => {
+      if (count > 0) runDrain();
+    });
+  }, delay);
+}
+
+/** Lance un drain et pilote l'escalier de réessai selon son résultat. */
+function runDrain(): void {
+  void drainOutbox()
+    .then((res: DrainResult) => {
+      // De la progression ⇒ la connexion marche par intermittence : on
+      // repart du bas de l'escalier pour insister rapidement.
+      if (res.done > 0) retryStep = 0;
+      if (res.stopped) scheduleRetry();
+      else retryStep = 0;
+    })
+    .catch((err: unknown) => {
+      console.warn('[sync-triggers] drainOutbox failed', err);
+    });
+}
 
 /**
  * Fire-and-forget: kicks off a drain if the browser reports connectivity.
@@ -33,9 +85,7 @@ const SWEEP_INTERVAL_MS = 30_000;
  */
 export function triggerDrain(): void {
   if (typeof navigator === 'undefined' || !navigator.onLine) return;
-  void drainOutbox().catch((err: unknown) => {
-    console.warn('[sync-triggers] drainOutbox failed', err);
-  });
+  runDrain();
 }
 
 /**
@@ -51,7 +101,12 @@ export function installSyncTriggers(): () => void {
     return () => undefined;
   }
 
-  const handleOnline = () => triggerDrain();
+  const handleOnline = () => {
+    // Connectivité fraîche ⇒ escalier remis à zéro (le prochain échec
+    // réessaiera vite) avant le drain immédiat.
+    retryStep = 0;
+    triggerDrain();
+  };
   window.addEventListener('online', handleOnline);
 
   const interval = setInterval(() => {
@@ -76,5 +131,6 @@ export function installSyncTriggers(): () => void {
   return () => {
     window.removeEventListener('online', handleOnline);
     clearInterval(interval);
+    cancelRetry();
   };
 }

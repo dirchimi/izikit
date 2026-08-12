@@ -81,6 +81,13 @@ export interface DrainResult {
   done: number;
   conflicts: number;
   errors: number;
+  /** `true` quand le drain s'est arrêté SANS avoir vidé la file, sur une
+   * branche transitoire (coupure réseau/timeout, corps 2xx tronqué, CSRF
+   * périmé, 401 non rafraîchissable) — la tête de file est repassée
+   * `pending`. `sync-triggers.ts` s'en sert pour programmer un réessai
+   * rapide (escalier 3s/8s/20s) au lieu d'attendre le balayage de 30 s —
+   * crucial sur les connexions instables (coupures de quelques secondes). */
+  stopped: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -373,7 +380,7 @@ let draining = false;
  */
 export async function drainOutbox(): Promise<DrainResult> {
   if (draining) {
-    return { done: 0, conflicts: 0, errors: 0 };
+    return { done: 0, conflicts: 0, errors: 0, stopped: false };
   }
   draining = true;
   try {
@@ -396,6 +403,7 @@ async function drainPending(): Promise<DrainResult> {
   let done = 0;
   let conflicts = 0;
   let errors = 0;
+  let stopped = false;
 
   for (const row of rows) {
     const seq = row.seq;
@@ -422,6 +430,7 @@ async function drainPending(): Promise<DrainResult> {
         // the payload (PHASE 0) — if the server already applied it, the
         // retry dedup-returns the existing entity.
         await db.outbox.update(seq, { status: 'pending' });
+        stopped = true;
         break;
       }
 
@@ -429,6 +438,7 @@ async function drainPending(): Promise<DrainResult> {
         // Offline mid-drain — see module docblock for why this resets to
         // `pending` (not `markError`) and stops rather than continuing.
         await db.outbox.update(seq, { status: 'pending' });
+        stopped = true;
         break;
       }
 
@@ -470,6 +480,7 @@ async function drainPending(): Promise<DrainResult> {
       // suivant repart tout seul.
       if (err.status === 403 && err.code === 'Invalid CSRF token') {
         await db.outbox.update(seq, { status: 'pending' });
+        stopped = true;
         break;
       }
 
@@ -489,6 +500,7 @@ async function drainPending(): Promise<DrainResult> {
         // this row onward — safe because every mutation is idempotent via
         // its client id.
         await db.outbox.update(seq, { status: 'pending' });
+        stopped = true;
         break;
       }
 
@@ -518,5 +530,5 @@ async function drainPending(): Promise<DrainResult> {
     done++;
   }
 
-  return { done, conflicts, errors };
+  return { done, conflicts, errors, stopped };
 }

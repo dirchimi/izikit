@@ -54,18 +54,23 @@ export function syncIndicatorState({
  *   - a drain already in flight (`syncing`) — safe no-op if called again
  *     (`drainOutbox()` is single-flight per `useSyncStatus.ts`'s docblock)
  *     but pointless to trigger twice from the UI;
- *   - nothing to do (`pendingCount === 0 && conflicts === 0`);
- *   - no network — a manual drain would just have nothing to POST to.
+ *   - nothing to do (`pendingCount === 0 && conflicts === 0`).
+ *
+ * Volontairement PAS désactivé quand `online === false` : `navigator.onLine`
+ * ment sur certains téléphones/proxys (portail captif, données mobiles
+ * capricieuses) — il peut annoncer « hors ligne » alors que le réseau passe.
+ * Le bouton manuel doit toujours tenter RÉELLEMENT : si le réseau est
+ * vraiment coupé, la requête échoue vite (timeout 30 s max), la ligne
+ * repasse `pending` et rien n'est perdu. `online` reste dans l'input pour
+ * l'INDICATEUR (`syncIndicatorState` ci-dessus), pas pour bloquer l'action.
  */
 export function isSyncNowDisabled({
   pendingCount,
   conflicts,
   syncing,
-  online,
 }: SyncIndicatorInput): boolean {
   if (syncing) return true;
   if (pendingCount === 0 && conflicts === 0) return true;
-  if (!online) return true;
   return false;
 }
 

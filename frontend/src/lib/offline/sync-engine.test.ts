@@ -89,7 +89,7 @@ describe('drainOutbox', () => {
 
     const result = await drainOutbox();
 
-    expect(result).toEqual({ done: 2, conflicts: 1, errors: 0 });
+    expect(result).toEqual({ done: 2, conflicts: 1, errors: 0, stopped: false });
 
     // FIFO: #2 must have been attempted before #3, in seq order.
     expect(mockedApi).toHaveBeenNthCalledWith(1, '/api/sales', {
@@ -134,7 +134,7 @@ describe('drainOutbox', () => {
     });
 
     const result = await drainOutbox();
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const sale = await db.sales.get('s7');
     expect(sale?.number).toBe('V-0007');
@@ -156,7 +156,7 @@ describe('drainOutbox', () => {
     });
 
     const result = await drainOutbox();
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const expense = await db.expenses.get('e7');
     expect(expense?.number).toBe('D-0007');
@@ -183,7 +183,7 @@ describe('drainOutbox', () => {
     mockedApi.mockResolvedValueOnce({ applied: 1200, remainingDebt: 300 });
 
     const result = await drainOutbox();
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const rep = await db.repayments.get('rp1');
     expect(rep?.synced).toBe(true);
@@ -231,7 +231,7 @@ describe('drainOutbox', () => {
     });
 
     const result = await drainOutbox();
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const movement = await db.stockMovements.get('mv1');
     expect(movement?.synced).toBe(true);
@@ -266,7 +266,7 @@ describe('drainOutbox', () => {
     mockedApi.mockResolvedValueOnce({}); // malformed/empty response
 
     const result = await drainOutbox();
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     const product = await db.products.get('p2');
     expect(product?.qty).toBe(8);
@@ -280,7 +280,7 @@ describe('drainOutbox', () => {
 
     const result = await drainOutbox();
 
-    expect(result).toEqual({ done: 0, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 0, conflicts: 0, errors: 0, stopped: true });
     // op #2 was never POSTed.
     expect(mockedApi).toHaveBeenCalledTimes(1);
 
@@ -301,7 +301,12 @@ describe('drainOutbox', () => {
 
     mockedApi.mockRejectedValueOnce(new ApiError(401, 'Unauthorized', { error: 'UNAUTHORIZED' }));
 
-    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+    await expect(drainOutbox()).resolves.toEqual({
+      done: 0,
+      conflicts: 0,
+      errors: 0,
+      stopped: true,
+    });
 
     // op #2 was never POSTed — the loop stopped after the 401.
     expect(mockedApi).toHaveBeenCalledTimes(1);
@@ -329,7 +334,12 @@ describe('drainOutbox', () => {
       new ApiError(403, 'Invalid CSRF token', { error: 'Invalid CSRF token' }),
     );
 
-    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+    await expect(drainOutbox()).resolves.toEqual({
+      done: 0,
+      conflicts: 0,
+      errors: 0,
+      stopped: true,
+    });
     expect(mockedApi).toHaveBeenCalledTimes(1); // s2 jamais tenté — FIFO préservé
 
     const pending = await listPending();
@@ -346,7 +356,12 @@ describe('drainOutbox', () => {
 
     mockedApi.mockRejectedValueOnce(new ApiError(403, 'Forbidden', { error: 'FORBIDDEN' }));
 
-    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 1 });
+    await expect(drainOutbox()).resolves.toEqual({
+      done: 0,
+      conflicts: 0,
+      errors: 1,
+      stopped: false,
+    });
     const s1 = (await db.outbox.toArray()).find((r) => r.opId === 's1');
     expect(s1?.status).toBe('error');
   });
@@ -371,7 +386,7 @@ describe('drainOutbox', () => {
 
     const result = await drainOutbox();
 
-    expect(result).toEqual({ done: 1, conflicts: 0, errors: 1 });
+    expect(result).toEqual({ done: 1, conflicts: 0, errors: 1, stopped: false });
 
     const rows = await db.outbox.toArray();
     const e1 = rows.find((r) => r.opId === 'e1');
@@ -404,10 +419,10 @@ describe('drainOutbox', () => {
     const first = drainOutbox();
     const second = drainOutbox(); // fired while `first` is still in flight
 
-    await expect(second).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+    await expect(second).resolves.toEqual({ done: 0, conflicts: 0, errors: 0, stopped: false });
 
     resolveApi({ sale: { id: 's1', number: 'V-0001', total: 100, publicToken: null } });
-    await expect(first).resolves.toEqual({ done: 1, conflicts: 0, errors: 0 });
+    await expect(first).resolves.toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
     expect(mockedApi).toHaveBeenCalledTimes(1);
   });
@@ -419,7 +434,12 @@ describe('drainOutbox', () => {
 
     mockedApi.mockRejectedValueOnce(new SyntaxError('Unexpected end of JSON input'));
 
-    await expect(drainOutbox()).resolves.toEqual({ done: 0, conflicts: 0, errors: 0 });
+    await expect(drainOutbox()).resolves.toEqual({
+      done: 0,
+      conflicts: 0,
+      errors: 0,
+      stopped: true,
+    });
 
     // op #2 was never POSTed — the loop stopped after the non-ApiError.
     expect(mockedApi).toHaveBeenCalledTimes(1);
@@ -456,7 +476,7 @@ describe('drainOutbox', () => {
 
     const result = await drainOutbox();
 
-    expect(result).toEqual({ done: 2, conflicts: 0, errors: 0 });
+    expect(result).toEqual({ done: 2, conflicts: 0, errors: 0, stopped: false });
     expect(warnSpy).toHaveBeenCalledWith(
       '[sync-engine] applySyncSuccess failed for row',
       's1',
@@ -492,7 +512,7 @@ describe('drainOutbox', () => {
       );
 
       const result = await drainOutbox();
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
       const rows = await db.outbox.toArray();
       expect(rows[0]?.status).toBe('done'); // NOT 'error'
@@ -514,7 +534,7 @@ describe('drainOutbox', () => {
       );
 
       const result = await drainOutbox();
-      expect(result).toEqual({ done: 0, conflicts: 0, errors: 1 });
+      expect(result).toEqual({ done: 0, conflicts: 0, errors: 1, stopped: false });
 
       const rows = await db.outbox.toArray();
       expect(rows[0]?.status).toBe('error');
@@ -537,7 +557,7 @@ describe('drainOutbox', () => {
       });
 
       const result = await drainOutbox();
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
       expect((await db.sales.get('sc3'))?.synced).toBe(true);
     });
   });
@@ -560,7 +580,7 @@ describe('drainOutbox', () => {
       // it wrote new `db.conflicts` rows, `conflicts` must be > 0 (Task 6.4
       // regression fix: this used to stay 0 because the counter only ever
       // looked at outbox `status: 'conflict'`, which a 200 response never sets).
-      expect(result).toEqual({ done: 1, conflicts: 1, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 1, errors: 0, stopped: false });
 
       const rows = await db.conflicts.toArray();
       expect(rows).toHaveLength(2);
@@ -596,7 +616,7 @@ describe('drainOutbox', () => {
 
       const result = await drainOutbox();
 
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
       expect(await db.conflicts.count()).toBe(0);
     });
 
@@ -627,7 +647,7 @@ describe('drainOutbox', () => {
 
       // A pure replay (the one conflict row already existed) writes nothing
       // NEW, so it must NOT count toward DrainResult.conflicts either.
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
 
       const rows = await db.conflicts.where('saleId').equals('s3').toArray();
       expect(rows).toHaveLength(1);
@@ -645,7 +665,7 @@ describe('drainOutbox', () => {
       });
 
       const result = await drainOutbox();
-      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0 });
+      expect(result).toEqual({ done: 1, conflicts: 0, errors: 0, stopped: false });
       expect(await db.conflicts.count()).toBe(0);
     });
   });

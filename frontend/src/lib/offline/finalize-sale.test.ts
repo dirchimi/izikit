@@ -40,7 +40,7 @@ function makeSaleRow(id: string, over: Partial<SaleRow> = {}): SaleRow {
 
 beforeEach(async () => {
   mockedDrain.mockClear();
-  mockedDrain.mockResolvedValue({ done: 1, conflicts: 0, errors: 0 });
+  mockedDrain.mockResolvedValue({ done: 1, conflicts: 0, errors: 0, stopped: false });
   await db.sales.clear();
 });
 

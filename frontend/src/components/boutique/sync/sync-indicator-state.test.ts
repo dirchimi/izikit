@@ -55,8 +55,8 @@ describe('isSyncNowDisabled', () => {
     expect(isSyncNowDisabled({ ...base, pendingCount: 2, syncing: true })).toBe(true);
   });
 
-  it('is disabled when offline, even with pending rows', () => {
-    expect(isSyncNowDisabled({ ...base, pendingCount: 2, online: false })).toBe(true);
+  it('stays ENABLED when the browser claims offline (navigator.onLine lies on some devices) — the manual attempt is the source of truth', () => {
+    expect(isSyncNowDisabled({ ...base, pendingCount: 2, online: false })).toBe(false);
   });
 
   it('is enabled when there are pending rows, online, not syncing', () => {
