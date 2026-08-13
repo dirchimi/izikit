@@ -190,6 +190,29 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
           // Could not read response body at all.
         }
 
+        // Jeton CSRF rejeté (403 « Invalid CSRF token ») : même auto-réparation
+        // que le 401 ci-dessus. Sans danger de doublon : `verifyCsrf` est la
+        // PREMIÈRE garde de chaque handler, le serveur n'a rien exécuté —
+        // l'interdiction de rejouer les mutations ne vise que les erreurs
+        // RÉSEAU, où la requête a pu aboutir sans réponse. Cause terrain (vu
+        // en prod sur PC) : un jeton périmé en localStorage masque le cookie
+        // frais (`getCsrfToken` préfère localStorage) → chaque mutation 403
+        // pour toujours, alors que la session est valide. `refreshAccessToken`
+        // réaligne localStorage + cookie via `storeCsrfToken`, puis on rejoue
+        // UNE fois — la garde anti-boucle est le même `_isRetryAfterRefresh`
+        // que le 401 (un seul rejeu au total, 401 et 403 confondus).
+        if (
+          response.status === 403 &&
+          errorBody.error === 'Invalid CSRF token' &&
+          !_isRetryAfterRefresh &&
+          path !== '/api/auth/refresh'
+        ) {
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            return api<T>(path, { ...options, _isRetryAfterRefresh: true });
+          }
+        }
+
         throw new ApiError(response.status, errorMessage, errorBody);
       }
 
