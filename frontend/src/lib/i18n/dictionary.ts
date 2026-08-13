@@ -2728,6 +2728,16 @@ const messages: Record<string, Msg> = {
   'common.subtotal': { fr: 'Sous-total', en: 'Subtotal', ar: 'المجموع الفرعي' },
   'common.loading': { fr: 'Chargement…', en: 'Loading…', ar: 'جارٍ التحميل…' },
   'async.error': { fr: 'Une erreur est survenue.', en: 'Something went wrong.', ar: 'حدث خطأ ما.' },
+  'error.subscriptionExpired': {
+    fr: 'Abonnement expiré — renouvelez dans Paramètres → Abonnement pour continuer.',
+    en: 'Subscription expired — renew in Settings → Subscription to continue.',
+    ar: 'انتهى الاشتراك — جدّدوه في الإعدادات ← الاشتراك للمتابعة.',
+  },
+  'error.offlineWrite': {
+    fr: 'Pas de connexion — cette action nécessite d’être en ligne. Réessayez.',
+    en: 'No connection — this action requires being online. Try again.',
+    ar: 'لا يوجد اتصال — هذا الإجراء يتطلب الاتصال بالإنترنت. حاولوا مجددًا.',
+  },
   'async.retry': { fr: 'Réessayer', en: 'Retry', ar: 'إعادة المحاولة' },
   'async.empty': { fr: 'Aucune donnée.', en: 'No data.', ar: 'لا توجد بيانات.' },
   'pos.insufficientStock': {

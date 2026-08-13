@@ -269,10 +269,19 @@ export default function StockManager() {
     }
   }
 
+  /** Erreur d'écriture produit → message ACTIONNABLE. Retour terrain : le
+   * générique « Une erreur est survenue » rendait tout échec indiagnosticable
+   * à distance — on nomme l'abonnement expiré et la coupure réseau (les 2
+   * causes fréquentes), et tout code inconnu s'affiche entre parenthèses pour
+   * que le support puisse le lire sur la capture d'écran du client. */
   function productWriteError(err: unknown): string {
-    const code = err instanceof ApiError ? err.code : '';
-    if (code === 'BARCODE_TAKEN') return t('stock.barcodeTaken');
-    if (code === 'REF_TAKEN') return t('stock.refTaken');
+    if (err instanceof ApiError) {
+      if (err.code === 'BARCODE_TAKEN') return t('stock.barcodeTaken');
+      if (err.code === 'REF_TAKEN') return t('stock.refTaken');
+      if (err.code === 'SUBSCRIPTION_EXPIRED') return t('error.subscriptionExpired');
+      if (err.status === 0) return t('error.offlineWrite');
+      if (err.code) return `${t('async.error')} (${err.code})`;
+    }
     return t('async.error');
   }
 
@@ -321,8 +330,8 @@ export default function StockManager() {
       await db.products.delete(p.id);
       toast(t('stock.deleted', { name: p.name }), 'success');
       onStockChange();
-    } catch {
-      toast(t('async.error'), 'error');
+    } catch (err) {
+      toast(productWriteError(err), 'error');
       setDeletingId(null);
       return;
     } finally {
